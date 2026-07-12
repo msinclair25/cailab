@@ -56,6 +56,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SEC-012 | Agent protocol inputs shall reject oversized frames, invalid UTF-8, duplicate JSON keys, unknown typed fields, and malformed message contracts before side effects. |
 | NFR-SEC-013 | Tool isolation declarations shall not be described as enforced unless the runtime verifies the corresponding network and filesystem boundaries. |
 | NFR-SEC-014 | An unisolated agent subprocess shall use explicit argv, working directory, and environment; enforce bounded protocol, diagnostics, and time limits; and be waited for after success, failure, or cancellation. |
+| NFR-SEC-015 | A governed tool response shall not be emitted unless manifest and policy evaluation succeed and its decision event commits; persistence failure shall prevent execution and response. |
 
 ### Reliability and reproducibility
 
@@ -67,6 +68,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-REL-004 | Verification output shall be stable for equivalent normalized state. |
 | NFR-REL-005 | Persistent state changes shall use versioned, tested migrations. |
 | NFR-REL-006 | Agent decision events shall use monotonic sequence numbers and stable correlation identifiers; timestamps shall not determine authorization or score. |
+| NFR-REL-007 | Persisted agent decision events shall be append-only through the application API and shall verify contiguous order, canonical record hashes, and the stored chain head when read. |
 
 ### Usability and portability
 

@@ -293,7 +293,7 @@ Exit gate:
 
 ### M3 — Agent governance harness
 
-**Status:** in development. The versioned contracts, strict owned-subprocess lifecycle, and deterministic reference agent are implemented. Governed tool execution, evidence persistence, approvals, isolation, and scoring remain.
+**Status:** in development. The versioned contracts, strict owned-subprocess lifecycle, deterministic reference agent, exact-match policy evaluator, and append-only decision evidence are implemented. Tool execution, public registration/run UX, approval resolution, isolation, full trace replay, and scoring remain.
 
 **Goal:** make an external agent a measurable principal in the range.
 
@@ -445,6 +445,6 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Add a gateway policy evaluator that authorizes declared tool calls and persists redacted decision events.
-2. Expose the reference baseline through a supported agent-run workflow after the gateway can produce complete evidence.
-3. Implement approval handling, then add explicit isolation modes before making any agent-containment claim.
+1. Add strict tool input-instance validation and an executor that can run only allowed or redacted calls and record actual outcomes.
+2. Expose registered policies, tools, and the reference baseline through a supported agent-run workflow.
+3. Implement approval resolution, then add explicit isolation modes before making any agent-containment claim.

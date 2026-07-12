@@ -22,7 +22,7 @@ var (
 	ErrActiveRun   = errors.New("an active run already exists")
 )
 
-const currentSchemaVersion = 2
+const currentSchemaVersion = 3
 
 type Store struct {
 	db *sql.DB
@@ -121,6 +121,37 @@ CREATE UNIQUE INDEX one_active_run ON runs(status) WHERE status = 'active';
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO schema_migrations(version, applied_at) VALUES(2, ?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record state migration 2: %w", err)
+		}
+		version = 2
+	}
+	if version < 3 {
+		if _, err := tx.ExecContext(ctx, `
+CREATE TABLE agent_event_heads (
+    run_id TEXT NOT NULL,
+    trial_id TEXT NOT NULL,
+    next_sequence INTEGER NOT NULL CHECK (next_sequence > 0),
+    last_hash TEXT NOT NULL,
+    PRIMARY KEY (run_id, trial_id),
+    FOREIGN KEY (run_id) REFERENCES runs(id)
+);
+CREATE TABLE agent_decision_events (
+    run_id TEXT NOT NULL,
+    trial_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL CHECK (sequence > 0),
+    event_id TEXT NOT NULL UNIQUE,
+    correlation_id TEXT NOT NULL,
+    event_json BLOB NOT NULL,
+    previous_hash TEXT NOT NULL,
+    record_hash TEXT NOT NULL,
+    PRIMARY KEY (run_id, trial_id, sequence),
+    UNIQUE (run_id, trial_id, correlation_id),
+    FOREIGN KEY (run_id) REFERENCES runs(id)
+);`); err != nil {
+			return fmt.Errorf("apply state migration 3: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO schema_migrations(version, applied_at) VALUES(3, ?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record state migration 3: %w", err)
 		}
 	}
 	if err := tx.Commit(); err != nil {

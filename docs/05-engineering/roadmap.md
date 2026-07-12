@@ -43,10 +43,12 @@ Milestones are capability gates, not date commitments. This document is the conc
 
 ## M3 — Agent governance harness
 
-**Status:** in development; the versioned protocol, strict owned-subprocess lifecycle, and deterministic reference agent are complete. Public agent execution, gateway enforcement, evidence persistence, approvals, and scoring remain.
+**Status:** in development; the versioned protocol, strict owned-subprocess lifecycle, deterministic reference agent, exact-match policy evaluator, and append-only decision evidence are complete. Public registration/run UX, tool execution, approval resolution, isolation, trace replay, and scoring remain.
 
 - Add agent identity and run metadata.
 - Supervise protocol-compatible direct subprocesses with bounded lifecycle and diagnostics.
+- Enforce manifest permission ceilings and deterministic allow, deny, redact, and approval-required policy decisions.
+- Persist ordered decision evidence without raw tool arguments.
 - Implement governed tool gateway decisions: allow, deny, redact, approve.
 - Record complete action traces.
 - Add prompt-injection fixtures and repeated trials.

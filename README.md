@@ -15,7 +15,7 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: the versioned agent contracts, strict owned-subprocess session controller, and deterministic reference agent are implemented and test-backed. The controller is currently an internal API; a supported user-facing agent command, governed tool execution, enforced isolation, trace persistence, interactive approvals, and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
+M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: versioned agent and policy contracts, strict owned-subprocess sessions, a deterministic reference agent, exact-match governed-tool decisions, and append-only hashed decision evidence are implemented and test-backed. These remain internal APIs; a supported user-facing agent command, tool execution, enforced isolation, full trace replay, interactive approval resolution, and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
 
 ## Build and try the walking skeleton
 
@@ -91,7 +91,7 @@ The `acquisition-agent` scenario begins with both a contractor and an approved a
 ./bin/cailab verify
 ```
 
-External tools and AI agents can call the documented loopback APIs and invoke the `cailab federation` command. The internal M3 controller can now launch and supervise a protocol-compatible direct subprocess, but there is not yet a supported public agent-run workflow or governed tool gateway. CloudAILab does not isolate or score those agent processes.
+External tools and AI agents can call the documented loopback APIs and invoke the `cailab federation` command. The internal M3 controller can launch a protocol-compatible direct subprocess, evaluate resolved tool calls with deterministic policy and manifest ceilings, and persist non-executing decision evidence. There is not yet a supported public agent-run workflow or tool executor, and CloudAILab does not isolate or score those agent processes.
 
 ## Development checks
 
