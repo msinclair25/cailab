@@ -1,0 +1,66 @@
+apiVersion: cloudailab.dev/v1alpha1
+kind: Scenario
+metadata:
+  name: walking-skeleton
+  version: 0.1.0
+  title: Cross-Provider Path — M0 Walking Skeleton
+spec:
+  seed: 42
+  briefing: >-
+    Confirm that CloudAILab can compile a provider-neutral identity graph,
+    persist a run, explain a directed trust path, and verify an invariant.
+    Provider runtimes are intentionally not started in this M0 scenario.
+  objectives:
+    - id: inspect-path
+      description: Inspect the path from the Google identity to the AWS resource.
+    - id: verify-invariant
+      description: Verify that the expected learning path is present.
+  tenants:
+    - id: northstar
+      name: Northstar Research
+      providers:
+        - google
+        - microsoft
+        - aws
+  principals:
+    - id: google:alex
+      tenant: northstar
+      type: human
+      displayName: Alex Contractor
+    - id: google:researchers
+      tenant: northstar
+      type: group
+      displayName: Acquisition Researchers
+    - id: aws:research-role
+      tenant: northstar
+      type: workload
+      displayName: Acquisition Research Role
+  resources:
+    - id: aws:acquisition-data
+      tenant: northstar
+      type: s3_bucket
+      displayName: Acquisition Data
+      classification: restricted
+  relationships:
+    - id: membership:alex-researchers
+      from: google:alex
+      to: google:researchers
+      type: member_of
+    - id: federation:researchers-role
+      from: google:researchers
+      to: aws:research-role
+      type: federates_as
+    - id: access:role-acquisition-data
+      from: aws:research-role
+      to: aws:acquisition-data
+      type: can_access
+      actions:
+        - s3:GetObject
+  verification:
+    invariants:
+      - id: learning-path-visible
+        type: path_exists
+        from: google:alex
+        to: aws:acquisition-data
+        severity: medium
+        description: The M0 learning path must be visible to the deterministic evaluator.

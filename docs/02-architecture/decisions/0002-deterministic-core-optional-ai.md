@@ -1,6 +1,6 @@
 ---
 title: "ADR-0002: Deterministic Core with Optional AI"
-status: proposed
+status: accepted
 date: 2026-07-11
 ---
 

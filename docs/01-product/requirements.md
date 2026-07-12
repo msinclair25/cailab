@@ -29,6 +29,11 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | FR-016 | The agent boundary shall support allow, deny, redact, and require-approval decisions. | Must |
 | FR-017 | The system shall support repeated agent trials and aggregate behavioral results. | Should |
 | FR-018 | The system may generate evidence-grounded coaching through an optional model provider. | Could |
+| FR-019 | The system shall publish an operation-level compatibility record for each supported provider operation. | Must |
+| FR-020 | The system shall return a stable diagnostic error for unsupported provider operations. | Must |
+| FR-021 | The system shall preserve enough run metadata to reproduce or explain each agent evaluation. | Must |
+| FR-022 | The system should support replaying a captured agent trace against compatible verification rules. | Should |
+| FR-023 | The system shall allow users to register versioned custom tool adapters with declared schemas, permissions, risk classification, timeout, transport, and isolation requirements. | Must |
 
 ## Non-functional requirements
 
@@ -51,6 +56,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-REL-002 | Failed startup shall identify the failed component and leave recoverable state. |
 | NFR-REL-003 | Reset and shutdown operations shall be idempotent. |
 | NFR-REL-004 | Verification output shall be stable for equivalent normalized state. |
+| NFR-REL-005 | Persistent state changes shall use versioned, tested migrations. |
 
 ### Usability and portability
 
@@ -60,6 +66,15 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-USE-002 | `cailab doctor` shall detect missing prerequisites and provide actionable remediation. |
 | NFR-USE-003 | Linux CI shall run without cloud accounts, hosted models, or interactive prompts. |
 | NFR-USE-004 | Provider compatibility and limitations shall be documented and test-backed. |
+
+### Maintainability and supply chain
+
+| ID | Requirement |
+|---|---|
+| NFR-MNT-001 | Scenario, event, and report schemas shall be versioned from their first committed release. |
+| NFR-MNT-002 | Dependency and generated-code changes shall be reproducible and reviewable. |
+| NFR-SUP-001 | Release artifacts shall include checksums, an SBOM, and build provenance by the M4 release. |
+| NFR-SUP-002 | CI workflows shall use minimum permissions and pin third-party actions to immutable revisions. |
 
 ## Deferred requirements
 

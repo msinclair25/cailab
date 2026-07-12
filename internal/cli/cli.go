@@ -1,0 +1,509 @@
+package cli
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"text/tabwriter"
+	"time"
+
+	"github.com/msinclair25/cailab/internal/app"
+	"github.com/msinclair25/cailab/internal/scenario"
+	"github.com/msinclair25/cailab/internal/state"
+	"github.com/msinclair25/cailab/internal/verify"
+)
+
+const (
+	ExitOK                 = 0
+	ExitError              = 1
+	ExitVerificationFailed = 3
+)
+
+var (
+	Version = "dev"
+	Commit  = "none"
+	Date    = "unknown"
+)
+
+type CLI struct {
+	stdout io.Writer
+	stderr io.Writer
+	getenv func(string) string
+}
+
+func New(stdout, stderr io.Writer) *CLI {
+	return &CLI{stdout: stdout, stderr: stderr, getenv: os.Getenv}
+}
+
+func (c *CLI) Run(ctx context.Context, args []string) int {
+	if len(args) == 0 {
+		c.printUsage(c.stderr)
+		return ExitError
+	}
+
+	var err error
+	var code = ExitOK
+	switch args[0] {
+	case "help", "-h", "--help":
+		c.printUsage(c.stdout)
+	case "version":
+		fmt.Fprintf(c.stdout, "cailab %s (commit %s, built %s)\n", Version, Commit, Date)
+	case "doctor":
+		err = c.runDoctor(ctx, args[1:])
+	case "scenario":
+		err = c.runScenario(args[1:])
+	case "up":
+		err = c.runUp(ctx, args[1:])
+	case "status":
+		err = c.runStatus(ctx, args[1:])
+	case "mission":
+		err = c.runMission(ctx, args[1:])
+	case "graph":
+		err = c.runGraph(ctx, args[1:])
+	case "verify":
+		code, err = c.runVerify(ctx, args[1:])
+	case "reset":
+		err = c.runReset(ctx, args[1:])
+	case "down":
+		err = c.runDown(ctx, args[1:])
+	default:
+		fmt.Fprintf(c.stderr, "unknown command %q\n\n", args[0])
+		c.printUsage(c.stderr)
+		return ExitError
+	}
+
+	if err != nil {
+		fmt.Fprintf(c.stderr, "error: %v\n", err)
+		if errors.Is(err, state.ErrNoActiveRun) {
+			fmt.Fprintln(c.stderr, "hint: start a scenario with `cailab up <scenario>`")
+		}
+		return ExitError
+	}
+	return code
+}
+
+func (c *CLI) printUsage(w io.Writer) {
+	fmt.Fprintln(w, `CloudAILab — local enterprise identity and AI-agent security range
+
+Usage:
+  cailab <command> [options]
+
+Commands:
+  doctor            Check local prerequisites
+  scenario list     List available scenarios
+  scenario show     Show a scenario briefing
+  up                 Start and persist a scenario run
+  status             Show the active run
+  mission            Show the active mission
+  graph path         Explain a directed trust path
+  verify             Evaluate deterministic invariants
+  reset              Restore the active M0 run state
+  down               Stop the active run
+  version            Print build information
+
+Run cailab <command> -h for command options.`)
+}
+
+func (c *CLI) runDoctor(ctx context.Context, args []string) error {
+	fs := newFlagSet("doctor", c.stderr)
+	jsonOutput := fs.Bool("json", false, "emit JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("doctor accepts no positional arguments")
+	}
+
+	type check struct {
+		Name   string `json:"name"`
+		Status string `json:"status"`
+		Detail string `json:"detail"`
+	}
+	checks := []check{{Name: "platform", Status: "pass", Detail: runtime.GOOS + "/" + runtime.GOARCH}}
+	path, err := exec.LookPath("docker")
+	if err != nil {
+		checks = append(checks, check{Name: "docker-cli", Status: "fail", Detail: "Docker CLI not found"})
+	} else {
+		checks = append(checks, check{Name: "docker-cli", Status: "pass", Detail: path})
+		dockerCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		output, dockerErr := exec.CommandContext(dockerCtx, path, "info", "--format", "{{.ServerVersion}}").CombinedOutput()
+		if dockerErr != nil {
+			detail := strings.TrimSpace(string(output))
+			if detail == "" {
+				detail = dockerErr.Error()
+			}
+			checks = append(checks, check{Name: "docker-engine", Status: "fail", Detail: detail})
+		} else {
+			checks = append(checks, check{Name: "docker-engine", Status: "pass", Detail: "server " + strings.TrimSpace(string(output))})
+		}
+	}
+
+	failed := false
+	for _, item := range checks {
+		if item.Status != "pass" {
+			failed = true
+		}
+	}
+	if *jsonOutput {
+		encoder := json.NewEncoder(c.stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(map[string]any{"checks": checks}); err != nil {
+			return err
+		}
+		if failed {
+			return errors.New("one or more prerequisite checks failed")
+		}
+		return nil
+	}
+	for _, item := range checks {
+		mark := "✓"
+		if item.Status != "pass" {
+			mark = "✗"
+		}
+		fmt.Fprintf(c.stdout, "%s %-16s %s\n", mark, item.Name, item.Detail)
+	}
+	if failed {
+		return errors.New("one or more prerequisite checks failed")
+	}
+	return nil
+}
+
+func (c *CLI) runScenario(args []string) error {
+	if len(args) == 0 {
+		return errors.New("scenario requires `list` or `show`")
+	}
+	switch args[0] {
+	case "list":
+		fs := newFlagSet("scenario list", c.stderr)
+		root := fs.String("root", "scenarios", "scenario catalog directory")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if fs.NArg() != 0 {
+			return errors.New("scenario list accepts no positional arguments")
+		}
+		summaries, err := scenario.List(*root)
+		if err != nil {
+			return err
+		}
+		w := tabwriter.NewWriter(c.stdout, 0, 4, 2, ' ', 0)
+		fmt.Fprintln(w, "SCENARIO\tVERSION\tOBJECTIVES\tTITLE")
+		for _, summary := range summaries {
+			fmt.Fprintf(w, "%s\t%s\t%d\t%s\n", summary.Name, summary.Version, summary.Objectives, summary.Title)
+		}
+		return w.Flush()
+	case "show":
+		fs := newFlagSet("scenario show", c.stderr)
+		root := fs.String("root", "scenarios", "scenario catalog directory")
+		if err := fs.Parse(args[1:]); err != nil {
+			return err
+		}
+		if fs.NArg() != 1 {
+			return errors.New("usage: cailab scenario show [--root DIR] <scenario>")
+		}
+		path, err := scenario.Resolve(*root, fs.Arg(0))
+		if err != nil {
+			return err
+		}
+		definition, err := scenario.Load(path)
+		if err != nil {
+			return err
+		}
+		printScenario(c.stdout, definition)
+		return nil
+	default:
+		return fmt.Errorf("unknown scenario command %q", args[0])
+	}
+}
+
+func (c *CLI) runUp(ctx context.Context, args []string) error {
+	fs := newFlagSet("up", c.stderr)
+	root := fs.String("scenario-root", "scenarios", "scenario catalog directory")
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	seed := fs.Int64("seed", 0, "override scenario seed")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return errors.New("usage: cailab up [options] <scenario>")
+	}
+	path, err := scenario.Resolve(*root, fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	var seedOverride *int64
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "seed" {
+			seedOverride = seed
+		}
+	})
+	service, closeStore, err := c.openService(ctx, *stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	run, err := service.Up(ctx, app.UpOptions{ScenarioPath: path, Seed: seedOverride})
+	if err != nil {
+		if errors.Is(err, state.ErrActiveRun) {
+			return errors.New("an active run already exists; use `cailab down` before starting another")
+		}
+		return err
+	}
+	fmt.Fprintf(c.stdout, "✓ scenario validated and compiled\n")
+	fmt.Fprintf(c.stdout, "✓ run %s is active\n", run.ID)
+	fmt.Fprintf(c.stdout, "  nodes: %d, relationships: %d, invariants: %d\n", len(run.Compiled.Nodes), len(run.Compiled.Edges), len(run.Compiled.Invariants))
+	fmt.Fprintln(c.stdout, "  M0 mode: provider runtimes are not started yet")
+	fmt.Fprintln(c.stdout, "\nRun `cailab mission` to inspect the lab.")
+	return nil
+}
+
+func (c *CLI) runStatus(ctx context.Context, args []string) error {
+	fs, stateDir, err := c.parseStateFlags("status", args)
+	if err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("status accepts no positional arguments")
+	}
+	service, closeStore, err := c.openService(ctx, stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	run, err := service.Status(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(c.stdout, "Run:       %s\n", run.ID)
+	fmt.Fprintf(c.stdout, "Scenario:  %s@%s\n", run.ScenarioName, run.ScenarioVersion)
+	fmt.Fprintf(c.stdout, "Status:    %s\n", run.Status)
+	fmt.Fprintf(c.stdout, "Seed:      %d\n", run.Seed)
+	fmt.Fprintf(c.stdout, "Digest:    %s\n", run.Compiled.Digest)
+	return nil
+}
+
+func (c *CLI) runMission(ctx context.Context, args []string) error {
+	fs, stateDir, err := c.parseStateFlags("mission", args)
+	if err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("mission accepts no positional arguments")
+	}
+	service, closeStore, err := c.openService(ctx, stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	compiled, err := service.Mission(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(c.stdout, "%s\n\n%s\n\nObjectives:\n", compiled.Title, compiled.Briefing)
+	for _, objective := range compiled.Objectives {
+		fmt.Fprintf(c.stdout, "[ ] %s — %s\n", objective.ID, objective.Description)
+	}
+	return nil
+}
+
+func (c *CLI) runGraph(ctx context.Context, args []string) error {
+	if len(args) == 0 || args[0] != "path" {
+		return errors.New("usage: cailab graph path [--state-dir DIR] <from> <to>")
+	}
+	fs, stateDir, err := c.parseStateFlags("graph path", args[1:])
+	if err != nil {
+		return err
+	}
+	if fs.NArg() != 2 {
+		return errors.New("usage: cailab graph path [--state-dir DIR] <from> <to>")
+	}
+	service, closeStore, err := c.openService(ctx, stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	path, ok, err := service.Path(ctx, fs.Arg(0), fs.Arg(1))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		fmt.Fprintln(c.stdout, "No directed path found.")
+		return nil
+	}
+	if len(path.Edges) == 0 {
+		fmt.Fprintln(c.stdout, path.Nodes[0])
+		return nil
+	}
+	fmt.Fprintln(c.stdout, path.Nodes[0])
+	for i, edge := range path.Edges {
+		actions := ""
+		if len(edge.Actions) > 0 {
+			actions = " [" + strings.Join(edge.Actions, ", ") + "]"
+		}
+		fmt.Fprintf(c.stdout, "  └─ %s%s → %s\n", edge.Type, actions, path.Nodes[i+1])
+	}
+	return nil
+}
+
+func (c *CLI) runVerify(ctx context.Context, args []string) (int, error) {
+	fs := newFlagSet("verify", c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	format := fs.String("format", "text", "output format: text, json, or markdown")
+	output := fs.String("output", "", "write report to a file")
+	if err := fs.Parse(args); err != nil {
+		return ExitError, err
+	}
+	if fs.NArg() != 0 {
+		return ExitError, errors.New("verify accepts no positional arguments")
+	}
+	service, closeStore, err := c.openService(ctx, *stateDir)
+	if err != nil {
+		return ExitError, err
+	}
+	defer closeStore()
+	report, err := service.Verify(ctx)
+	if err != nil {
+		return ExitError, err
+	}
+	data, err := renderReport(report, *format)
+	if err != nil {
+		return ExitError, err
+	}
+	if *output != "" {
+		if err := os.WriteFile(*output, data, 0o600); err != nil {
+			return ExitError, fmt.Errorf("write report %q: %w", *output, err)
+		}
+		fmt.Fprintf(c.stdout, "report written to %s\n", *output)
+	} else {
+		_, _ = c.stdout.Write(data)
+	}
+	if !report.Passed {
+		return ExitVerificationFailed, nil
+	}
+	return ExitOK, nil
+}
+
+func (c *CLI) runReset(ctx context.Context, args []string) error {
+	fs, stateDir, err := c.parseStateFlags("reset", args)
+	if err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("reset accepts no positional arguments")
+	}
+	service, closeStore, err := c.openService(ctx, stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	run, err := service.Reset(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(c.stdout, "✓ run %s restored to its compiled M0 state\n", run.ID)
+	return nil
+}
+
+func (c *CLI) runDown(ctx context.Context, args []string) error {
+	fs, stateDir, err := c.parseStateFlags("down", args)
+	if err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("down accepts no positional arguments")
+	}
+	service, closeStore, err := c.openService(ctx, stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	run, err := service.Down(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(c.stdout, "✓ run %s stopped\n", run.ID)
+	return nil
+}
+
+func (c *CLI) parseStateFlags(name string, args []string) (*flag.FlagSet, string, error) {
+	fs := newFlagSet(name, c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	if err := fs.Parse(args); err != nil {
+		return nil, "", err
+	}
+	return fs, *stateDir, nil
+}
+
+func (c *CLI) defaultStateDir() string {
+	if home := c.getenv("CAILAB_HOME"); home != "" {
+		return home
+	}
+	return ".cloudailab"
+}
+
+func (c *CLI) openService(ctx context.Context, stateDir string) (*app.Service, func(), error) {
+	store, err := state.Open(ctx, filepath.Join(stateDir, "cailab.db"))
+	if err != nil {
+		return nil, nil, err
+	}
+	return app.New(store), func() { _ = store.Close() }, nil
+}
+
+func newFlagSet(name string, output io.Writer) *flag.FlagSet {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.SetOutput(output)
+	return fs
+}
+
+func printScenario(w io.Writer, definition scenario.Scenario) {
+	fmt.Fprintf(w, "%s\n\n", definition.Metadata.Title)
+	fmt.Fprintf(w, "Name: %s\nVersion: %s\nSeed: %d\n\n", definition.Metadata.Name, definition.Metadata.Version, definition.Spec.Seed)
+	fmt.Fprintln(w, definition.Spec.Briefing)
+	fmt.Fprintln(w, "\nObjectives:")
+	for _, objective := range definition.Spec.Objectives {
+		fmt.Fprintf(w, "- %s: %s\n", objective.ID, objective.Description)
+	}
+}
+
+func renderReport(report verify.Report, format string) ([]byte, error) {
+	switch format {
+	case "json":
+		data, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("render JSON report: %w", err)
+		}
+		return append(data, '\n'), nil
+	case "markdown":
+		return []byte(verify.Markdown(report)), nil
+	case "text":
+		var b strings.Builder
+		status := "PASS"
+		if !report.Passed {
+			status = "FAIL"
+		}
+		fmt.Fprintf(&b, "CloudAILab verification: %s — %s\n", report.Scenario, status)
+		for _, result := range report.Results {
+			mark := "PASS"
+			if !result.Passed {
+				mark = "FAIL"
+			}
+			fmt.Fprintf(&b, "%s  %-20s %s\n", mark, result.InvariantID, result.Message)
+			for _, evidence := range result.Evidence {
+				fmt.Fprintf(&b, "      %s\n", evidence)
+			}
+		}
+		fmt.Fprintf(&b, "Results: %d passed, %d failed\n", report.PassedCount, report.FailedCount)
+		return []byte(b.String()), nil
+	default:
+		return nil, fmt.Errorf("unsupported report format %q", format)
+	}
+}

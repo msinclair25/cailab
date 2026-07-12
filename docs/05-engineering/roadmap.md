@@ -5,7 +5,7 @@ status: draft
 
 # Delivery roadmap
 
-Milestones are capability gates, not date commitments.
+Milestones are capability gates, not date commitments. This document is the concise roadmap; detailed scope, workstreams, evidence, risks, and exit criteria are maintained in the [CloudAILab Master Plan](../00-project/master-plan.md).
 
 ## M0 — Contracts and walking skeleton
 
