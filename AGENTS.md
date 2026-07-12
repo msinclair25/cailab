@@ -1,0 +1,50 @@
+# CloudAILab repository guidance
+
+CloudAILab is a local enterprise identity and AI-agent security range. The project is in discovery and architecture definition; do not present proposed capabilities as implemented.
+
+## Before changing the project
+
+- Read `README.md` and the documentation relevant to the change.
+- Treat `docs/01-product/requirements.md` as the requirements index.
+- Treat accepted records in `docs/02-architecture/decisions/` as durable architectural constraints.
+- Review `docs/03-security/threat-model.md` when a change adds a trust boundary, credential, network listener, downloaded dependency, hosted integration, or agent capability.
+
+## Design guardrails
+
+- Keep scenario compilation, authorization, attack-path evaluation, evidence, and scoring deterministic.
+- AI features are optional and cannot override authorization or verification results.
+- Use a provider-neutral canonical graph; isolate provider-specific behavior behind adapters or facades.
+- Add provider operations only for a documented scenario or compatibility contract.
+- Do not claim provider parity without contract tests and a documented fidelity level.
+- Bind services to loopback by default and use synthetic credentials.
+- Never execute scenario-provided shell text implicitly.
+- Do not describe agent execution as isolated unless network and filesystem isolation are actually enforced.
+
+## Implementation expectations
+
+- Keep `cmd/cailab` thin and place behavior in testable internal packages.
+- Prefer typed boundaries, small consumer-defined interfaces, explicit cancellation, and wrapped errors.
+- Avoid package-level mutable state and hidden global configuration.
+- Preserve provider-native evidence during normalization.
+- Pin and verify external runtime artifacts.
+
+## Validation
+
+- Add unit tests for domain behavior and policy semantics.
+- Add contract tests for provider-shaped requests, responses, and claimed authorization behavior.
+- Add negative tests for tenant isolation and explicit-deny behavior.
+- Exercise lifecycle changes through deploy, mutate, collect, normalize, verify, and cleanup as applicable.
+- Security defects require regression tests.
+
+## Documentation
+
+- Update documentation in the same change as behavior.
+- Use stable requirement identifiers and do not renumber removed requirements.
+- Record costly-to-reverse architecture or security decisions in an ADR.
+- Keep Markdown portable between Obsidian and GitHub; prefer standard relative Markdown links.
+- Clearly label illustrative examples and proposed behavior.
+- Keep the README limited to verified status, value, quick start, and navigation.
+
+## Completion standard
+
+A change is complete only when implementation, relevant tests, documentation, security impact, compatibility impact, diagnostics, and cleanup behavior have been addressed in proportion to risk.

@@ -1,0 +1,12 @@
+.DS_Store
+.trash/
+
+# Obsidian stores per-user UI state here. Vault configuration remains versioned.
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache/
+
+# Local CloudAILab state and generated reports.
+.cloudailab/
+dist/
+coverage/
