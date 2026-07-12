@@ -1,0 +1,100 @@
+apiVersion: cloudailab.dev/v1alpha1
+kind: Scenario
+metadata:
+  name: google-drive-sharing
+  version: 0.1.0
+  title: Google Drive Contractor Sharing
+spec:
+  seed: 20260712
+  briefing: >-
+    A contractor has a direct Google Drive permission on a restricted records file.
+    Remove that direct grant without disrupting the approved records-team group path.
+  runtimes:
+    google:
+      engine: native
+  providers:
+    google:
+      tenant: tenant:acme
+      customerId: C01234567
+      users:
+        - node: principal:records-admin
+          id: user_records_admin
+          primaryEmail: records.admin@example.test
+          displayName: Records Administrator
+        - node: principal:contractor
+          id: user_contractor
+          primaryEmail: contractor@example.test
+          displayName: External Contractor
+      groups:
+        - node: principal:records-team
+          id: group_records_team
+          email: records-team@example.test
+          name: Records Team
+          description: Approved readers of restricted records.
+          members:
+            - id: member_records_admin
+              email: records.admin@example.test
+              role: MEMBER
+              type: USER
+      driveFiles:
+        - node: resource:retention-plan
+          id: file_retention_plan
+          name: 2027 Records Retention Plan.txt
+          mimeType: text/plain
+          content: Synthetic restricted records-retention data for CloudAILab.
+      drivePermissions:
+        - id: permission_contractor
+          fileId: file_retention_plan
+          type: user
+          emailAddress: contractor@example.test
+          role: reader
+        - id: permission_records_team
+          fileId: file_retention_plan
+          type: group
+          emailAddress: records-team@example.test
+          role: reader
+  objectives:
+    - id: inspect-directory
+      description: Inspect Google users, groups, and group membership.
+    - id: inspect-drive
+      description: Identify direct and group-derived access to the restricted Drive file.
+    - id: remove-contractor-access
+      description: Remove only the contractor's direct Drive permission.
+  tenants:
+    - id: tenant:acme
+      name: Acme Records
+      providers: [google]
+  principals:
+    - id: principal:contractor
+      tenant: tenant:acme
+      type: human
+      displayName: External Contractor
+    - id: principal:records-admin
+      tenant: tenant:acme
+      type: human
+      displayName: Records Administrator
+    - id: principal:records-team
+      tenant: tenant:acme
+      type: group
+      displayName: Records Team
+  resources:
+    - id: resource:retention-plan
+      tenant: tenant:acme
+      type: drive_file
+      displayName: 2027 Records Retention Plan
+      classification: restricted
+  relationships: []
+  verification:
+    invariants:
+      - id: contractor-access-removed
+        type: path_absent
+        from: principal:contractor
+        to: resource:retention-plan
+        severity: high
+        description: The contractor must not retain access to the restricted Drive file.
+      - id: records-admin-access-preserved
+        type: path_exists
+        from: principal:records-admin
+        to: resource:retention-plan
+        severity: high
+        description: The records administrator must retain access through the approved group.

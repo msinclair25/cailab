@@ -122,6 +122,28 @@ func copyProviders(providers Providers) Providers {
 		})
 		result.Microsoft = &microsoft
 	}
+	if providers.Google != nil {
+		google := *providers.Google
+		google.Users = append([]GoogleUser(nil), providers.Google.Users...)
+		google.Groups = make([]GoogleGroup, len(providers.Google.Groups))
+		for i, group := range providers.Google.Groups {
+			google.Groups[i] = group
+			google.Groups[i].Members = append([]GoogleGroupMember(nil), group.Members...)
+			sort.Slice(google.Groups[i].Members, func(j, k int) bool {
+				return google.Groups[i].Members[j].Email < google.Groups[i].Members[k].Email
+			})
+		}
+		google.DriveFiles = append([]GoogleDriveFile(nil), providers.Google.DriveFiles...)
+		google.DrivePermissions = append([]GoogleDrivePermission(nil), providers.Google.DrivePermissions...)
+		sort.Slice(google.Users, func(i, j int) bool { return google.Users[i].ID < google.Users[j].ID })
+		sort.Slice(google.Groups, func(i, j int) bool { return google.Groups[i].ID < google.Groups[j].ID })
+		sort.Slice(google.DriveFiles, func(i, j int) bool { return google.DriveFiles[i].ID < google.DriveFiles[j].ID })
+		sort.Slice(google.DrivePermissions, func(i, j int) bool {
+			left, right := google.DrivePermissions[i], google.DrivePermissions[j]
+			return left.FileID < right.FileID || left.FileID == right.FileID && left.ID < right.ID
+		})
+		result.Google = &google
+	}
 	return result
 }
 
@@ -134,6 +156,10 @@ func copyRuntimes(runtimes Runtimes) Runtimes {
 	if runtimes.Microsoft != nil {
 		microsoftRuntime := *runtimes.Microsoft
 		result.Microsoft = &microsoftRuntime
+	}
+	if runtimes.Google != nil {
+		googleRuntime := *runtimes.Google
+		result.Google = &googleRuntime
 	}
 	return result
 }

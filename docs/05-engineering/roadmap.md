@@ -32,7 +32,7 @@ Milestones are capability gates, not date commitments. This document is the conc
 
 ## M2 — Microsoft and Google identity facades
 
-**Status:** in development; the first persistent Microsoft delegated-consent workflow is executable.
+**Status:** in development; persistent Microsoft delegated-consent and Google Directory/Drive sharing workflows are executable.
 
 - Implement scenario-required users, groups, applications, roles, and memberships.
 - Add local issuer and selected federation claims.

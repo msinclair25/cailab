@@ -524,18 +524,22 @@ func (c *CLI) openService(ctx context.Context, stateDir string) (*app.Service, f
 }
 
 func (c *CLI) runInternalRuntime(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] != "microsoft" {
+	if len(args) == 0 || (args[0] != "microsoft" && args[0] != "google") {
 		return errors.New("invalid private runtime command")
 	}
-	fs := newFlagSet("_runtime microsoft", c.stderr)
+	providerName := args[0]
+	fs := newFlagSet("_runtime "+providerName, c.stderr)
 	config := fs.String("config", "", "private runtime configuration")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 || *config == "" {
-		return errors.New("invalid private Microsoft runtime configuration")
+		return fmt.Errorf("invalid private %s runtime configuration", providerName)
 	}
-	return provider.ServeMicrosoftRuntime(ctx, *config)
+	if providerName == "microsoft" {
+		return provider.ServeMicrosoftRuntime(ctx, *config)
+	}
+	return provider.ServeGoogleRuntime(ctx, *config)
 }
 
 func newFlagSet(name string, output io.Writer) *flag.FlagSet {

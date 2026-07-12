@@ -270,7 +270,7 @@ Exit gate:
 
 ### M2 — Cross-provider enterprise identity
 
-**Status:** in development. The first persistent Microsoft delegated-consent slice is executable; Google, local OIDC, and cross-provider federation remain.
+**Status:** in development. Persistent Microsoft delegated-consent and Google Directory/Drive sharing slices are executable; local OIDC and cross-provider federation remain.
 
 **Goal:** complete one credible Google → Microsoft → AWS trust chain.
 
@@ -443,8 +443,7 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Complete and harden the scoped Microsoft Graph facade contract.
-2. Add the scenario-required Google Directory and Drive facade operations.
-3. Implement local OIDC discovery, JWKS, claims, expiry, and rotation.
-4. Connect Google, Microsoft, and AWS representations through one tested federation chain.
-5. Publish the M2 cross-provider compatibility matrix and end-to-end evidence.
+1. Implement local OIDC discovery, JWKS, claims, expiry, and rotation.
+2. Connect Google, Microsoft, and AWS representations through one tested federation chain.
+3. Publish the M2 cross-provider compatibility matrix and end-to-end evidence.
+4. Add contract-tested SDK examples for supported local endpoints.

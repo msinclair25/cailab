@@ -144,7 +144,10 @@ func TestMicrosoftNativeIntegration(t *testing.T) {
 	}
 	compiled := loadMicrosoftScenario(t)
 	manager := NewMicrosoftProcessManager(t.TempDir())
-	manager.command = func(executable, configPath string) *exec.Cmd {
+	manager.command = func(executable, providerName, configPath string) *exec.Cmd {
+		if providerName != "microsoft" {
+			t.Fatalf("providerName = %q, want microsoft", providerName)
+		}
 		command := exec.Command(executable, "-test.run=^TestMicrosoftRuntimeHelper$", "--", configPath)
 		command.Env = append(os.Environ(), "CAILAB_MICROSOFT_RUNTIME_HELPER=1")
 		return command
@@ -157,7 +160,7 @@ func TestMicrosoftNativeIntegration(t *testing.T) {
 	stopped := false
 	defer func() {
 		if !stopped {
-			_ = manager.Stop(context.Background(), runID, instances)
+			_ = manager.Stop(context.Background(), runID, instances, compiled)
 		}
 	}()
 	if len(instances) != 1 || instances[0].Provider != "microsoft" {
@@ -179,11 +182,11 @@ func TestMicrosoftNativeIntegration(t *testing.T) {
 	}
 	assertPath(t, snapshot, "microsoft:analyst", "microsoft:directory-data", false)
 	assertPath(t, snapshot, "microsoft:security-admin", "microsoft:directory-data", true)
-	if err := manager.Stop(context.Background(), runID, instances); err != nil {
+	if err := manager.Stop(context.Background(), runID, instances, compiled); err != nil {
 		t.Fatal(err)
 	}
 	stopped = true
-	if _, err := os.Stat(manager.runtimeDir(runID)); !errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(manager.runtimeDir(runID, "microsoft")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("runtime directory still exists: %v", err)
 	}
 }

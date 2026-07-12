@@ -22,18 +22,8 @@ import (
 const LocalGraphToken = "cailab-local"
 
 type MicrosoftRuntimeConfig struct {
-	RunID        string                     `json:"runId"`
-	Listen       string                     `json:"listen"`
-	StatePath    string                     `json:"statePath"`
-	ReadyPath    string                     `json:"readyPath"`
-	ControlToken string                     `json:"controlToken"`
-	Provider     scenario.MicrosoftProvider `json:"provider"`
-}
-
-type microsoftReady struct {
-	RunID    string `json:"runId"`
-	Endpoint string `json:"endpoint"`
-	PID      int    `json:"pid"`
+	NativeRuntimeControl
+	Provider scenario.MicrosoftProvider `json:"provider"`
 }
 
 type microsoftFacade struct {
@@ -92,7 +82,7 @@ func ServeMicrosoftRuntime(ctx context.Context, configPath string) error {
 		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       30 * time.Second,
 	}
-	readyData, err := json.Marshal(microsoftReady{RunID: config.RunID, Endpoint: endpoint, PID: os.Getpid()})
+	readyData, err := json.Marshal(nativeReady{RunID: config.RunID, Endpoint: endpoint, PID: os.Getpid()})
 	if err != nil {
 		return fmt.Errorf("encode Microsoft readiness: %w", err)
 	}

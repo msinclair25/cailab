@@ -28,13 +28,13 @@ type Manager interface {
 }
 
 type CompositeManager struct {
-	docker    *DockerManager
-	microsoft *MicrosoftProcessManager
+	docker *DockerManager
+	native *NativeProcessManager
 }
 
 func NewManager(stateDir string) *CompositeManager {
 	return &CompositeManager{
-		docker: NewDockerManager(), microsoft: NewMicrosoftProcessManager(stateDir),
+		docker: NewDockerManager(), native: NewNativeProcessManager(stateDir),
 	}
 }
 
@@ -43,33 +43,30 @@ func (m *CompositeManager) Start(ctx context.Context, runID string, compiled sce
 	if err != nil {
 		return nil, err
 	}
-	microsoftInstances, err := m.microsoft.Start(ctx, runID, compiled)
+	nativeInstances, err := m.native.Start(ctx, runID, compiled)
 	if err != nil {
 		_ = m.docker.Stop(context.Background(), runID, instances)
 		return nil, err
 	}
-	return append(instances, microsoftInstances...), nil
+	return append(instances, nativeInstances...), nil
 }
 
 func (m *CompositeManager) Stop(ctx context.Context, runID string, instances []Instance, compiled scenario.Compiled) error {
-	var microsoftInstances, dockerInstances []Instance
+	var nativeInstances, dockerInstances []Instance
 	for _, instance := range instances {
 		switch instance.Provider {
-		case "microsoft":
-			microsoftInstances = append(microsoftInstances, instance)
+		case "microsoft", "google":
+			nativeInstances = append(nativeInstances, instance)
 		case "aws":
 			dockerInstances = append(dockerInstances, instance)
 		}
 	}
-	var microsoftErr error
-	if compiled.Runtimes.Microsoft != nil || len(microsoftInstances) > 0 {
-		microsoftErr = m.microsoft.Stop(ctx, runID, microsoftInstances)
-	}
+	nativeErr := m.native.Stop(ctx, runID, nativeInstances, compiled)
 	var dockerErr error
 	if compiled.Runtimes.AWS != nil || len(dockerInstances) > 0 {
 		dockerErr = m.docker.Stop(ctx, runID, dockerInstances)
 	}
-	return errors.Join(microsoftErr, dockerErr)
+	return errors.Join(nativeErr, dockerErr)
 }
 
 func (m *CompositeManager) Snapshot(ctx context.Context, instances []Instance, compiled scenario.Compiled) (scenario.Compiled, error) {
@@ -77,5 +74,5 @@ func (m *CompositeManager) Snapshot(ctx context.Context, instances []Instance, c
 	if err != nil {
 		return scenario.Compiled{}, err
 	}
-	return m.microsoft.Snapshot(ctx, instances, snapshot)
+	return m.native.Snapshot(ctx, instances, snapshot)
 }
