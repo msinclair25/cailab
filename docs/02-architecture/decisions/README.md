@@ -11,6 +11,10 @@ ADRs record significant decisions that affect system structure, security, compat
 
 - [ADR-0001: Canonical provider-neutral graph](0001-canonical-provider-neutral-graph.md)
 - [ADR-0002: Deterministic core with optional AI](0002-deterministic-core-optional-ai.md)
+- [ADR-0003: Native provider facades by default](0003-native-provider-facades.md)
+- [ADR-0004: Scenario-driven compatibility](0004-scenario-driven-compatibility.md)
+- [ADR-0005: CGO-free SQLite state](0005-cgo-free-sqlite-state.md)
+- [ADR-0006: Built-in invariant predicates before a policy DSL](0006-built-in-invariant-predicates.md)
 
 ## Lifecycle
 

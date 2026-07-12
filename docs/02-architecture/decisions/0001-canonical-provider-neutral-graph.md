@@ -1,6 +1,6 @@
 ---
 title: "ADR-0001: Canonical Provider-Neutral Graph"
-status: proposed
+status: accepted
 date: 2026-07-11
 ---
 

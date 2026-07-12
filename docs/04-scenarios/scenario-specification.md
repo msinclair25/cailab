@@ -9,6 +9,8 @@ status: draft
 
 A scenario is a versioned, reproducible enterprise topology plus a mission, intentional weaknesses, observable events, and deterministic verification rules.
 
+The normative M0 schema is [schemas/scenario/v1alpha1.json](../../schemas/scenario/v1alpha1.json). The executable reference is [scenarios/walking-skeleton/scenario.yaml](../../scenarios/walking-skeleton/scenario.yaml). This document explains the authoring contract but does not override the schema or typed validator.
+
 ## Required sections
 
 1. Metadata and schema version
@@ -16,7 +18,7 @@ A scenario is a versioned, reproducible enterprise topology plus a mission, inte
 3. Public mission briefing
 4. Tenants and provider accounts
 5. Principals and group membership
-6. Applications, workloads, and agents
+6. Applications and workloads represented as principals
 7. Resources and data classification
 8. Policies and cross-provider trust
 9. Intentional weaknesses
@@ -24,46 +26,52 @@ A scenario is a versioned, reproducible enterprise topology plus a mission, inte
 11. Public success criteria
 12. Protected invariants and evidence queries
 
-## Illustrative manifest
+## Minimal manifest
 
-This sketch is not yet a committed schema.
+This abbreviated example follows the committed M0 schema. See the reference scenario for a complete file.
 
 ```yaml
 apiVersion: cloudailab.dev/v1alpha1
 kind: Scenario
 metadata:
-  name: acquisition-agent
+  name: path-example
   version: 0.1.0
-  title: The Over-Privileged Acquisition Agent
+  title: Path Example
 spec:
   seed: 42
+  briefing: Trace the expected learning path.
   objectives:
-    - trace a cross-provider identity path
-    - remediate excessive workload permissions
-    - contain indirect prompt injection
+    - id: trace-path
+      description: Trace a cross-provider identity path.
   tenants:
     - id: northstar
-      providers:
-        googleWorkspace: {}
-        microsoft: {}
-        aws:
-          accounts:
-            - id: "111111111111"
-            - id: "222222222222"
-  agents:
-    - id: research-agent
-      identity: principal:entra:research-agent
-      tools:
-        - google.drive.read
-        - aws.s3.read
-      approvals:
-        - when: data.classification >= confidential
+      name: Northstar Research
+      providers: [google, microsoft, aws]
+  principals:
+    - id: google:alex
+      tenant: northstar
+      type: human
+      displayName: Alex Contractor
+  resources:
+    - id: aws:acquisition-data
+      tenant: northstar
+      type: s3_bucket
+      displayName: Acquisition Data
+      classification: restricted
+  relationships:
+    - id: access:alex-acquisition-data
+      from: google:alex
+      to: aws:acquisition-data
+      type: can_access
+      actions: [s3:GetObject]
   verification:
     invariants:
-      - id: no-contractor-path-to-payroll
-        severity: critical
-      - id: restricted-data-requires-approval
-        severity: high
+      - id: learning-path-visible
+        type: path_exists
+        from: google:alex
+        to: aws:acquisition-data
+        severity: medium
+        description: The expected learning path is visible.
 ```
 
 ## Authoring rules
@@ -74,6 +82,8 @@ spec:
 - Intentional weaknesses include learning rationale and expected remediation classes.
 - Verification states the required outcome, not one mandatory implementation.
 - Hidden ground truth is separable from the learner-visible scenario package.
+- Unknown fields are rejected by the M0 decoder.
+- IDs are unique across tenants, principals, and resources.
 
 ## Flagship scenario acceptance criteria
 

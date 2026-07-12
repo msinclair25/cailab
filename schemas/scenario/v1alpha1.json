@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudailab.dev/schemas/scenario/v1alpha1.json",
+  "title": "CloudAILab Scenario v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "properties": {
+    "apiVersion": { "const": "cloudailab.dev/v1alpha1" },
+    "kind": { "const": "Scenario" },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "title"],
+      "properties": {
+        "name": { "$ref": "#/$defs/id" },
+        "version": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seed",
+        "briefing",
+        "objectives",
+        "tenants",
+        "principals",
+        "resources",
+        "relationships",
+        "verification"
+      ],
+      "properties": {
+        "seed": { "type": "integer" },
+        "briefing": { "type": "string", "minLength": 1 },
+        "objectives": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/objective" }
+        },
+        "tenants": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/tenant" }
+        },
+        "principals": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/principal" }
+        },
+        "resources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/resource" }
+        },
+        "relationships": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/relationship" }
+        },
+        "verification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["invariants"],
+          "properties": {
+            "invariants": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/invariant" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._:-]{0,127}$"
+    },
+    "objective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "tenant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "providers"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1 },
+        "providers": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["aws", "microsoft", "google", "local"] }
+        }
+      }
+    },
+    "principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "tenant", "type", "displayName"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "tenant": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["human", "group", "workload", "application", "service", "agent"] },
+        "displayName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "tenant", "type", "displayName", "classification"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "tenant": { "$ref": "#/$defs/id" },
+        "type": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string", "minLength": 1 },
+        "classification": { "enum": ["public", "internal", "confidential", "restricted"] }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "from", "to", "type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "from": { "$ref": "#/$defs/id" },
+        "to": { "$ref": "#/$defs/id" },
+        "type": {
+          "enum": ["member_of", "synchronized_to", "assigned_to", "federates_as", "can_access", "owns"]
+        },
+        "actions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "invariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "type", "from", "to", "severity", "description"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "enum": ["path_exists", "path_absent"] },
+        "from": { "$ref": "#/$defs/id" },
+        "to": { "$ref": "#/$defs/id" },
+        "severity": { "enum": ["low", "medium", "high", "critical"] },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

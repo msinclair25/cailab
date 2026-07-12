@@ -1,13 +1,15 @@
 # CloudAILab repository guidance
 
-CloudAILab is a local enterprise identity and AI-agent security range. The project is in discovery and architecture definition; do not present proposed capabilities as implemented.
+CloudAILab is a local enterprise identity and AI-agent security range. M0 is an executable control-plane walking skeleton; provider and agent runtimes remain planned. Present only behavior covered by the implementation and tests as available.
 
 ## Before changing the project
 
 - Read `README.md` and the documentation relevant to the change.
+- Use `docs/00-project/master-plan.md` for milestone scope, delivery order, risks, and exit gates.
 - Treat `docs/01-product/requirements.md` as the requirements index.
 - Treat accepted records in `docs/02-architecture/decisions/` as durable architectural constraints.
 - Review `docs/03-security/threat-model.md` when a change adds a trust boundary, credential, network listener, downloaded dependency, hosted integration, or agent capability.
+- Use `docs/05-engineering/quality-strategy.md` to choose validation in proportion to risk.
 
 ## Design guardrails
 

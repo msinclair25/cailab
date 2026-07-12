@@ -8,5 +8,6 @@
 
 # Local CloudAILab state and generated reports.
 .cloudailab/
+/bin/
 dist/
 coverage/
