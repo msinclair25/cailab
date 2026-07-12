@@ -13,6 +13,8 @@ var awsRoleNamePattern = regexp.MustCompile(`^[A-Za-z0-9_+=,.@-]{1,64}$`)
 var awsBucketNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
 var awsRegionPattern = regexp.MustCompile(`^[a-z]{2}(-gov)?-[a-z]+-[0-9]$`)
 var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+var googleObjectIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+$`)
 
 var (
 	providerTypes     = setOf("aws", "microsoft", "google", "local")
@@ -177,6 +179,9 @@ func validateRuntimes(issues *[]string, runtimes Runtimes) {
 	if runtimes.Microsoft != nil && runtimes.Microsoft.Engine != "native" {
 		*issues = append(*issues, fmt.Sprintf("spec.runtimes.microsoft.engine has unsupported value %q", runtimes.Microsoft.Engine))
 	}
+	if runtimes.Google != nil && runtimes.Google.Engine != "native" {
+		*issues = append(*issues, fmt.Sprintf("spec.runtimes.google.engine has unsupported value %q", runtimes.Google.Engine))
+	}
 }
 
 func validateProviders(
@@ -187,6 +192,7 @@ func validateProviders(
 	principalTenants, resourceTenants map[string]string,
 ) {
 	validateMicrosoftProvider(issues, providers.Microsoft, runtimes.Microsoft, tenants, principals, resources, principalTenants, resourceTenants)
+	validateGoogleProvider(issues, providers.Google, runtimes.Google, tenants, principals, resources, principalTenants, resourceTenants)
 	if providers.AWS == nil {
 		return
 	}
@@ -285,6 +291,145 @@ func validateProviders(
 			objectKeys[object.Key] = struct{}{}
 		}
 	}
+}
+
+func validateGoogleProvider(
+	issues *[]string,
+	provider *GoogleProvider,
+	runtime *GoogleRuntime,
+	tenants, principals, resources map[string]struct{},
+	principalTenants, resourceTenants map[string]string,
+) {
+	if provider == nil {
+		if runtime != nil {
+			*issues = append(*issues, "spec.runtimes.google requires spec.providers.google")
+		}
+		return
+	}
+	if runtime == nil {
+		*issues = append(*issues, "spec.providers.google requires spec.runtimes.google")
+	}
+	checkReference(issues, "spec.providers.google.tenant", provider.Tenant, tenants)
+	validateGoogleID(issues, "spec.providers.google.customerId", provider.CustomerID)
+	if len(provider.Users) == 0 {
+		*issues = append(*issues, "spec.providers.google.users must contain at least one user")
+	}
+
+	objectIDs := make(map[string]string)
+	usersByEmail := make(map[string]struct{})
+	for i, user := range provider.Users {
+		prefix := fmt.Sprintf("spec.providers.google.users[%d]", i)
+		validateGoogleObjectID(issues, prefix+".id", user.ID, objectIDs)
+		checkReference(issues, prefix+".node", user.Node, principals)
+		validateMicrosoftNodeTenant(issues, prefix+".node", user.Node, provider.Tenant, principalTenants)
+		email := validateGoogleEmail(issues, prefix+".primaryEmail", user.PrimaryEmail)
+		if _, exists := usersByEmail[email]; exists && email != "" {
+			*issues = append(*issues, fmt.Sprintf("%s.primaryEmail %q is duplicated", prefix, user.PrimaryEmail))
+		}
+		usersByEmail[email] = struct{}{}
+		requireText(issues, prefix+".displayName", user.DisplayName)
+	}
+
+	groupsByEmail := make(map[string]struct{})
+	for i, group := range provider.Groups {
+		prefix := fmt.Sprintf("spec.providers.google.groups[%d]", i)
+		validateGoogleObjectID(issues, prefix+".id", group.ID, objectIDs)
+		checkReference(issues, prefix+".node", group.Node, principals)
+		validateMicrosoftNodeTenant(issues, prefix+".node", group.Node, provider.Tenant, principalTenants)
+		email := validateGoogleEmail(issues, prefix+".email", group.Email)
+		if _, exists := groupsByEmail[email]; exists && email != "" {
+			*issues = append(*issues, fmt.Sprintf("%s.email %q is duplicated", prefix, group.Email))
+		}
+		groupsByEmail[email] = struct{}{}
+		requireText(issues, prefix+".name", group.Name)
+		memberIDs := make(map[string]struct{})
+		memberEmails := make(map[string]struct{})
+		for j, member := range group.Members {
+			memberPrefix := fmt.Sprintf("%s.members[%d]", prefix, j)
+			validateGoogleID(issues, memberPrefix+".id", member.ID)
+			if _, exists := memberIDs[member.ID]; exists {
+				*issues = append(*issues, fmt.Sprintf("%s.id %q is duplicated in group", memberPrefix, member.ID))
+			}
+			memberIDs[member.ID] = struct{}{}
+			memberEmail := validateGoogleEmail(issues, memberPrefix+".email", member.Email)
+			if _, exists := memberEmails[memberEmail]; exists && memberEmail != "" {
+				*issues = append(*issues, fmt.Sprintf("%s.email %q is duplicated in group", memberPrefix, member.Email))
+			}
+			memberEmails[memberEmail] = struct{}{}
+			if member.Type != "USER" {
+				*issues = append(*issues, fmt.Sprintf("%s.type has unsupported value %q", memberPrefix, member.Type))
+			}
+			if _, exists := usersByEmail[memberEmail]; !exists {
+				*issues = append(*issues, fmt.Sprintf("%s.email references unknown Google user %q", memberPrefix, member.Email))
+			}
+			if member.Role != "OWNER" && member.Role != "MANAGER" && member.Role != "MEMBER" {
+				*issues = append(*issues, fmt.Sprintf("%s.role has unsupported value %q", memberPrefix, member.Role))
+			}
+		}
+	}
+
+	fileIDs := make(map[string]struct{})
+	for i, file := range provider.DriveFiles {
+		prefix := fmt.Sprintf("spec.providers.google.driveFiles[%d]", i)
+		validateGoogleObjectID(issues, prefix+".id", file.ID, objectIDs)
+		fileIDs[file.ID] = struct{}{}
+		checkReference(issues, prefix+".node", file.Node, resources)
+		validateMicrosoftNodeTenant(issues, prefix+".node", file.Node, provider.Tenant, resourceTenants)
+		requireText(issues, prefix+".name", file.Name)
+		requireText(issues, prefix+".mimeType", file.MimeType)
+	}
+
+	permissionKeys := make(map[string]struct{})
+	for i, permission := range provider.DrivePermissions {
+		prefix := fmt.Sprintf("spec.providers.google.drivePermissions[%d]", i)
+		validateGoogleID(issues, prefix+".id", permission.ID)
+		if _, exists := fileIDs[permission.FileID]; !exists {
+			*issues = append(*issues, fmt.Sprintf("%s.fileId references unknown Drive file %q", prefix, permission.FileID))
+		}
+		key := permission.FileID + ":" + permission.ID
+		if _, exists := permissionKeys[key]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s duplicates permission %q for file %q", prefix, permission.ID, permission.FileID))
+		}
+		permissionKeys[key] = struct{}{}
+		email := validateGoogleEmail(issues, prefix+".emailAddress", permission.EmailAddress)
+		switch permission.Type {
+		case "user":
+			if _, exists := usersByEmail[email]; !exists {
+				*issues = append(*issues, fmt.Sprintf("%s.emailAddress references unknown Google user %q", prefix, permission.EmailAddress))
+			}
+		case "group":
+			if _, exists := groupsByEmail[email]; !exists {
+				*issues = append(*issues, fmt.Sprintf("%s.emailAddress references unknown Google group %q", prefix, permission.EmailAddress))
+			}
+		default:
+			*issues = append(*issues, fmt.Sprintf("%s.type has unsupported value %q", prefix, permission.Type))
+		}
+		if permission.Role != "reader" && permission.Role != "commenter" && permission.Role != "writer" {
+			*issues = append(*issues, fmt.Sprintf("%s.role has unsupported value %q", prefix, permission.Role))
+		}
+	}
+}
+
+func validateGoogleObjectID(issues *[]string, field, value string, objects map[string]string) {
+	validateGoogleID(issues, field, value)
+	if previous, exists := objects[value]; exists {
+		*issues = append(*issues, fmt.Sprintf("%s %q duplicates %s", field, value, previous))
+	}
+	objects[value] = field
+}
+
+func validateGoogleID(issues *[]string, field, value string) {
+	if !googleObjectIDPattern.MatchString(value) {
+		*issues = append(*issues, fmt.Sprintf("%s has invalid Google object ID %q", field, value))
+	}
+}
+
+func validateGoogleEmail(issues *[]string, field, value string) string {
+	normalized := strings.ToLower(value)
+	if value != normalized || !emailPattern.MatchString(value) {
+		*issues = append(*issues, fmt.Sprintf("%s must be a lowercase email address", field))
+	}
+	return normalized
 }
 
 func validateMicrosoftProvider(

@@ -15,7 +15,7 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0 and the M1 AWS identity slice are complete. M2 now includes a development Microsoft identity slice: a persistent native Microsoft Graph-shaped facade, users, applications, service principals, delegated permission grants, live consent-path normalization, scoped remediation, reset, and cleanup. Google, local OIDC federation, the full cross-provider chain, and agent governance remain planned. Provider compatibility is limited to the tested operations in the compatibility matrices.
+M0 and the M1 AWS identity slice are complete. M2 now includes development Microsoft and Google identity slices. The Google slice provides a persistent native Directory/Drive-shaped facade, direct group membership, selected files and permissions, live path normalization, scoped permission deletion, reset, and cleanup. Local OIDC federation, the full cross-provider chain, and agent governance remain planned. Provider compatibility is limited to the tested operations in the compatibility matrices.
 
 ## Build and try the walking skeleton
 
@@ -58,6 +58,17 @@ This scenario starts with an ordinary analyst holding an excessive delegated Mic
 ./bin/cailab verify
 ```
 
+## Try the Google identity slice
+
+This scenario starts with a contractor holding a direct permission on a restricted Drive file while an approved administrator reaches it through a group. Follow the [Google Drive sharing lab guide](docs/07-guides/google-drive-sharing-lab.md) to inspect Directory and Drive state, remove only the contractor grant, and preserve the intended path. Docker and a Google account are not required.
+
+```bash
+./bin/cailab up google-drive-sharing
+./bin/cailab status
+./bin/cailab graph path principal:contractor resource:retention-plan
+./bin/cailab verify
+```
+
 ## Development checks
 
 ```bash
@@ -97,6 +108,8 @@ go run ./internal/tools/doccheck .
 - [AWS/Floci compatibility matrix](docs/07-compatibility/aws-floci-1.5.32.md)
 - [Microsoft consent lab](docs/07-guides/microsoft-consent-lab.md)
 - [Microsoft Graph facade compatibility matrix](docs/07-compatibility/microsoft-graph-facade.md)
+- [Google Drive sharing lab](docs/07-guides/google-drive-sharing-lab.md)
+- [Google Workspace facade compatibility matrix](docs/07-compatibility/google-workspace-facade.md)
 
 ## Working vocabulary
 

@@ -72,10 +72,11 @@ It does not assert containment for arbitrary agent processes unless an isolation
 
 ## M2 residual risk
 
-- The native Microsoft facade runs as the current OS user and is not an agent sandbox.
-- `Bearer cailab-local` gates the first training API but is not a signed token or caller identity; local OIDC remains M2 work.
-- The facade uses HTTP on IPv4 loopback and must never be advertised as a network service.
-- The supported Microsoft Graph surface is intentionally incomplete and does not enforce Entra directory roles or real consent policy.
+- The native Microsoft and Google facades run as the current OS user and are not agent sandboxes.
+- `Bearer cailab-local` and `Bearer cailab-google-local` gate training APIs but are not signed tokens or caller identities; local OIDC remains M2 work.
+- Facades use HTTP on IPv4 loopback and must never be advertised as network services.
+- The supported Graph, Directory, and Drive surfaces are intentionally incomplete and do not enforce real provider roles, consent policy, sharing policy, inherited permissions, or OAuth semantics.
+- Synthetic Drive content is readable by any local process that receives the endpoint and static API token; scenarios must not contain real secrets.
 
 ## Review triggers
 

@@ -9,7 +9,7 @@ status: draft
 
 A scenario is a versioned, reproducible enterprise topology plus a mission, intentional weaknesses, observable events, and deterministic verification rules.
 
-The normative schema is [schemas/scenario/v1alpha1.json](../../schemas/scenario/v1alpha1.json). Executable references are [scenarios/walking-skeleton/scenario.yaml](../../scenarios/walking-skeleton/scenario.yaml), [scenarios/aws-cross-account/scenario.yaml](../../scenarios/aws-cross-account/scenario.yaml), and [scenarios/microsoft-consent/scenario.yaml](../../scenarios/microsoft-consent/scenario.yaml). This document explains the authoring contract but does not override the schema or typed validator.
+The normative schema is [schemas/scenario/v1alpha1.json](../../schemas/scenario/v1alpha1.json). Executable references are [scenarios/walking-skeleton/scenario.yaml](../../scenarios/walking-skeleton/scenario.yaml), [scenarios/aws-cross-account/scenario.yaml](../../scenarios/aws-cross-account/scenario.yaml), [scenarios/microsoft-consent/scenario.yaml](../../scenarios/microsoft-consent/scenario.yaml), and [scenarios/google-drive-sharing/scenario.yaml](../../scenarios/google-drive-sharing/scenario.yaml). This document explains the authoring contract but does not override the schema or typed validator.
 
 ## Required sections
 
@@ -89,6 +89,9 @@ spec:
 - AWS account principal references and role/bucket nodes must resolve to canonical principals and resources.
 - Microsoft directory object IDs use GUID syntax and map explicitly to canonical principal or resource nodes.
 - Microsoft delegated grants must reference a declared user, client service principal, and resource service principal. The current schema accepts only principal-specific consent.
+- Google user, group, member, file, and permission IDs use the provider's scoped identifier syntax and map explicitly to canonical nodes.
+- Google member email addresses must reference declared users; Drive user/group permissions must reference the corresponding declared principal and file.
+- The current Google slice accepts direct `USER` group members and direct `user` or `group` Drive permissions with `reader`, `commenter`, or `writer` roles.
 
 ## Flagship scenario acceptance criteria
 

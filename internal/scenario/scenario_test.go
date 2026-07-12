@@ -179,6 +179,17 @@ func TestRepositorySchemaAndReferenceScenario(t *testing.T) {
 	if microsoftCompiled.Providers.Microsoft == nil || len(microsoftCompiled.Providers.Microsoft.OAuth2PermissionGrants) != 2 {
 		t.Fatalf("compiled Microsoft provider = %+v", microsoftCompiled.Providers.Microsoft)
 	}
+	google, err := Load(filepath.Join(root, "scenarios", "google-drive-sharing", "scenario.yaml"))
+	if err != nil {
+		t.Fatalf("load Google scenario: %v", err)
+	}
+	googleCompiled, err := Compile(google, google.Spec.Seed)
+	if err != nil {
+		t.Fatalf("compile Google scenario: %v", err)
+	}
+	if googleCompiled.Providers.Google == nil || len(googleCompiled.Providers.Google.DrivePermissions) != 2 {
+		t.Fatalf("compiled Google provider = %+v", googleCompiled.Providers.Google)
+	}
 }
 
 func TestMicrosoftGrantReferencesDeclaredDirectoryObjects(t *testing.T) {
@@ -191,6 +202,19 @@ func TestMicrosoftGrantReferencesDeclaredDirectoryObjects(t *testing.T) {
 	err = Validate(definition)
 	if err == nil || !strings.Contains(err.Error(), "clientId references unknown client service principal") {
 		t.Fatalf("Validate() Microsoft reference error = %v", err)
+	}
+}
+
+func TestGooglePermissionReferencesDeclaredDirectoryObject(t *testing.T) {
+	t.Parallel()
+	definition, err := Load(filepath.Join("..", "..", "scenarios", "google-drive-sharing", "scenario.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition.Spec.Providers.Google.DrivePermissions[0].EmailAddress = "unknown@example.test"
+	err = Validate(definition)
+	if err == nil || !strings.Contains(err.Error(), "references unknown Google user") {
+		t.Fatalf("Validate() Google reference error = %v", err)
 	}
 }
 

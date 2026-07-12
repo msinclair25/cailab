@@ -36,6 +36,7 @@ type Spec struct {
 type Runtimes struct {
 	AWS       *AWSRuntime       `json:"aws,omitempty" yaml:"aws,omitempty"`
 	Microsoft *MicrosoftRuntime `json:"microsoft,omitempty" yaml:"microsoft,omitempty"`
+	Google    *GoogleRuntime    `json:"google,omitempty" yaml:"google,omitempty"`
 }
 
 type AWSRuntime struct {
@@ -48,9 +49,62 @@ type MicrosoftRuntime struct {
 	Engine string `json:"engine" yaml:"engine"`
 }
 
+type GoogleRuntime struct {
+	Engine string `json:"engine" yaml:"engine"`
+}
+
 type Providers struct {
 	AWS       *AWSProvider       `json:"aws,omitempty" yaml:"aws,omitempty"`
 	Microsoft *MicrosoftProvider `json:"microsoft,omitempty" yaml:"microsoft,omitempty"`
+	Google    *GoogleProvider    `json:"google,omitempty" yaml:"google,omitempty"`
+}
+
+type GoogleProvider struct {
+	Tenant           string                  `json:"tenant" yaml:"tenant"`
+	CustomerID       string                  `json:"customerId" yaml:"customerId"`
+	Users            []GoogleUser            `json:"users" yaml:"users"`
+	Groups           []GoogleGroup           `json:"groups" yaml:"groups"`
+	DriveFiles       []GoogleDriveFile       `json:"driveFiles" yaml:"driveFiles"`
+	DrivePermissions []GoogleDrivePermission `json:"drivePermissions" yaml:"drivePermissions"`
+}
+
+type GoogleUser struct {
+	Node         string `json:"node" yaml:"node"`
+	ID           string `json:"id" yaml:"id"`
+	PrimaryEmail string `json:"primaryEmail" yaml:"primaryEmail"`
+	DisplayName  string `json:"displayName" yaml:"displayName"`
+}
+
+type GoogleGroup struct {
+	Node        string              `json:"node" yaml:"node"`
+	ID          string              `json:"id" yaml:"id"`
+	Email       string              `json:"email" yaml:"email"`
+	Name        string              `json:"name" yaml:"name"`
+	Description string              `json:"description,omitempty" yaml:"description,omitempty"`
+	Members     []GoogleGroupMember `json:"members" yaml:"members"`
+}
+
+type GoogleGroupMember struct {
+	ID    string `json:"id" yaml:"id"`
+	Email string `json:"email" yaml:"email"`
+	Role  string `json:"role" yaml:"role"`
+	Type  string `json:"type" yaml:"type"`
+}
+
+type GoogleDriveFile struct {
+	Node     string `json:"node" yaml:"node"`
+	ID       string `json:"id" yaml:"id"`
+	Name     string `json:"name" yaml:"name"`
+	MimeType string `json:"mimeType" yaml:"mimeType"`
+	Content  string `json:"content" yaml:"content"`
+}
+
+type GoogleDrivePermission struct {
+	ID           string `json:"id" yaml:"id"`
+	FileID       string `json:"fileId" yaml:"fileId"`
+	Type         string `json:"type" yaml:"type"`
+	EmailAddress string `json:"emailAddress" yaml:"emailAddress"`
+	Role         string `json:"role" yaml:"role"`
 }
 
 type MicrosoftProvider struct {
