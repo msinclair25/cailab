@@ -5,13 +5,15 @@ import (
 	"fmt"
 
 	"github.com/msinclair25/cailab/internal/graph"
+	"github.com/msinclair25/cailab/internal/provider"
 	"github.com/msinclair25/cailab/internal/scenario"
 	"github.com/msinclair25/cailab/internal/state"
 	"github.com/msinclair25/cailab/internal/verify"
 )
 
 type Service struct {
-	store *state.Store
+	store    *state.Store
+	provider provider.Manager
 }
 
 type UpOptions struct {
@@ -19,8 +21,8 @@ type UpOptions struct {
 	Seed         *int64
 }
 
-func New(store *state.Store) *Service {
-	return &Service{store: store}
+func New(store *state.Store, providerManager provider.Manager) *Service {
+	return &Service{store: store, provider: providerManager}
 }
 
 func (s *Service) Up(ctx context.Context, options UpOptions) (state.Run, error) {
@@ -40,6 +42,17 @@ func (s *Service) Up(ctx context.Context, options UpOptions) (state.Run, error) 
 	if err != nil {
 		return state.Run{}, err
 	}
+	instances, err := s.provider.Start(ctx, run.ID, compiled)
+	if err != nil {
+		_, _ = s.store.StopActiveRun(context.Background())
+		return state.Run{}, err
+	}
+	if err := s.store.SetRuntimes(ctx, run.ID, instances); err != nil {
+		_ = s.provider.Stop(context.Background(), run.ID, instances)
+		_, _ = s.store.StopActiveRun(context.Background())
+		return state.Run{}, err
+	}
+	run.Runtimes = instances
 	return run, nil
 }
 
@@ -60,7 +73,11 @@ func (s *Service) Verify(ctx context.Context) (verify.Report, error) {
 	if err != nil {
 		return verify.Report{}, err
 	}
-	return verify.Evaluate(run.ID, run.Compiled)
+	compiled, err := s.provider.Snapshot(ctx, run.Runtimes, run.Compiled)
+	if err != nil {
+		return verify.Report{}, fmt.Errorf("snapshot provider state: %w", err)
+	}
+	return verify.Evaluate(run.ID, compiled)
 }
 
 func (s *Service) Path(ctx context.Context, from, to string) (graph.Path, bool, error) {
@@ -68,7 +85,11 @@ func (s *Service) Path(ctx context.Context, from, to string) (graph.Path, bool, 
 	if err != nil {
 		return graph.Path{}, false, err
 	}
-	g, err := graph.New(run.Compiled.Nodes, run.Compiled.Edges)
+	compiled, err := s.provider.Snapshot(ctx, run.Runtimes, run.Compiled)
+	if err != nil {
+		return graph.Path{}, false, fmt.Errorf("snapshot provider state: %w", err)
+	}
+	g, err := graph.New(compiled.Nodes, compiled.Edges)
 	if err != nil {
 		return graph.Path{}, false, fmt.Errorf("build active graph: %w", err)
 	}
@@ -77,9 +98,43 @@ func (s *Service) Path(ctx context.Context, from, to string) (graph.Path, bool, 
 }
 
 func (s *Service) Reset(ctx context.Context) (state.Run, error) {
-	return s.store.ResetActiveRun(ctx)
+	run, err := s.store.ActiveRun(ctx)
+	if err != nil {
+		return state.Run{}, err
+	}
+	if len(run.Runtimes) > 0 || run.Compiled.Runtimes.AWS != nil {
+		if err := s.provider.Stop(ctx, run.ID, run.Runtimes); err != nil {
+			return state.Run{}, err
+		}
+	}
+	if err := s.store.SetRuntimes(ctx, run.ID, nil); err != nil {
+		return state.Run{}, err
+	}
+	instances, err := s.provider.Start(ctx, run.ID, run.Compiled)
+	if err != nil {
+		return state.Run{}, err
+	}
+	if err := s.store.SetRuntimes(ctx, run.ID, instances); err != nil {
+		_ = s.provider.Stop(context.Background(), run.ID, instances)
+		return state.Run{}, err
+	}
+	run, err = s.store.ResetActiveRun(ctx)
+	if err != nil {
+		return state.Run{}, err
+	}
+	run.Runtimes = instances
+	return run, nil
 }
 
 func (s *Service) Down(ctx context.Context) (state.Run, error) {
+	run, err := s.store.ActiveRun(ctx)
+	if err != nil {
+		return state.Run{}, err
+	}
+	if len(run.Runtimes) > 0 || run.Compiled.Runtimes.AWS != nil {
+		if err := s.provider.Stop(ctx, run.ID, run.Runtimes); err != nil {
+			return state.Run{}, err
+		}
+	}
 	return s.store.StopActiveRun(ctx)
 }

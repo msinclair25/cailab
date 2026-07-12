@@ -2,7 +2,7 @@
 title: CloudAILab
 aliases:
   - CAL
-status: m0-complete
+status: m1-development
 ---
 
 # CloudAILab
@@ -15,11 +15,11 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0, the executable walking skeleton, is complete. The repository implements strict scenario loading, deterministic compilation, canonical path analysis, SQLite-backed run lifecycle, deterministic invariant verification, and the initial CLI. AWS, Microsoft, Google, and agent runtimes are not implemented yet. No provider compatibility claim should be treated as implemented until it appears in a tested compatibility matrix.
+M0, the executable walking skeleton, is complete. M1 now includes a development AWS vertical slice backed by a digest-pinned Floci runtime: two accounts, IAM role trust, STS role assumption, S3 data, live trust-path normalization, remediation-aware verification, reset, and cleanup. Microsoft, Google, and agent runtimes are not implemented yet. Provider compatibility is limited to the tested operations in the compatibility matrix.
 
 ## Build and try M0
 
-Prerequisites: Go 1.25.8 or newer. Docker is checked by `doctor` because provider runtimes will require it beginning in M1.
+Prerequisites: Go 1.25.12 or newer. Docker is required for provider-backed scenarios.
 
 ```bash
 go build -o ./bin/cailab ./cmd/cailab
@@ -34,6 +34,18 @@ go build -o ./bin/cailab ./cmd/cailab
 ```
 
 The default state database is `.cloudailab/cailab.db`. Override it with `--state-dir` on lifecycle commands or set `CAILAB_HOME`.
+
+## Try the AWS vertical slice
+
+The initial `verify` is expected to fail because the scenario starts vulnerable. Follow the [AWS cross-account lab guide](docs/07-guides/aws-cross-account-lab.md) to prove the access with the AWS CLI, narrow the role trust, and make both invariants pass.
+
+```bash
+./bin/cailab up aws-cross-account
+./bin/cailab status
+./bin/cailab mission
+./bin/cailab graph path aws:parent-root aws:acquisition-data
+./bin/cailab verify
+```
 
 ## Development checks
 
@@ -70,6 +82,8 @@ go run ./internal/tools/doccheck .
 - [Quality strategy](docs/05-engineering/quality-strategy.md)
 - [Delivery roadmap](docs/05-engineering/roadmap.md)
 - [Technical basis and source register](docs/06-research/technical-basis.md)
+- [AWS cross-account lab](docs/07-guides/aws-cross-account-lab.md)
+- [AWS/Floci compatibility matrix](docs/07-compatibility/aws-floci-1.5.32.md)
 
 ## Working vocabulary
 

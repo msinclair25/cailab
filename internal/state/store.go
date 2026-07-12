@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/msinclair25/cailab/internal/provider"
 	"github.com/msinclair25/cailab/internal/scenario"
 	_ "modernc.org/sqlite"
 )
@@ -21,7 +22,7 @@ var (
 	ErrActiveRun   = errors.New("an active run already exists")
 )
 
-const currentSchemaVersion = 1
+const currentSchemaVersion = 2
 
 type Store struct {
 	db *sql.DB
@@ -34,6 +35,7 @@ type Run struct {
 	Seed            int64
 	Status          string
 	Compiled        scenario.Compiled
+	Runtimes        []provider.Instance
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
@@ -110,6 +112,16 @@ CREATE UNIQUE INDEX one_active_run ON runs(status) WHERE status = 'active';
 			`INSERT INTO schema_migrations(version, applied_at) VALUES(1, ?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record state migration 1: %w", err)
 		}
+		version = 1
+	}
+	if version < 2 {
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE runs ADD COLUMN runtimes_json TEXT NOT NULL DEFAULT '[]'`); err != nil {
+			return fmt.Errorf("apply state migration 2: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO schema_migrations(version, applied_at) VALUES(2, ?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record state migration 2: %w", err)
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit state migration: %w", err)
@@ -151,17 +163,17 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
 
 func (s *Store) ActiveRun(ctx context.Context) (Run, error) {
 	return s.queryRun(ctx, `
-SELECT id, scenario_name, scenario_version, seed, status, compiled_json, created_at, updated_at
+SELECT id, scenario_name, scenario_version, seed, status, compiled_json, runtimes_json, created_at, updated_at
 FROM runs WHERE status = 'active' LIMIT 1`)
 }
 
 func (s *Store) queryRun(ctx context.Context, query string, args ...any) (Run, error) {
 	var run Run
-	var data []byte
+	var data, runtimeData []byte
 	var createdAt, updatedAt string
 	err := s.db.QueryRowContext(ctx, query, args...).Scan(
 		&run.ID, &run.ScenarioName, &run.ScenarioVersion, &run.Seed, &run.Status,
-		&data, &createdAt, &updatedAt,
+		&data, &runtimeData, &createdAt, &updatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Run{}, ErrNoActiveRun
@@ -172,6 +184,9 @@ func (s *Store) queryRun(ctx context.Context, query string, args ...any) (Run, e
 	if err := json.Unmarshal(data, &run.Compiled); err != nil {
 		return Run{}, fmt.Errorf("decode run %q state: %w", run.ID, err)
 	}
+	if err := json.Unmarshal(runtimeData, &run.Runtimes); err != nil {
+		return Run{}, fmt.Errorf("decode run %q runtimes: %w", run.ID, err)
+	}
 	run.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAt)
 	if err != nil {
 		return Run{}, fmt.Errorf("parse run %q creation time: %w", run.ID, err)
@@ -181,6 +196,27 @@ func (s *Store) queryRun(ctx context.Context, query string, args ...any) (Run, e
 		return Run{}, fmt.Errorf("parse run %q update time: %w", run.ID, err)
 	}
 	return run, nil
+}
+
+func (s *Store) SetRuntimes(ctx context.Context, runID string, runtimes []provider.Instance) error {
+	data, err := json.Marshal(runtimes)
+	if err != nil {
+		return fmt.Errorf("encode run %q runtimes: %w", runID, err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE runs SET runtimes_json = ?, updated_at = ? WHERE id = ? AND status = 'active'`, data, now, runID)
+	if err != nil {
+		return fmt.Errorf("save run %q runtimes: %w", runID, err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("confirm run %q runtimes: %w", runID, err)
+	}
+	if rows != 1 {
+		return ErrNoActiveRun
+	}
+	return nil
 }
 
 func newRunID(scenarioName string) (string, error) {

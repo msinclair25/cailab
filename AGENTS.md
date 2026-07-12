@@ -1,6 +1,6 @@
 # CloudAILab repository guidance
 
-CloudAILab is a local enterprise identity and AI-agent security range. M0 is an executable control-plane walking skeleton; provider and agent runtimes remain planned. Present only behavior covered by the implementation and tests as available.
+CloudAILab is a local enterprise identity and AI-agent security range. M0 is complete and M1 contains a scoped AWS/Floci IAM, STS, and S3 vertical slice. Microsoft, Google, and agent runtimes remain planned. Present only behavior covered by the implementation, integration tests, and compatibility matrix as available.
 
 ## Before changing the project
 

@@ -9,7 +9,7 @@ status: draft
 
 A scenario is a versioned, reproducible enterprise topology plus a mission, intentional weaknesses, observable events, and deterministic verification rules.
 
-The normative M0 schema is [schemas/scenario/v1alpha1.json](../../schemas/scenario/v1alpha1.json). The executable reference is [scenarios/walking-skeleton/scenario.yaml](../../scenarios/walking-skeleton/scenario.yaml). This document explains the authoring contract but does not override the schema or typed validator.
+The normative schema is [schemas/scenario/v1alpha1.json](../../schemas/scenario/v1alpha1.json). Executable references are [scenarios/walking-skeleton/scenario.yaml](../../scenarios/walking-skeleton/scenario.yaml) and [scenarios/aws-cross-account/scenario.yaml](../../scenarios/aws-cross-account/scenario.yaml). This document explains the authoring contract but does not override the schema or typed validator.
 
 ## Required sections
 
@@ -28,7 +28,7 @@ The normative M0 schema is [schemas/scenario/v1alpha1.json](../../schemas/scenar
 
 ## Minimal manifest
 
-This abbreviated example follows the committed M0 schema. See the reference scenario for a complete file.
+This abbreviated example follows the committed schema. See the reference scenarios for complete files.
 
 ```yaml
 apiVersion: cloudailab.dev/v1alpha1
@@ -82,8 +82,11 @@ spec:
 - Intentional weaknesses include learning rationale and expected remediation classes.
 - Verification states the required outcome, not one mandatory implementation.
 - Hidden ground truth is separable from the learner-visible scenario package.
-- Unknown fields are rejected by the M0 decoder.
+- Unknown fields are rejected by the decoder.
 - IDs are unique across tenants, principals, and resources.
+- Provider runtimes must be code-allowlisted and pinned to the exact digest accepted by the schema.
+- AWS provider topology uses typed accounts, roles, inline policies, buckets, and synthetic objects; scenario-provided shell hooks are not supported.
+- AWS account principal references and role/bucket nodes must resolve to canonical principals and resources.
 
 ## Flagship scenario acceptance criteria
 

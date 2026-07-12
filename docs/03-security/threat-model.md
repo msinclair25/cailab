@@ -1,6 +1,6 @@
 ---
 title: Threat Model
-status: draft
+status: active
 ---
 
 # Threat model
@@ -45,6 +45,9 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-008 | Verification rules are disclosed or modified during a mission. | Separate public objectives from protected ground truth, integrity hashes, read-only mission mounts in isolated mode. |
 | TM-009 | Hosted AI receives sensitive traces or secrets. | Opt-in adapters, field-level redaction, outbound preview, provider configuration, no implicit uploads. |
 | TM-010 | An AI-generated explanation contradicts evidence. | Evidence citations, deterministic score precedence, explicit non-authoritative labeling. |
+| TM-011 | A scenario causes CAL to pull and execute an attacker-selected container. | Code-owned runtime allowlist, immutable OCI digest, schema rejection of custom images, no implicit shell hooks. |
+| TM-012 | Cleanup removes an unrelated host container. | CAL ownership label, per-run label, deterministic names, label verification before removal. |
+| TM-013 | The provider container gains unnecessary host authority. | Non-root UID, all capabilities dropped, `no-new-privileges`, CPU/memory limits, no Docker socket mount for M1, loopback-only published API. |
 
 ## Security invariants
 
@@ -54,6 +57,15 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - Agent authority cannot exceed the credential and policy attached to its current run.
 - Every governed agent tool call produces a decision record.
 - Optional coaching cannot change verification state or score.
+- A scenario cannot select a provider image outside the release allowlist.
+- CAL removes a provider container only when its persisted or discovered run label matches the active run.
+
+## M1 residual risk
+
+- The Floci container uses Docker's bridge network and may have outbound network access. It is not an agent sandbox.
+- Docker daemon access by the `cailab` process is host-equivalent authority even though the child container is unprivileged.
+- Digest pinning establishes artifact identity, not that the artifact is vulnerability-free or independently reproducible.
+- Floci signature validation remains disabled for the synthetic M1 workflow, and unknown local access keys are permissive emulator behavior.
 
 ## Review triggers
 

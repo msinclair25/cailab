@@ -48,6 +48,11 @@ jobs:
       - name: Test with race detector
         run: go test -race -count=1 ./...
 
+      - name: Test pinned Floci integration
+        env:
+          CAILAB_DOCKER_INTEGRATION: "1"
+        run: go test -count=1 -run '^TestFlociIntegration$' -v ./internal/provider
+
       - name: Check documentation
         run: go run ./internal/tools/doccheck .
 

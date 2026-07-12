@@ -48,6 +48,10 @@ func TestWalkingSkeletonLifecycle(t *testing.T) {
 	}
 	assertRun(ExitOK, "reset", "--state-dir", stateDir)
 	assertRun(ExitOK, "down", "--state-dir", stateDir)
+	output = assertRun(ExitOK, "down", "--state-dir", stateDir)
+	if !strings.Contains(output, "no active run") {
+		t.Fatalf("second down output = %q", output)
+	}
 	if code := c.Run(ctx, []string{"status", "--state-dir", stateDir}); code != ExitError {
 		t.Fatalf("status after down code = %d, want %d", code, ExitError)
 	}
@@ -78,6 +82,21 @@ func TestVerificationFailureUsesDedicatedExitCode(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "1 failed") {
 		t.Fatalf("verify output = %q", stdout.String())
+	}
+}
+
+func TestDockerVersionSupported(t *testing.T) {
+	t.Parallel()
+	tests := map[string]bool{
+		"20.9.9":  false,
+		"20.10.0": true,
+		"29.5.3":  true,
+		"invalid": false,
+	}
+	for version, want := range tests {
+		if got := dockerVersionSupported(version); got != want {
+			t.Errorf("dockerVersionSupported(%q) = %v, want %v", version, got, want)
+		}
 	}
 }
 

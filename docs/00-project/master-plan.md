@@ -3,7 +3,7 @@ title: CloudAILab Master Plan
 status: active
 plan_version: 0.1.0
 last_reviewed: 2026-07-11
-current_milestone: M0
+current_milestone: M1
 ---
 
 # CloudAILab master plan
@@ -12,7 +12,7 @@ current_milestone: M0
 
 This document is the execution plan for CloudAILab. The [project charter](charter.md) defines why the project exists, the [product requirements](../01-product/requirements.md) define required behavior, accepted [architecture decisions](../02-architecture/decisions/README.md) constrain implementation, and this plan defines delivery order and evidence gates.
 
-The plan is intentionally milestone-based rather than date-based. Calendar estimates will be made only after the M0 walking skeleton measures the unknowns around policy evaluation, provider translation, SQLite packaging, and container orchestration.
+The plan is intentionally milestone-based rather than date-based. M0 measured the control-plane, SQLite, and packaging baseline; M1 is measuring provider translation, container lifecycle, and compatibility limits before broader estimates are made.
 
 ## Product outcome
 
@@ -158,11 +158,11 @@ Stable IDs are opaque and provider-neutral. Provider IDs and raw payloads are pr
 
 ### WS3 — State, graph, and policy
 
-- Select a SQLite driver after measuring CGO, portability, and release implications.
+- Maintain the accepted CGO-free SQLite driver and validate migrations and release targets on every relevant change.
 - Use numbered, forward-only schema migrations with transaction tests.
 - Implement graph reachability and explainable path evidence before optimization.
 - Start with typed built-in invariant predicates rather than a general user policy language.
-- Run an M0 spike comparing built-in predicates with an embedded policy engine; record the result in an ADR before exposing a policy DSL. OPA is a candidate because it supports declarative policy and policy tests, but it is not preselected. [OPA policy testing](https://www.openpolicyagent.org/docs/policy-testing)
+- Keep typed built-in predicates as accepted by ADR-0006. Evaluate a policy engine only when accepted scenarios demonstrate requirements the typed model cannot express cleanly. [OPA policy testing](https://www.openpolicyagent.org/docs/policy-testing)
 
 ### WS4 — Provider surfaces
 
@@ -246,6 +246,8 @@ Exit gate:
 - All proposed M0 ADRs are accepted or explicitly deferred.
 
 ### M1 — AWS identity vertical slice
+
+**Status:** in development. The first IAM/STS/S3 trust-remediation slice is executable and undergoing compatibility and release hardening.
 
 **Goal:** prove the adapter, normalization, policy, and remediation loop against Floci.
 
@@ -340,7 +342,7 @@ Version 1.0 is not tied to API breadth. It requires:
 - Operation-level compatibility documentation.
 - Reproducible releases and a maintained security policy.
 
-## Repository shape at M0
+## Repository shape
 
 Directories are created when they contain real code or artifacts; empty speculative packages are avoided.
 
@@ -351,8 +353,7 @@ internal/domain/             # Canonical typed model
 internal/graph/              # Reachability and path evidence
 internal/policy/             # Deterministic decisions and invariants
 internal/state/              # SQLite access and migrations
-internal/runtime/            # Process/container lifecycle
-internal/provider/aws/       # Added in M1
+internal/provider/           # Provider lifecycle, AWS hydration, snapshots
 internal/provider/microsoft/ # Added in M2
 internal/provider/google/    # Added in M2
 internal/identity/           # Local issuer, added in M2
@@ -383,7 +384,7 @@ Minimum pull-request checks after Go scaffolding:
 
 Container integration tests run on changes to lifecycle or provider code and on the default branch. Bounded fuzzing and cross-platform builds run on scheduled or release workflows until runtime permits broader pull-request coverage.
 
-No global coverage percentage is selected before M0 establishes a meaningful baseline. Critical policy, graph, compiler, and isolation behavior must have explicit positive, negative, and regression tests regardless of line coverage.
+Coverage remains diagnostic rather than a release target. Critical policy, graph, compiler, lifecycle, and isolation behavior must have explicit positive, negative, integration, and regression tests regardless of line coverage.
 
 ## Documentation system
 
@@ -422,9 +423,9 @@ Document statuses are `draft`, `proposed`, `accepted`, `active`, `deprecated`, o
 
 The following questions must be resolved through spikes and ADRs before dependent implementation proceeds:
 
-1. SQLite driver and CGO/static-build policy — M0.
-2. Docker/Podman control through CLI or API — M0.
-3. Built-in invariant predicates versus embedded policy engine — M0.
+1. SQLite driver and CGO/static-build policy — resolved by ADR-0005.
+2. Docker provider control and runtime allowlisting — resolved for M1 Docker by ADR-0007; Podman remains untested.
+3. Built-in invariant predicates versus embedded policy engine — resolved by ADR-0006.
 4. Canonical policy condition representation — before M1 compatibility claims.
 5. Microsoft and Google pagination/error subset — before M2 facade implementation.
 6. Agent subprocess trace protocol and approval handshake — before M3.
@@ -440,8 +441,8 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Review and accept or amend ADR-0001 through ADR-0004; ADR-0005 records the implemented SQLite decision.
-2. Complete M0 CLI, state, scenario, verification, and CI exit gates.
-3. Resolve the container-control and policy-engine spikes before M1.
-4. Approve the MVP provider operation budget and flagship scenario narrative.
-5. Create M1 issues only after the M0 exit evidence is recorded.
+1. Complete the M1 Floci compatibility matrix and link every claim to automated evidence.
+2. Exercise the AWS CLI mission on Linux, macOS, and Windows documentation paths.
+3. Add failure-path tests for interrupted startup, unavailable Docker, and stale runtime metadata.
+4. Decide whether signature validation enters M1 or remains an explicitly documented emulator limitation.
+5. Record two consecutive clean scenario runs with no leaked containers, ports, or active state before the M1 exit decision.
