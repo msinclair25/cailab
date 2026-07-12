@@ -16,6 +16,7 @@ var awsRegionPattern = regexp.MustCompile(`^[a-z]{2}(-gov)?-[a-z]+-[0-9]$`)
 var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 var googleObjectIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 var emailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+$`)
+var oidcAudiencePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,253}[a-z0-9])?$`)
 
 var (
 	providerTypes     = setOf("aws", "microsoft", "google", "local")
@@ -269,6 +270,17 @@ func validateProviders(
 			seenTrust[trusted] = struct{}{}
 		}
 		validateAWSPolicies(issues, prefix+".policies", role.Policies)
+		if role.WebIdentity != nil {
+			webPrefix := prefix + ".webIdentity"
+			checkReference(issues, webPrefix+".clientNode", role.WebIdentity.ClientNode, principals)
+			checkReference(issues, webPrefix+".audienceNode", role.WebIdentity.AudienceNode, resources)
+			if !validOIDCAudienceValue(role.WebIdentity.Audience) {
+				*issues = append(*issues, fmt.Sprintf("%s.audience has invalid value %q", webPrefix, role.WebIdentity.Audience))
+			}
+			if !oidcClientAudienceExists(providers.OIDC, role.WebIdentity.ClientNode, role.WebIdentity.AudienceNode, role.WebIdentity.Audience) {
+				*issues = append(*issues, webPrefix+" must match a declared OIDC client and audience")
+			}
+		}
 	}
 
 	bucketNames := make(map[string]struct{})
@@ -366,9 +378,8 @@ func validateOIDCProvider(
 			audiencePrefix := fmt.Sprintf("%s.audiences[%d]", prefix, j)
 			checkReference(issues, audiencePrefix+".node", audience.Node, resources)
 			validateMicrosoftNodeTenant(issues, audiencePrefix+".node", audience.Node, provider.Tenant, resourceTenants)
-			parsed, err := url.Parse(audience.Value)
-			if err != nil || !((parsed.Scheme == "https" && parsed.Host != "") || (parsed.Scheme == "urn" && parsed.Opaque != "")) || parsed.Fragment != "" {
-				*issues = append(*issues, fmt.Sprintf("%s.value must be an absolute HTTPS or URN audience identifier without a fragment: %q", audiencePrefix, audience.Value))
+			if !validOIDCAudienceValue(audience.Value) {
+				*issues = append(*issues, fmt.Sprintf("%s.value must be an absolute HTTPS URI, URN, or DNS-style audience identifier without a fragment: %q", audiencePrefix, audience.Value))
 			}
 			if _, exists := audienceValues[audience.Value]; exists {
 				*issues = append(*issues, fmt.Sprintf("%s.value %q is duplicated", audiencePrefix, audience.Value))
@@ -625,6 +636,15 @@ func validateMicrosoftProvider(
 			*issues = append(*issues, fmt.Sprintf("%s.userPrincipalName must contain @", prefix))
 		}
 	}
+	groupIDs := make(map[string]struct{})
+	for i, group := range provider.Groups {
+		prefix := fmt.Sprintf("spec.providers.microsoft.groups[%d]", i)
+		validateMicrosoftObjectID(issues, prefix+".id", group.ID, objectIDs)
+		groupIDs[group.ID] = struct{}{}
+		checkReference(issues, prefix+".node", group.Node, principals)
+		validateMicrosoftNodeTenant(issues, prefix+".node", group.Node, provider.Tenant, principalTenants)
+		requireText(issues, prefix+".displayName", group.DisplayName)
+	}
 
 	applicationAppIDs := make(map[string]struct{})
 	for i, application := range provider.Applications {
@@ -641,6 +661,7 @@ func validateMicrosoftProvider(
 	}
 
 	servicePrincipalIDs := make(map[string]MicrosoftServicePrincipal)
+	appRolesByResource := make(map[string]map[string]struct{})
 	for i, servicePrincipal := range provider.ServicePrincipals {
 		prefix := fmt.Sprintf("spec.providers.microsoft.servicePrincipals[%d]", i)
 		validateMicrosoftObjectID(issues, prefix+".id", servicePrincipal.ID, objectIDs)
@@ -661,6 +682,23 @@ func validateMicrosoftProvider(
 			validateMicrosoftNodeTenant(issues, prefix+".resourceNode", servicePrincipal.ResourceNode, provider.Tenant, resourceTenants)
 		}
 		servicePrincipalIDs[servicePrincipal.ID] = servicePrincipal
+		roleIDs := make(map[string]struct{})
+		roleValues := make(map[string]struct{})
+		for j, appRole := range servicePrincipal.AppRoles {
+			rolePrefix := fmt.Sprintf("%s.appRoles[%d]", prefix, j)
+			validateMicrosoftUUID(issues, rolePrefix+".id", appRole.ID)
+			if _, exists := roleIDs[appRole.ID]; exists {
+				*issues = append(*issues, fmt.Sprintf("%s.id %q is duplicated", rolePrefix, appRole.ID))
+			}
+			roleIDs[appRole.ID] = struct{}{}
+			requireText(issues, rolePrefix+".value", appRole.Value)
+			if _, exists := roleValues[appRole.Value]; exists && appRole.Value != "" {
+				*issues = append(*issues, fmt.Sprintf("%s.value %q is duplicated", rolePrefix, appRole.Value))
+			}
+			roleValues[appRole.Value] = struct{}{}
+			requireText(issues, rolePrefix+".displayName", appRole.DisplayName)
+		}
+		appRolesByResource[servicePrincipal.ID] = roleIDs
 	}
 
 	grantIDs := make(map[string]struct{})
@@ -689,6 +727,53 @@ func validateMicrosoftProvider(
 			*issues = append(*issues, prefix+".scope must contain at least one permission")
 		}
 	}
+
+	assignmentIDs := make(map[string]struct{})
+	for i, assignment := range provider.AppRoleAssignments {
+		prefix := fmt.Sprintf("spec.providers.microsoft.appRoleAssignments[%d]", i)
+		validateMicrosoftUUID(issues, prefix+".id", assignment.ID)
+		if _, exists := assignmentIDs[assignment.ID]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s.id %q is duplicated", prefix, assignment.ID))
+		}
+		assignmentIDs[assignment.ID] = struct{}{}
+		if _, exists := groupIDs[assignment.PrincipalID]; !exists {
+			*issues = append(*issues, fmt.Sprintf("%s.principalId references unknown group %q", prefix, assignment.PrincipalID))
+		}
+		resource, exists := servicePrincipalIDs[assignment.ResourceID]
+		if !exists || resource.Node == "" {
+			*issues = append(*issues, fmt.Sprintf("%s.resourceId references unknown application service principal %q", prefix, assignment.ResourceID))
+		}
+		if roles, exists := appRolesByResource[assignment.ResourceID]; !exists {
+			*issues = append(*issues, fmt.Sprintf("%s.appRoleId has no declared resource app roles", prefix))
+		} else if _, exists := roles[assignment.AppRoleID]; !exists {
+			*issues = append(*issues, fmt.Sprintf("%s.appRoleId references unknown app role %q", prefix, assignment.AppRoleID))
+		}
+	}
+}
+
+func validOIDCAudienceValue(value string) bool {
+	parsed, err := url.Parse(value)
+	if err == nil && ((parsed.Scheme == "https" && parsed.Host != "") || (parsed.Scheme == "urn" && parsed.Opaque != "")) && parsed.Fragment == "" {
+		return true
+	}
+	return oidcAudiencePattern.MatchString(value)
+}
+
+func oidcClientAudienceExists(provider *OIDCProvider, clientNode, audienceNode, audienceValue string) bool {
+	if provider == nil {
+		return false
+	}
+	for _, client := range provider.Clients {
+		if client.Node != clientNode {
+			continue
+		}
+		for _, audience := range client.Audiences {
+			if audience.Node == audienceNode && audience.Value == audienceValue {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func validateMicrosoftObjectID(issues *[]string, field, value string, objects map[string]string) {

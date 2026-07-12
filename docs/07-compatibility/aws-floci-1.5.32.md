@@ -1,6 +1,6 @@
 ---
 title: AWS Compatibility Matrix — Floci 1.5.32
-status: m1-complete
+status: m2-complete
 last_reviewed: 2026-07-12
 runtime_digest: sha256:4f69631e560120d79ad82d2af9f7dda8c6ef7ecbbae0c43ddcffa109c6588a15
 ---
@@ -9,7 +9,7 @@ runtime_digest: sha256:4f69631e560120d79ad82d2af9f7dda8c6ef7ecbbae0c43ddcffa109c
 
 ## Claim boundary
 
-CloudAILab supports only the operations below for the `aws-cross-account` workflow. A listed operation is not a claim of complete service compatibility. The authoritative automated exercise is [`TestFlociIntegration`](../../internal/provider/docker_integration_test.go), with focused policy and runtime tests in [`internal/provider`](../../internal/provider).
+CloudAILab supports only the operations below for the `aws-cross-account` and `acquisition-agent` workflows. A listed operation is not a claim of complete service compatibility. The authoritative automated exercises are `TestFlociIntegration` and `TestCrossProviderFederationIntegration` in [`internal/provider`](../../internal/provider).
 
 Fidelity labels follow [ADR-0004](../02-architecture/decisions/0004-scenario-driven-compatibility.md):
 
@@ -37,6 +37,7 @@ Fidelity labels follow [ADR-0004](../02-architecture/decisions/0004-scenario-dri
 | IAM | `GetRole` | API-compatible for the scenario | Reads the current trust document for live graph normalization. | CAL normalizes only known account-root AWS principals. |
 | IAM | `UpdateAssumeRolePolicy` | API- and behavior-compatible for the scenario | AWS CLI mutation changes subsequent STS decisions and CAL trust edges. | `NotPrincipal` is unsupported by Floci. Trust-policy conditions are not evaluated by Floci STS. |
 | STS | `AssumeRole` | API-compatible; limited authorization compatibility | Trusted account root succeeds, untrusted root fails, and temporary credentials route to the role account. | Floci checks the target trust policy but does not fully enforce the caller-side `sts:AssumeRole` identity policy. `Condition` blocks such as `ExternalId` are ignored. |
+| STS | `AssumeRoleWithWebIdentity` | API-shaped response; CloudAILab-authorized | After the gateway validates the signed token, live Microsoft assignment, and typed web trust, Floci returns temporary credentials routed to the role account. | A measured invalid-JWT spike still received credentials directly from Floci. Floci is not the JWT or web-trust authority; direct calls are unsupported as security evidence. |
 | S3 | `CreateBucket` | API- and behavior-compatible for the scenario | Creates the scenario bucket in account B. | Only path-style addressing is used. No bucket-policy claim. |
 | S3 | `PutObject` | API- and behavior-compatible for the scenario | Seeds one synthetic object. | No encryption, versioning, ACL, or metadata fidelity claim. |
 | S3 | `GetObject` | API-compatible; limited authorization compatibility | Assumed-role credentials with an inline role policy retrieve the seeded object. | Floci IAM enforcement does not support S3 resource-based bucket policies. |
@@ -48,6 +49,7 @@ Fidelity labels follow [ADR-0004](../02-architecture/decisions/0004-scenario-dri
 - Unknown access keys are permissive in Floci. CAL uses only declared synthetic account IDs and generated STS credentials in the supported workflow.
 - IAM enforcement is enabled, but Floci permits unauthenticated health routes and operations it cannot map to an IAM action.
 - Resource-based policies are outside the M1 claim. Cross-provider and cross-account grading remains deterministic in CAL's normalized graph.
+- The M2 gateway owns `AssumeRoleWithWebIdentity` authorization. Existing temporary credentials are not revoked when a Microsoft assignment is later removed.
 
 ## Primary sources
 
@@ -58,3 +60,4 @@ Fidelity labels follow [ADR-0004](../02-architecture/decisions/0004-scenario-dri
 - [Floci S3 operations](https://floci.io/floci/services/s3/)
 - [Floci multi-account isolation](https://floci.io/floci/configuration/multi-account/)
 - [AWS IAM policy evaluation logic](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html)
+- [AWS web identity temporary credentials](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp_request.html)

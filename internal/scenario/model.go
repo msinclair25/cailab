@@ -143,12 +143,14 @@ type GoogleDrivePermission struct {
 }
 
 type MicrosoftProvider struct {
-	Tenant                 string                      `json:"tenant" yaml:"tenant"`
-	TenantID               string                      `json:"tenantId" yaml:"tenantId"`
-	Users                  []MicrosoftUser             `json:"users" yaml:"users"`
-	Applications           []MicrosoftApplication      `json:"applications" yaml:"applications"`
-	ServicePrincipals      []MicrosoftServicePrincipal `json:"servicePrincipals" yaml:"servicePrincipals"`
-	OAuth2PermissionGrants []MicrosoftPermissionGrant  `json:"oauth2PermissionGrants" yaml:"oauth2PermissionGrants"`
+	Tenant                 string                       `json:"tenant" yaml:"tenant"`
+	TenantID               string                       `json:"tenantId" yaml:"tenantId"`
+	Users                  []MicrosoftUser              `json:"users" yaml:"users"`
+	Groups                 []MicrosoftGroup             `json:"groups" yaml:"groups"`
+	Applications           []MicrosoftApplication       `json:"applications" yaml:"applications"`
+	ServicePrincipals      []MicrosoftServicePrincipal  `json:"servicePrincipals" yaml:"servicePrincipals"`
+	OAuth2PermissionGrants []MicrosoftPermissionGrant   `json:"oauth2PermissionGrants" yaml:"oauth2PermissionGrants"`
+	AppRoleAssignments     []MicrosoftAppRoleAssignment `json:"appRoleAssignments" yaml:"appRoleAssignments"`
 }
 
 type MicrosoftUser struct {
@@ -165,12 +167,32 @@ type MicrosoftApplication struct {
 	DisplayName string `json:"displayName" yaml:"displayName"`
 }
 
+type MicrosoftGroup struct {
+	Node        string `json:"node" yaml:"node"`
+	ID          string `json:"id" yaml:"id"`
+	DisplayName string `json:"displayName" yaml:"displayName"`
+}
+
 type MicrosoftServicePrincipal struct {
-	Node         string `json:"node,omitempty" yaml:"node,omitempty"`
-	ResourceNode string `json:"resourceNode,omitempty" yaml:"resourceNode,omitempty"`
-	ID           string `json:"id" yaml:"id"`
-	AppID        string `json:"appId" yaml:"appId"`
-	DisplayName  string `json:"displayName" yaml:"displayName"`
+	Node         string             `json:"node,omitempty" yaml:"node,omitempty"`
+	ResourceNode string             `json:"resourceNode,omitempty" yaml:"resourceNode,omitempty"`
+	ID           string             `json:"id" yaml:"id"`
+	AppID        string             `json:"appId" yaml:"appId"`
+	DisplayName  string             `json:"displayName" yaml:"displayName"`
+	AppRoles     []MicrosoftAppRole `json:"appRoles,omitempty" yaml:"appRoles,omitempty"`
+}
+
+type MicrosoftAppRole struct {
+	ID          string `json:"id" yaml:"id"`
+	Value       string `json:"value" yaml:"value"`
+	DisplayName string `json:"displayName" yaml:"displayName"`
+}
+
+type MicrosoftAppRoleAssignment struct {
+	ID          string `json:"id" yaml:"id"`
+	PrincipalID string `json:"principalId" yaml:"principalId"`
+	ResourceID  string `json:"resourceId" yaml:"resourceId"`
+	AppRoleID   string `json:"appRoleId" yaml:"appRoleId"`
 }
 
 type MicrosoftPermissionGrant struct {
@@ -196,11 +218,18 @@ type AWSAccount struct {
 }
 
 type AWSRole struct {
-	Node     string            `json:"node" yaml:"node"`
-	Account  string            `json:"account" yaml:"account"`
-	Name     string            `json:"name" yaml:"name"`
-	Trust    []string          `json:"trust" yaml:"trust"`
-	Policies []AWSInlinePolicy `json:"policies,omitempty" yaml:"policies,omitempty"`
+	Node        string               `json:"node" yaml:"node"`
+	Account     string               `json:"account" yaml:"account"`
+	Name        string               `json:"name" yaml:"name"`
+	Trust       []string             `json:"trust" yaml:"trust"`
+	Policies    []AWSInlinePolicy    `json:"policies,omitempty" yaml:"policies,omitempty"`
+	WebIdentity *AWSWebIdentityTrust `json:"webIdentity,omitempty" yaml:"webIdentity,omitempty"`
+}
+
+type AWSWebIdentityTrust struct {
+	ClientNode   string `json:"clientNode" yaml:"clientNode"`
+	AudienceNode string `json:"audienceNode" yaml:"audienceNode"`
+	Audience     string `json:"audience" yaml:"audience"`
 }
 
 type AWSInlinePolicy struct {

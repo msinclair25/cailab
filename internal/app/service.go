@@ -90,6 +90,54 @@ func (s *Service) ValidateIdentity(ctx context.Context, token, tokenType, audien
 	return provider.OIDCClaims{}, errors.New("active scenario has no OIDC runtime")
 }
 
+func (s *Service) AssumeAWSWebIdentity(ctx context.Context, token, roleNode string) (provider.FederatedCredentials, error) {
+	run, err := s.store.ActiveRun(ctx)
+	if err != nil {
+		return provider.FederatedCredentials{}, err
+	}
+	if run.Compiled.Providers.AWS == nil {
+		return provider.FederatedCredentials{}, errors.New("active scenario has no AWS provider")
+	}
+	var oidcEndpoint, awsEndpoint string
+	for _, runtime := range run.Runtimes {
+		switch {
+		case runtime.Provider == "oidc" && runtime.Engine == "native":
+			oidcEndpoint = runtime.Endpoint
+		case runtime.Provider == "aws" && runtime.Engine == "floci":
+			awsEndpoint = runtime.Endpoint
+		}
+	}
+	if oidcEndpoint == "" || awsEndpoint == "" {
+		return provider.FederatedCredentials{}, errors.New("active scenario does not have recorded OIDC and AWS runtimes")
+	}
+	role, ok := findAWSRole(run.Compiled.Providers.AWS.Roles, roleNode)
+	if !ok || role.WebIdentity == nil {
+		return provider.FederatedCredentials{}, fmt.Errorf("AWS role %q has no declared web-identity trust", roleNode)
+	}
+	claims, err := provider.ValidateOIDCRuntimeToken(ctx, oidcEndpoint, token, "access", role.WebIdentity.Audience)
+	if err != nil {
+		return provider.FederatedCredentials{}, fmt.Errorf("validate federation token: %w", err)
+	}
+	snapshot, err := s.provider.Snapshot(ctx, run.Runtimes, run.Compiled)
+	if err != nil {
+		return provider.FederatedCredentials{}, fmt.Errorf("snapshot provider state: %w", err)
+	}
+	authorizedRole, err := provider.AuthorizeAWSWebIdentity(snapshot, claims, roleNode)
+	if err != nil {
+		return provider.FederatedCredentials{}, fmt.Errorf("authorize federation: %w", err)
+	}
+	return provider.AssumeAWSWebIdentity(ctx, awsEndpoint, run.Compiled.Providers.AWS.Region, authorizedRole, token, "cailab-federation")
+}
+
+func findAWSRole(roles []scenario.AWSRole, node string) (scenario.AWSRole, bool) {
+	for _, role := range roles {
+		if role.Node == node {
+			return role, true
+		}
+	}
+	return scenario.AWSRole{}, false
+}
+
 func (s *Service) Verify(ctx context.Context) (verify.Report, error) {
 	run, err := s.store.ActiveRun(ctx)
 	if err != nil {

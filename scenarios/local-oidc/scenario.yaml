@@ -79,11 +79,6 @@ spec:
       to: principal:automation-client
       type: assigned_to
       actions: [openid]
-    - id: identity:client-api
-      from: principal:automation-client
-      to: resource:identity-api
-      type: can_access
-      actions: [api.read]
   verification:
     invariants:
       - id: registered-subject-path

@@ -2,7 +2,7 @@
 title: CloudAILab
 aliases:
   - CAL
-status: m2-development
+status: m2-complete
 ---
 
 # CloudAILab
@@ -15,7 +15,7 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0 and the M1 AWS identity slice are complete. M2 now includes development Microsoft and Google identity slices plus a local development OIDC profile with discovery, JWKS, a synthetic Authorization Code flow, signed short-lived tokens, local validation, and overlap-safe key rotation. The full cross-provider federation chain and agent governance remain planned. Provider and protocol compatibility is limited to the tested operations in the compatibility matrices.
+M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. The flagship scenario connects live Google group membership, Microsoft app-role assignment, signed local OIDC access tokens, an authoritative federation gateway, Floci temporary credentials, and an AWS-shaped S3 boundary. The M3 governed agent runtime, approvals, traces, and repeated trials remain planned. Provider and protocol compatibility is limited to the tested operations in the compatibility matrices.
 
 ## Build and try the walking skeleton
 
@@ -80,6 +80,19 @@ Follow the [local OIDC lab guide](docs/07-guides/local-oidc-lab.md) to retrieve 
 ./bin/cailab verify
 ```
 
+## Try the cross-provider flagship
+
+The `acquisition-agent` scenario begins with both a contractor and an approved administrator able to reach acquisition data through Google → Microsoft → local OIDC → AWS representations. Follow the [flagship lab guide](docs/07-guides/acquisition-agent-lab.md) to issue signed synthetic tokens, exercise the federation gateway, revoke only the contractor group's Microsoft app-role assignment, and prove the administrator path survives.
+
+```bash
+./bin/cailab doctor acquisition-agent
+./bin/cailab up acquisition-agent
+./bin/cailab graph path google:contractor aws:acquisition-data
+./bin/cailab verify
+```
+
+External tools and AI agents can call the documented loopback APIs and invoke the `cailab federation` command. CloudAILab does not yet launch, isolate, govern, or score those agent processes; that work begins in M3.
+
 ## Development checks
 
 ```bash
@@ -123,6 +136,8 @@ go run ./internal/tools/doccheck .
 - [Google Workspace facade compatibility matrix](docs/07-compatibility/google-workspace-facade.md)
 - [Local development OIDC lab](docs/07-guides/local-oidc-lab.md)
 - [Local development OIDC compatibility matrix](docs/07-compatibility/local-oidc-profile.md)
+- [Cross-provider acquisition-agent lab](docs/07-guides/acquisition-agent-lab.md)
+- [Cross-provider federation compatibility matrix](docs/07-compatibility/cross-provider-federation.md)
 
 ## Working vocabulary
 

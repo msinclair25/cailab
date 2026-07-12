@@ -70,6 +70,8 @@ func (c *CLI) Run(ctx context.Context, args []string) int {
 		err = c.runMission(ctx, args[1:])
 	case "identity":
 		err = c.runIdentity(ctx, args[1:])
+	case "federation":
+		err = c.runFederation(ctx, args[1:])
 	case "graph":
 		err = c.runGraph(ctx, args[1:])
 	case "verify":
@@ -110,6 +112,7 @@ Commands:
   status             Show the active run
   mission            Show the active mission
   identity           Validate tokens or rotate the active local issuer key
+  federation         Exchange an authorized local token for temporary credentials
   graph path         Explain a directed trust path
   verify             Evaluate deterministic invariants
   reset              Restore the active scenario state
@@ -446,6 +449,87 @@ func (c *CLI) runIdentityValidate(ctx context.Context, args []string) error {
 		return fmt.Errorf("encode validated claims: %w", err)
 	}
 	fmt.Fprintln(c.stdout, string(encoded))
+	return nil
+}
+
+func (c *CLI) runFederation(ctx context.Context, args []string) error {
+	if len(args) == 0 || args[0] != "assume-aws" {
+		return errors.New("usage: cailab federation assume-aws --token-file FILE --role-node ID --output FILE [--state-dir DIR]")
+	}
+	fs := newFlagSet("federation assume-aws", c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	tokenFile := fs.String("token-file", "", "file containing one raw JWT")
+	roleNode := fs.String("role-node", "", "canonical AWS role node")
+	output := fs.String("output", "", "owner-only JSON credential file")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 || *tokenFile == "" || *roleNode == "" || *output == "" {
+		return errors.New("usage: cailab federation assume-aws --token-file FILE --role-node ID --output FILE [--state-dir DIR]")
+	}
+	info, err := os.Stat(*tokenFile)
+	if err != nil {
+		return fmt.Errorf("inspect token file: %w", err)
+	}
+	if info.Size() > 64<<10 {
+		return errors.New("token file exceeds 64 KiB")
+	}
+	data, err := os.ReadFile(*tokenFile)
+	if err != nil {
+		return fmt.Errorf("read token file: %w", err)
+	}
+	service, closeStore, err := c.openService(ctx, *stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	credentials, err := service.AssumeAWSWebIdentity(ctx, strings.TrimSpace(string(data)), *roleNode)
+	if err != nil {
+		return err
+	}
+	if err := writeOwnerOnlyJSON(*output, credentials); err != nil {
+		return err
+	}
+	absolute, err := filepath.Abs(*output)
+	if err != nil {
+		absolute = *output
+	}
+	fmt.Fprintf(c.stdout, "✓ temporary AWS credentials written to %s (expires %s)\n", absolute, credentials.Expiration.UTC().Format(time.RFC3339))
+	return nil
+}
+
+func writeOwnerOnlyJSON(path string, value any) error {
+	directory := filepath.Dir(path)
+	temporary, err := os.CreateTemp(directory, ".cailab-credentials-*")
+	if err != nil {
+		return fmt.Errorf("create credential file: %w", err)
+	}
+	temporaryPath := temporary.Name()
+	committed := false
+	defer func() {
+		_ = temporary.Close()
+		if !committed {
+			_ = os.Remove(temporaryPath)
+		}
+	}()
+	if err := temporary.Chmod(0o600); err != nil {
+		return fmt.Errorf("secure credential file: %w", err)
+	}
+	encoder := json.NewEncoder(temporary)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(value); err != nil {
+		return fmt.Errorf("encode credential file: %w", err)
+	}
+	if err := temporary.Sync(); err != nil {
+		return fmt.Errorf("sync credential file: %w", err)
+	}
+	if err := temporary.Close(); err != nil {
+		return fmt.Errorf("close credential file: %w", err)
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return fmt.Errorf("publish credential file: %w", err)
+	}
+	committed = true
 	return nil
 }
 

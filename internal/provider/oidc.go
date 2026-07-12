@@ -422,6 +422,12 @@ func (f *oidcFacade) issueTokens(now time.Time, client scenario.OIDCClient, subj
 	accessClaims.TokenID = accessJTI
 	accessClaims.ClientID = client.ClientID
 	accessClaims.Scope = strings.Join(code.Scopes, " ")
+	if oidcContains(code.Scopes, "email") {
+		accessClaims.Email = subject.Email
+	}
+	if oidcContains(code.Scopes, "profile") {
+		accessClaims.Groups = append([]string(nil), subject.Groups...)
+	}
 	accessToken, err := signJWT(key, "at+jwt", accessClaims)
 	if err != nil {
 		return nil, err

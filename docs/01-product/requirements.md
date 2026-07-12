@@ -34,6 +34,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | FR-021 | The system shall preserve enough run metadata to reproduce or explain each agent evaluation. | Must |
 | FR-022 | The system should support replaying a captured agent trace against compatible verification rules. | Should |
 | FR-023 | The system shall allow users to register versioned custom tool adapters with declared schemas, permissions, risk classification, timeout, transport, and isolation requirements. | Must |
+| FR-024 | The system shall authorize each supported local federation exchange from a validated signed token, current provider state, and typed trust contract before invoking a permissive emulator. | Must |
 
 ## Non-functional requirements
 
@@ -50,6 +51,8 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SEC-007 | Declarative scenarios shall not select executable provider images outside a code-owned allowlist. |
 | NFR-SEC-008 | Runtime cleanup shall verify CloudAILab ownership and run identity before removing host resources. |
 | NFR-SEC-009 | A persisted process identifier alone shall not authorize native-runtime cleanup. |
+| NFR-SEC-010 | Temporary federation credentials shall be written only to an owner-only file and shall not be printed to standard output. |
+| NFR-SEC-011 | A permissive provider emulator shall not be treated as the authoritative source for a CloudAILab authorization decision. |
 
 ### Reliability and reproducibility
 

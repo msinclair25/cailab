@@ -53,6 +53,9 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-016 | A forged, replayed, expired, wrong-audience, or algorithm-confused local token crosses a trust boundary. | RS256 allowlist, asymmetric signatures, exact issuer and audience validation, explicit token types, one-time expiring codes, bounded token lifetime, RFC 7638 key IDs, and negative contract tests. |
 | TM-017 | Discovery redirects a validator to attacker-controlled signing keys. | HTTP redirect refusal, exact active issuer match, IPv4 loopback endpoint validation, and same-origin fixed `/jwks` enforcement in the reference validator. |
 | TM-018 | Key rotation invalidates legitimate unexpired tokens or exposes private signing material. | Owner-authenticated rotation, owner-only active private-key state, immediate retired-private-key discard, retired-public-key overlap through maximum token lifetime, public-only JWKS, persistence rollback, and run-scoped cleanup. |
+| TM-019 | A forged token or stale group assignment obtains a temporary AWS-shaped credential because Floci accepts the request. | The federation command validates the active issuer/JWKS, signed claims, declared subject, current Microsoft app-role assignment, and typed AWS trust before calling Floci; negative and lifecycle regression tests cover each decision class. |
+| TM-020 | Federation credentials leak through terminal output or permissive file modes. | The CLI requires an explicit output path, writes through an owner-only temporary file, atomically publishes it, and prints only the path and expiration. |
+| TM-021 | An external tool bypasses the federation command and calls the permissive Floci endpoint directly. | Direct Floci web-identity calls are excluded from authorization evidence; agent-facing wrappers must withhold the endpoint, and no containment claim is made until M3 enforces network/tool boundaries. |
 
 ## Security invariants
 
@@ -65,6 +68,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - A scenario cannot select a provider image outside the release allowlist.
 - CAL removes a provider container only when its persisted or discovered run label matches the active run.
 - CAL stops a native facade only through a run-matched control document and authenticated control endpoint; a persisted PID alone is insufficient.
+- The supported federation command returns credentials only after signed-token, live-assignment, and typed-trust checks succeed.
 
 ## M1 residual risk
 
@@ -76,13 +80,15 @@ It does not assert containment for arbitrary agent processes unless an isolation
 ## M2 residual risk
 
 - The native Microsoft and Google facades run as the current OS user and are not agent sandboxes.
-- `Bearer cailab-local` and `Bearer cailab-google-local` gate training APIs but are not signed tokens or caller identities; local OIDC remains M2 work.
+- `Bearer cailab-local` and `Bearer cailab-google-local` gate training APIs but are not signed tokens or caller identities; the federation gateway separately validates signed local OIDC tokens.
 - Facades use HTTP on IPv4 loopback and must never be advertised as network services.
 - The supported Graph, Directory, and Drive surfaces are intentionally incomplete and do not enforce real provider roles, consent policy, sharing policy, inherited permissions, or OAuth semantics.
 - Synthetic Drive content is readable by any local process that receives the endpoint and static API token; scenarios must not contain real secrets.
 - The local development issuer's loopback HTTP transport does not meet OIDC/OAuth TLS requirements and must not carry real credentials or tokens.
 - `cailab_subject` is synthetic subject selection, not user authentication; any declared confidential client with its scenario secret can request a code for a declared subject.
 - Client secrets, codes, tokens, and RSA private keys are run-local synthetic credentials; local processes under the same OS account remain inside the documented trust boundary.
+- Floci's direct `AssumeRoleWithWebIdentity` route accepts invalid tokens in the pinned release, and unknown access keys are permissive. Any process given or able to discover the Floci endpoint can bypass the M2 CLI gateway. M2 is a learning range, not an enforced agent sandbox.
+- Removing an app-role assignment prevents new gateway exchanges but does not revoke already-issued Floci credentials before expiration.
 
 ## Review triggers
 

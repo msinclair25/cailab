@@ -192,7 +192,9 @@ func (m *NativeProcessManager) Snapshot(ctx context.Context, instances []Instanc
 			return scenario.Compiled{}, fmt.Errorf("active scenario requires a %s runtime, but none is recorded", name)
 		}
 		var err error
-		if name == "microsoft" {
+		if name == "oidc" {
+			snapshot = snapshotOIDC(snapshot)
+		} else if name == "microsoft" {
 			snapshot, err = snapshotMicrosoft(ctx, instance.Endpoint, snapshot)
 		} else if name == "google" {
 			snapshot, err = snapshotGoogle(ctx, instance.Endpoint, snapshot)

@@ -105,6 +105,9 @@ func snapshotAWS(ctx context.Context, endpoint string, compiled scenario.Compile
 	originalEdges := make(map[string]scenario.Relationship)
 	edges := make([]scenario.Relationship, 0, len(compiled.Edges))
 	for _, edge := range compiled.Edges {
+		if strings.HasPrefix(edge.ID, "aws-web-trust:") {
+			continue
+		}
 		if _, isRole := roleNodes[edge.To]; isRole && edge.Type == "federates_as" {
 			originalEdges[edge.From+"\x00"+edge.To] = edge
 			continue
@@ -126,7 +129,32 @@ func snapshotAWS(ctx context.Context, endpoint string, compiled scenario.Compile
 	}
 	sort.Slice(edges, func(i, j int) bool { return edges[i].ID < edges[j].ID })
 	compiled.Edges = edges
-	return compiled, nil
+	return normalizeAWSWebIdentityTrust(compiled), nil
+}
+
+func normalizeAWSWebIdentityTrust(compiled scenario.Compiled) scenario.Compiled {
+	if compiled.Providers.AWS == nil {
+		return compiled
+	}
+	edges := make([]scenario.Relationship, 0, len(compiled.Edges)+len(compiled.Providers.AWS.Roles))
+	for _, edge := range compiled.Edges {
+		if !strings.HasPrefix(edge.ID, "aws-web-trust:") {
+			edges = append(edges, edge)
+		}
+	}
+	for _, role := range compiled.Providers.AWS.Roles {
+		if role.WebIdentity == nil {
+			continue
+		}
+		edges = append(edges, scenario.Relationship{
+			ID:   webTrustEdgeID(role.WebIdentity.AudienceNode, role.Node, role.WebIdentity.Audience),
+			From: role.WebIdentity.AudienceNode, To: role.Node, Type: "federates_as",
+			Actions: []string{"sts:AssumeRoleWithWebIdentity"},
+		})
+	}
+	sort.Slice(edges, func(i, j int) bool { return edges[i].ID < edges[j].ID })
+	compiled.Edges = edges
+	return compiled
 }
 
 func iamClient(endpoint, region, accountID string) *iam.Client {
@@ -327,4 +355,9 @@ func matchesPrincipal(policyPrincipals, aliases []string) bool {
 func trustEdgeID(from, to string) string {
 	sum := sha256.Sum256([]byte(from + "\x00" + to))
 	return "aws-trust:" + hex.EncodeToString(sum[:8])
+}
+
+func webTrustEdgeID(from, to, audience string) string {
+	sum := sha256.Sum256([]byte(from + "\x00" + to + "\x00" + audience))
+	return "aws-web-trust:" + hex.EncodeToString(sum[:8])
 }
