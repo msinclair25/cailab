@@ -22,6 +22,7 @@ ADRs record significant decisions that affect system structure, security, compat
 - [ADR-0011: Versioned agent JSON Lines protocol](0011-versioned-agent-json-lines-protocol.md)
 - [ADR-0012: Owned agent subprocess sessions](0012-owned-agent-subprocess-sessions.md)
 - [ADR-0013: Deterministic tool policy and decision evidence](0013-deterministic-tool-policy-and-evidence.md)
+- [ADR-0014: Strict one-shot tool execution](0014-strict-one-shot-tool-execution.md)
 
 ## Lifecycle
 

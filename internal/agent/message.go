@@ -61,6 +61,21 @@ func ValidateMessage(message Message) error {
 		if payload.Status == "not_executed" && len(payload.Content) > 0 {
 			issues = append(issues, "not_executed tool results must not include content")
 		}
+		if payload.Status == "succeeded" {
+			if len(payload.Content) == 0 {
+				issues = append(issues, "succeeded tool results must include content")
+			}
+			if payload.ErrorCode != "" {
+				issues = append(issues, "succeeded tool results must not include errorCode")
+			}
+		} else if payload.Status == "failed" {
+			validateID(&issues, "payload.errorCode", payload.ErrorCode)
+			if len(payload.Content) > 0 {
+				issues = append(issues, "failed tool results must not include content")
+			}
+		} else if payload.ErrorCode != "" {
+			issues = append(issues, "not_executed tool results must not include errorCode")
+		}
 	case MessageApprovalRequired:
 		requireCorrelation = true
 		var payload ApprovalRequiredPayload

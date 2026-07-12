@@ -68,6 +68,20 @@ func DecodeGovernancePolicy(data []byte) (GovernancePolicy, error) {
 	return policy, nil
 }
 
+func DecodeToolOutcomeEvent(data []byte) (ToolOutcomeEvent, error) {
+	if len(data) > MaxFrameBytes {
+		return ToolOutcomeEvent{}, fmt.Errorf("tool outcome event exceeds %d bytes", MaxFrameBytes)
+	}
+	var event ToolOutcomeEvent
+	if err := decodeStrict(data, &event); err != nil {
+		return ToolOutcomeEvent{}, fmt.Errorf("decode tool outcome event: %w", err)
+	}
+	if err := ValidateToolOutcomeEvent(event); err != nil {
+		return ToolOutcomeEvent{}, err
+	}
+	return event, nil
+}
+
 func DigestToolManifest(manifest ToolManifest) (string, error) {
 	if err := ValidateToolManifest(manifest); err != nil {
 		return "", err

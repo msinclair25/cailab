@@ -86,6 +86,8 @@ func (c *CLI) Run(ctx context.Context, args []string) int {
 		err = c.runInternalRuntime(ctx, args[1:])
 	case "_agent":
 		err = c.runInternalAgent(ctx, args[1:])
+	case "_tool":
+		err = c.runInternalTool(ctx, args[1:])
 	default:
 		fmt.Fprintf(c.stderr, "unknown command %q\n\n", args[0])
 		c.printUsage(c.stderr)
@@ -720,6 +722,21 @@ func (c *CLI) runInternalAgent(ctx context.Context, args []string) error {
 		return errors.New("invalid private reference-agent configuration")
 	}
 	return agent.ServeReferenceAgent(ctx, c.stdin, c.stdout, agent.ReferenceAgentConfig{ID: *id, Version: *version})
+}
+
+func (c *CLI) runInternalTool(ctx context.Context, args []string) error {
+	if len(args) == 0 || args[0] != "reference" {
+		return errors.New("invalid private tool command")
+	}
+	fs := newFlagSet("_tool reference", c.stderr)
+	tool := fs.String("tool", "cloudailab.reference", "expected tool name")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("invalid private reference-tool configuration")
+	}
+	return agent.ServeReferenceTool(ctx, c.stdin, c.stdout, *tool)
 }
 
 func newFlagSet(name string, output io.Writer) *flag.FlagSet {

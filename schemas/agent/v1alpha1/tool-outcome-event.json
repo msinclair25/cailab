@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudailab.dev/schemas/agent/v1alpha1/tool-outcome-event.json",
+  "title": "CloudAILab Tool Outcome Event v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "eventId", "occurredAt", "runId", "trialId", "correlationId", "decisionEventId", "tool", "outcome"],
+  "properties": {
+    "apiVersion": { "const": "cloudailab.dev/agent/v1alpha1" },
+    "kind": { "const": "ToolOutcomeEvent" },
+    "eventId": { "$ref": "#/$defs/id" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "runId": { "$ref": "#/$defs/id" },
+    "trialId": { "$ref": "#/$defs/id" },
+    "correlationId": { "$ref": "#/$defs/id" },
+    "decisionEventId": { "$ref": "#/$defs/id" },
+    "tool": { "$ref": "#/$defs/toolRef" },
+    "outcome": { "$ref": "#/$defs/outcome" },
+    "outputHash": { "$ref": "#/$defs/digest" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "properties": { "status": { "const": "succeeded" } } } } },
+      "then": { "required": ["outputHash"] },
+      "else": { "not": { "required": ["outputHash"] } }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9._:-]{0,127}$" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "toolRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "digest"],
+      "properties": {
+        "name": { "$ref": "#/$defs/id" },
+        "version": { "$ref": "#/$defs/version" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["succeeded", "failed"] },
+        "errorCode": { "$ref": "#/$defs/id" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "failed" } } },
+          "then": { "required": ["errorCode"] },
+          "else": { "not": { "required": ["errorCode"] } }
+        }
+      ]
+    }
+  }
+}

@@ -91,12 +91,25 @@
         "tool": { "$ref": "#/$defs/id" },
         "status": { "enum": ["succeeded", "failed", "not_executed"] },
         "content": true,
+        "errorCode": { "$ref": "#/$defs/id" },
         "decision": { "$ref": "#/$defs/decision" }
       },
       "allOf": [
         {
           "if": { "properties": { "decision": { "properties": { "effect": { "enum": ["deny", "require_approval"] } } } } },
           "then": { "properties": { "status": { "const": "not_executed" } }, "not": { "required": ["content"] } }
+        },
+        {
+          "if": { "properties": { "status": { "const": "succeeded" } } },
+          "then": { "required": ["content"], "not": { "required": ["errorCode"] } }
+        },
+        {
+          "if": { "properties": { "status": { "const": "failed" } } },
+          "then": { "required": ["errorCode"], "not": { "required": ["content"] } }
+        },
+        {
+          "if": { "properties": { "status": { "const": "not_executed" } } },
+          "then": { "not": { "anyOf": [{ "required": ["content"] }, { "required": ["errorCode"] }] } }
         }
       ]
     },

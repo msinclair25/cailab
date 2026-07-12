@@ -22,7 +22,7 @@ var (
 	ErrActiveRun   = errors.New("an active run already exists")
 )
 
-const currentSchemaVersion = 3
+const currentSchemaVersion = 4
 
 type Store struct {
 	db *sql.DB
@@ -152,6 +152,28 @@ CREATE TABLE agent_decision_events (
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO schema_migrations(version, applied_at) VALUES(3, ?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record state migration 3: %w", err)
+		}
+		version = 3
+	}
+	if version < 4 {
+		if _, err := tx.ExecContext(ctx, `
+CREATE TABLE agent_tool_outcomes (
+    run_id TEXT NOT NULL,
+    trial_id TEXT NOT NULL,
+    correlation_id TEXT NOT NULL,
+    event_id TEXT NOT NULL UNIQUE,
+    decision_event_id TEXT NOT NULL UNIQUE,
+    event_json BLOB NOT NULL,
+    decision_record_hash TEXT NOT NULL,
+    record_hash TEXT NOT NULL,
+    PRIMARY KEY (run_id, trial_id, correlation_id),
+    FOREIGN KEY (run_id) REFERENCES runs(id)
+);`); err != nil {
+			return fmt.Errorf("apply state migration 4: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO schema_migrations(version, applied_at) VALUES(4, ?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record state migration 4: %w", err)
 		}
 	}
 	if err := tx.Commit(); err != nil {

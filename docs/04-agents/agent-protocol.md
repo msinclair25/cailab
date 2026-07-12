@@ -8,7 +8,7 @@ last_reviewed: 2026-07-12
 
 ## Current scope
 
-CloudAILab now defines typed and schema-backed contracts for M3 agent runs, tool registration, governance policy, protocol messages, decisions, redaction, and decision events. The internal session controller launches one explicitly selected subprocess, enforces protocol lifecycle and resource limits, and includes a deterministic no-tool reference agent. The internal gateway applies exact-match policy and manifest ceilings and commits non-executing decision evidence. A supported end-user command, tool execution, full input-instance validation, enforced isolation, full trace replay, interactive approval resolution, and aggregate metrics remain later M3 work.
+CloudAILab now defines typed and schema-backed contracts for M3 agent runs, tool registration, governance policy, agent messages, tool execution, decisions, redaction, decision events, and tool outcomes. The internal harness owns agent and one-shot tool subprocesses, applies exact-match policy and manifest ceilings, validates Draft 2020-12 input offline, protects successful output, and commits linked decision/outcome evidence. Supported public registration/run commands, enforced isolation, full trace replay, interactive approval resolution, and aggregate metrics remain later M3 work.
 
 The normative schemas are:
 
@@ -17,6 +17,8 @@ The normative schemas are:
 - [Protocol message](../../schemas/agent/v1alpha1/protocol-message.json)
 - [Decision event](../../schemas/agent/v1alpha1/decision-event.json)
 - [Governance policy](../../schemas/agent/v1alpha1/governance-policy.json)
+- [Tool execution message](../../schemas/agent/v1alpha1/tool-execution-message.json)
+- [Tool outcome event](../../schemas/agent/v1alpha1/tool-outcome-event.json)
 
 The executable validation, policy, gateway, and session contracts are in [`internal/agent`](../../internal/agent). [ADR-0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) defines the wire contract; [ADR-0012](../02-architecture/decisions/0012-owned-agent-subprocess-sessions.md) defines the owned-process lifecycle; [ADR-0013](../02-architecture/decisions/0013-deterministic-tool-policy-and-evidence.md) defines policy and evidence semantics.
 
@@ -65,7 +67,7 @@ Each explicitly registered tool declares:
 - a timeout from 100 ms through 300 seconds;
 - expected network authority: `none`, `loopback`, or `host`;
 - expected filesystem authority: `none`, `read_only`, `workspace_write`, or `host`;
-- sensitive result/input fields as non-root RFC 6901 JSON Pointers.
+- sensitive successful-output fields as non-root RFC 6901 JSON Pointers.
 
 A valid manifest is inert data. Registration and later execution require explicit user action; scenario files cannot cause these command vectors to run.
 
@@ -80,13 +82,21 @@ A valid manifest is inert data. Registration and later execution require explici
 
 Every decision carries a stable reason code and policy version. `redact` requires pointers; `require_approval` requires an approval ID; `allow` and `deny` cannot carry either. Denied and approval-pending events must record `not_executed`.
 
-Governance policies default only to deny and match exact agent, tool, action, resource, tenant, and classification values. A manifest permission is a mandatory ceiling: policy cannot add undeclared authority. Multiple matching rules are independent of document order and use fixed precedence: `deny`, then `require_approval`, then `redact`, then `allow`. Redaction pointers are merged and sorted; a missing pointer becomes a stable deny. The current gateway returns `not_executed` even for allow and redact because tool execution is not implemented in this slice.
+Governance policies default only to deny and match exact agent, tool, action, resource, tenant, and classification values. A manifest permission is a mandatory ceiling: policy cannot add undeclared authority. Multiple matching rules are independent of document order and use fixed precedence: `deny`, then `require_approval`, then `redact`, then `allow`. Redaction pointers are merged and sorted; a missing pointer becomes a stable deny.
+
+Policy redaction pointers apply to input arguments before execution. Input instances must satisfy the manifest's closed Draft 2020-12 schema; `$ref` and `$dynamicRef` are fragment-local and schema compilation has no external loader. Only allow and redact launch a tool. Deny and approval-required remain `not_executed`.
+
+## Tool execution
+
+The one-shot subprocess receives exactly one `ToolExecutionRequest` JSON line and returns exactly one correlated `ToolExecutionResponse` line. The executor requires an absolute command and working directory, a complete explicit environment, the manifest timeout, bounded output and diagnostics, and no shell. A response is either `succeeded` with JSON content or `failed` with a stable error code; the correlated agent-facing `tool.result` preserves that failure code.
+
+Successful content is canonicalized and applies every manifest `sensitiveFields` pointer before it can be returned or hashed. Missing output pointers fail the call closed. Tool subprocess ownership is lifecycle management, not isolation.
 
 ## Reproducibility and evidence
 
 An agent run records the exact scenario digest and seed, agent/provider/model version, policy digest, prompt hash, tool digests, trial index/count, status, and UTC timestamps. A decision event adds a monotonic sequence, correlation ID, actor and tenant, tool, action, resource classification, decision, outcome, and canonical input/output hashes.
 
-Sequence is authoritative for event order. Wall-clock time is diagnostic context and does not determine policy or score. The gateway hashes canonical original arguments and does not persist raw arguments. SQLite appends canonical decision-event JSON under a unique correlation, assigns a contiguous sequence transactionally, and advances a record-hash chain head in the same commit. Reads validate schema, order, chain links, and the head. This detects accidental mutation or deletion but is not protection from a local user who can rewrite the database and recompute the chain. Full protocol transcript persistence and replay remain planned.
+Sequence is authoritative for decision order. Wall-clock time is diagnostic context and does not determine policy or score. The gateway hashes canonical original arguments and does not persist them. It commits the immutable decision with `not_executed` before an allowed/redacted launch, then appends a separate `ToolOutcomeEvent` linked to that decision and stored record hash. Successful outcomes hash the exact protected content returned to the agent; failed outcomes carry a stable error code. Reads validate schema and hashes. This detects accidental inconsistency but is not protection from a local user who can rewrite the database. Full transcript persistence and replay remain planned.
 
 ## Security boundary
 

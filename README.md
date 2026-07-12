@@ -15,7 +15,7 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: versioned agent and policy contracts, strict owned-subprocess sessions, a deterministic reference agent, exact-match governed-tool decisions, and append-only hashed decision evidence are implemented and test-backed. These remain internal APIs; a supported user-facing agent command, tool execution, enforced isolation, full trace replay, interactive approval resolution, and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
+M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: versioned agent, policy, tool-execution, and outcome contracts; strict owned subprocesses; deterministic references; exact-match policy; Draft 2020-12 input validation; protected tool output; and append-only decision/outcome evidence are implemented and test-backed. These remain internal APIs; supported public registration/run commands, enforced isolation, full trace replay, interactive approval resolution, and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
 
 ## Build and try the walking skeleton
 
@@ -91,7 +91,7 @@ The `acquisition-agent` scenario begins with both a contractor and an approved a
 ./bin/cailab verify
 ```
 
-External tools and AI agents can call the documented loopback APIs and invoke the `cailab federation` command. The internal M3 controller can launch a protocol-compatible direct subprocess, evaluate resolved tool calls with deterministic policy and manifest ceilings, and persist non-executing decision evidence. There is not yet a supported public agent-run workflow or tool executor, and CloudAILab does not isolate or score those agent processes.
+External tools and AI agents can call the documented loopback APIs and invoke the `cailab federation` command. The internal M3 harness can launch a protocol-compatible agent, validate and govern resolved tool calls, execute allowed or redacted one-shot tools, protect successful output, and persist linked decision/outcome evidence. There is not yet a supported public registration/run workflow, and CloudAILab does not isolate or score those processes.
 
 ## Development checks
 

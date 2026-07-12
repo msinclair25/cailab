@@ -293,7 +293,7 @@ Exit gate:
 
 ### M3 — Agent governance harness
 
-**Status:** in development. The versioned contracts, strict owned-subprocess lifecycle, deterministic reference agent, exact-match policy evaluator, and append-only decision evidence are implemented. Tool execution, public registration/run UX, approval resolution, isolation, full trace replay, and scoring remain.
+**Status:** in development. Versioned agent/policy/tool/outcome contracts, strict owned subprocesses, deterministic references, exact-match policy, Draft 2020-12 validation, protected tool execution, and append-only decision/outcome evidence are implemented. Public registration/run UX, approval resolution, isolation, full trace replay, and scoring remain.
 
 **Goal:** make an external agent a measurable principal in the range.
 
@@ -445,6 +445,6 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Add strict tool input-instance validation and an executor that can run only allowed or redacted calls and record actual outcomes.
-2. Expose registered policies, tools, and the reference baseline through a supported agent-run workflow.
-3. Implement approval resolution, then add explicit isolation modes before making any agent-containment claim.
+1. Expose registered policies, tools, and the reference baseline through a supported agent-run workflow.
+2. Implement explicit approval resolution with immutable evidence and re-evaluation.
+3. Add enforced isolation modes before making any agent-containment claim, then build trace replay and repeated-trial scoring.

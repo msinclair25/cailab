@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudailab.dev/schemas/agent/v1alpha1/tool-execution-message.json",
+  "title": "CloudAILab Tool Execution Message v1alpha1",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/response" }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9._:-]{0,127}$" },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "callId", "tool", "arguments"],
+      "properties": {
+        "protocolVersion": { "const": "1.0" },
+        "callId": { "$ref": "#/$defs/id" },
+        "tool": { "$ref": "#/$defs/id" },
+        "arguments": { "type": "object" }
+      }
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolVersion", "callId", "status"],
+      "properties": {
+        "protocolVersion": { "const": "1.0" },
+        "callId": { "$ref": "#/$defs/id" },
+        "status": { "enum": ["succeeded", "failed"] },
+        "content": true,
+        "errorCode": { "$ref": "#/$defs/id" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "succeeded" } } },
+          "then": { "required": ["content"], "not": { "required": ["errorCode"] } },
+          "else": { "required": ["errorCode"], "not": { "required": ["content"] } }
+        }
+      ]
+    }
+  }
+}

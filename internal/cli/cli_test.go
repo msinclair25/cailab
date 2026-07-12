@@ -166,6 +166,32 @@ func TestInternalReferenceAgentUsesProtocolStreams(t *testing.T) {
 	}
 }
 
+func TestInternalReferenceToolUsesProtocolStreams(t *testing.T) {
+	request, err := json.Marshal(agent.ToolExecutionRequest{
+		ProtocolVersion: agent.ProtocolVersion, CallID: "call:1", Tool: "google.drive.read",
+		Arguments: json.RawMessage(`{"fileId":"google:file"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := bytes.NewBuffer(append(request, '\n'))
+	var output, diagnostics bytes.Buffer
+	c := New(&output, &diagnostics)
+	c.stdin = input
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if code := c.Run(ctx, []string{"_tool", "reference", "--tool", "google.drive.read"}); code != ExitOK {
+		t.Fatalf("code = %d; stderr=%s", code, diagnostics.String())
+	}
+	var response agent.ToolExecutionResponse
+	if err := json.Unmarshal(bytes.TrimSpace(output.Bytes()), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Status != "succeeded" || response.CallID != "call:1" {
+		t.Fatalf("response = %+v", response)
+	}
+}
+
 func TestDoctorUsesScenarioSpecificPrerequisites(t *testing.T) {
 	t.Parallel()
 	var stdout, stderr bytes.Buffer

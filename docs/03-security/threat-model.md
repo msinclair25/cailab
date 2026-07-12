@@ -61,6 +61,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-024 | Raw tool inputs, outputs, or credentials leak into an audit trace. | Decision events store canonical payload hashes by default; sensitive fields use fail-closed RFC 6901 redaction before persistence; later persistence requires dedicated regression tests. |
 | TM-025 | An agent inherits host credentials, floods diagnostics, violates protocol order, or survives a canceled session. | Absolute direct execution without a shell, explicit non-inherited environment, frame/message/stderr/time limits, direction and lifecycle validation, direct-child cancellation, bounded pipe cleanup, and wait-on-all-started-paths tests. |
 | TM-026 | Rule ordering, permissive manifests, failed audit writes, or stored-record mutation hides or widens an agent action. | Default deny, manifest permission ceiling, fixed deny-first precedence, evidence-before-response, transactional sequence/correlation constraints, canonical event hashes, chain/head verification, and mutation/deletion regression tests. |
+| TM-027 | A malicious schema or tool process triggers external retrieval, inherits host secrets, evades timeout, smuggles protocol output, or returns sensitive data. | Fragment-local schema references, no schema URL loader, explicit argv/cwd/environment, no shell, input validation before launch, bounded timeout/stdout/stderr/cleanup, one correlated response, output redaction, and linked outcome evidence. |
 
 ## Security invariants
 
@@ -98,11 +99,13 @@ It does not assert containment for arbitrary agent processes unless an isolation
 
 ## M3 residual risk
 
-- The internal gateway evaluates resolved tool metadata and persists `not_executed` decision evidence, but no supported public agent-run workflow or tool execution path exists yet.
+- The internal gateway can execute an explicitly configured one-shot tool after allow/redact and persist linked outcomes, but no supported public registration/run workflow exists yet.
 - JSON Lines framing and direct-child ownership provide no authentication, encryption, filesystem isolation, syscall isolation, or network policy.
 - Cancellation targets the direct child. Independently detached descendants may outlive it until an isolation backend owns a process boundary.
 - An agent receives an empty environment by default but still runs with the launching OS user's ambient filesystem and network authority.
-- Tool input schemas are structurally constrained and hashed, but full input-instance evaluation enters with the executor.
+- Draft 2020-12 input instances are validated with a pinned library; custom formats are annotations unless a later contract enables format assertion explicitly.
+- Agent and tool subprocesses remain unisolated and retain the launching OS user's ambient filesystem, network, and syscall authority.
+- A crash after a tool side effect but before outcome commit can leave durable authorization intent without durable outcome evidence; the agent result is withheld in that case.
 - The SQLite hash chain detects inconsistent stored records but is not tamper-proof against the launching OS account, which can rewrite both records and chain metadata.
 - Declared `none`, `loopback`, or filesystem restrictions are requirements, not verified isolation claims, until an execution backend enforces them.
 
