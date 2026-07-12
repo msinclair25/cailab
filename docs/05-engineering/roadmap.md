@@ -43,6 +43,8 @@ Milestones are capability gates, not date commitments. This document is the conc
 
 ## M3 — Agent governance harness
 
+**Status:** in development; the versioned protocol, metadata, decision, and redaction contracts are complete, while execution and governance enforcement remain.
+
 - Add agent identity and run metadata.
 - Implement governed tool gateway decisions: allow, deny, redact, approve.
 - Record complete action traces.

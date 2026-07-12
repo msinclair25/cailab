@@ -19,6 +19,7 @@ ADRs record significant decisions that affect system structure, security, compat
 - [ADR-0008: Managed native facade processes](0008-managed-native-facade-processes.md)
 - [ADR-0009: Local development OIDC profile](0009-local-development-oidc-profile.md)
 - [ADR-0010: Authoritative web-identity gateway](0010-authoritative-web-identity-gateway.md)
+- [ADR-0011: Versioned agent JSON Lines protocol](0011-versioned-agent-json-lines-protocol.md)
 
 ## Lifecycle
 

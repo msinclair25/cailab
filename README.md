@@ -2,7 +2,7 @@
 title: CloudAILab
 aliases:
   - CAL
-status: m2-complete
+status: m3-development
 ---
 
 # CloudAILab
@@ -15,7 +15,7 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. The flagship scenario connects live Google group membership, Microsoft app-role assignment, signed local OIDC access tokens, an authoritative federation gateway, Floci temporary credentials, and an AWS-shaped S3 boundary. The M3 governed agent runtime, approvals, traces, and repeated trials remain planned. Provider and protocol compatibility is limited to the tested operations in the compatibility matrices.
+M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: the versioned agent-run, tool-manifest, JSON Lines message, deterministic decision, redaction, and decision-event contracts are implemented and test-backed. Subprocess execution, enforced isolation, trace persistence, interactive approvals, and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
 
 ## Build and try the walking skeleton
 
@@ -138,6 +138,7 @@ go run ./internal/tools/doccheck .
 - [Local development OIDC compatibility matrix](docs/07-compatibility/local-oidc-profile.md)
 - [Cross-provider acquisition-agent lab](docs/07-guides/acquisition-agent-lab.md)
 - [Cross-provider federation compatibility matrix](docs/07-compatibility/cross-provider-federation.md)
+- [Agent protocol v1alpha1](docs/04-agents/agent-protocol.md)
 
 ## Working vocabulary
 

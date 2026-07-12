@@ -35,6 +35,7 @@ Use Go's native fuzzing for untrusted or combinatorial inputs:
 - Provider identifier normalization
 - JWT claim parsing and validation
 - Event and report decoding
+- Agent JSON Lines framing, typed payloads, duplicate keys, size bounds, and redaction pointers
 
 Fuzz targets must be deterministic, avoid persistent global state, and retain minimized failures as regression corpus entries. [Go fuzzing](https://go.dev/doc/security/fuzz/)
 
