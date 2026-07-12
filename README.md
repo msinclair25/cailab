@@ -19,7 +19,7 @@ M0, the executable walking skeleton, is complete. The repository implements stri
 
 ## Build and try M0
 
-Prerequisites: Go 1.25 or newer. Docker is checked by `doctor` because provider runtimes will require it beginning in M1.
+Prerequisites: Go 1.25.8 or newer. Docker is checked by `doctor` because provider runtimes will require it beginning in M1.
 
 ```bash
 go build -o ./bin/cailab ./cmd/cailab
