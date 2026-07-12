@@ -59,6 +59,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-022 | A malicious agent frame exhausts memory, exploits parser ambiguity, or smuggles a conflicting field. | UTF-8 JSON Lines objects are capped at 1 MiB and reject empty frames, duplicate keys, unknown typed fields, malformed payloads, and trailing values before execution. |
 | TM-023 | A tool manifest hides shell behavior or is mistaken for authorization/isolation. | Commands are explicit argv vectors with no implicit shell concatenation; manifests are inert until explicit registration; authority and isolation declarations require separate deterministic evaluation and enforcement. |
 | TM-024 | Raw tool inputs, outputs, or credentials leak into an audit trace. | Decision events store canonical payload hashes by default; sensitive fields use fail-closed RFC 6901 redaction before persistence; later persistence requires dedicated regression tests. |
+| TM-025 | An agent inherits host credentials, floods diagnostics, violates protocol order, or survives a canceled session. | Absolute direct execution without a shell, explicit non-inherited environment, frame/message/stderr/time limits, direction and lifecycle validation, direct-child cancellation, bounded pipe cleanup, and wait-on-all-started-paths tests. |
 
 ## Security invariants
 
@@ -96,8 +97,10 @@ It does not assert containment for arbitrary agent processes unless an isolation
 
 ## M3 residual risk
 
-- The committed protocol and tool manifests are inert contracts. No subprocess isolation or governed execution is implemented yet.
-- JSON Lines framing provides no authentication, encryption, process containment, or network policy.
+- The session controller can launch one explicitly configured direct subprocess through an internal API, but no supported public agent-run workflow or governed execution path exists yet.
+- JSON Lines framing and direct-child ownership provide no authentication, encryption, filesystem isolation, syscall isolation, or network policy.
+- Cancellation targets the direct child. Independently detached descendants may outlive it until an isolation backend owns a process boundary.
+- An agent receives an empty environment by default but still runs with the launching OS user's ambient filesystem and network authority.
 - Tool input schemas are structurally constrained and hashed, but full input-instance evaluation enters with the gateway executor.
 - Declared `none`, `loopback`, or filesystem restrictions are requirements, not verified isolation claims, until an execution backend enforces them.
 

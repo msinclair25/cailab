@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/msinclair25/cailab/internal/agent"
 )
 
 func TestWriteOwnerOnlyJSON(t *testing.T) {
@@ -123,6 +126,42 @@ func TestDockerVersionSupported(t *testing.T) {
 	for version, want := range tests {
 		if got := dockerVersionSupported(version); got != want {
 			t.Errorf("dockerVersionSupported(%q) = %v, want %v", version, got, want)
+		}
+	}
+}
+
+func TestInternalReferenceAgentUsesProtocolStreams(t *testing.T) {
+	startPayload, err := json.Marshal(agent.SessionStartPayload{
+		RunID: "run:reference", TrialID: "trial:1",
+		ScenarioDigest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		PolicyVersion:  "0.1.0",
+		Tools:          []agent.ToolRef{{Name: "google.drive.read", Version: "0.1.0", Digest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var input bytes.Buffer
+	if err := agent.NewEncoder(&input).Write(agent.Message{
+		ProtocolVersion: agent.ProtocolVersion, ID: "message:start", Type: agent.MessageSessionStart, Payload: startPayload,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var output, diagnostics bytes.Buffer
+	c := New(&output, &diagnostics)
+	c.stdin = &input
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if code := c.Run(ctx, []string{"_agent", "reference"}); code != ExitOK {
+		t.Fatalf("code = %d; stderr=%s", code, diagnostics.String())
+	}
+	decoder := agent.NewDecoder(&output)
+	for _, expected := range []string{agent.MessageAgentReady, agent.MessageSessionComplete} {
+		message, err := decoder.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if message.Type != expected {
+			t.Fatalf("message type = %q, want %q", message.Type, expected)
 		}
 	}
 }

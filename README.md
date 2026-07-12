@@ -15,7 +15,7 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: the versioned agent-run, tool-manifest, JSON Lines message, deterministic decision, redaction, and decision-event contracts are implemented and test-backed. Subprocess execution, enforced isolation, trace persistence, interactive approvals, and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
+M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: the versioned agent contracts, strict owned-subprocess session controller, and deterministic reference agent are implemented and test-backed. The controller is currently an internal API; a supported user-facing agent command, governed tool execution, enforced isolation, trace persistence, interactive approvals, and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
 
 ## Build and try the walking skeleton
 
@@ -91,7 +91,7 @@ The `acquisition-agent` scenario begins with both a contractor and an approved a
 ./bin/cailab verify
 ```
 
-External tools and AI agents can call the documented loopback APIs and invoke the `cailab federation` command. CloudAILab does not yet launch, isolate, govern, or score those agent processes; that work begins in M3.
+External tools and AI agents can call the documented loopback APIs and invoke the `cailab federation` command. The internal M3 controller can now launch and supervise a protocol-compatible direct subprocess, but there is not yet a supported public agent-run workflow or governed tool gateway. CloudAILab does not isolate or score those agent processes.
 
 ## Development checks
 

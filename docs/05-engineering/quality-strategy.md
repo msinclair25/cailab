@@ -69,6 +69,7 @@ Use only public CLI commands and documented workflows. The flagship scenario is 
 ### Agent evaluations
 
 - A deterministic reference agent establishes harness correctness.
+- Subprocess tests cover ordering, direction, correlation, malformed output, bounded diagnostics, timeouts, cancellation, unexpected exit, and cleanup.
 - Deliberately unsafe fixtures establish that findings trigger.
 - Nondeterministic models run multiple trials.
 - Reports include denominators, configuration, errors, and incomplete trials.

@@ -55,6 +55,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SEC-011 | A permissive provider emulator shall not be treated as the authoritative source for a CloudAILab authorization decision. |
 | NFR-SEC-012 | Agent protocol inputs shall reject oversized frames, invalid UTF-8, duplicate JSON keys, unknown typed fields, and malformed message contracts before side effects. |
 | NFR-SEC-013 | Tool isolation declarations shall not be described as enforced unless the runtime verifies the corresponding network and filesystem boundaries. |
+| NFR-SEC-014 | An unisolated agent subprocess shall use explicit argv, working directory, and environment; enforce bounded protocol, diagnostics, and time limits; and be waited for after success, failure, or cancellation. |
 
 ### Reliability and reproducibility
 

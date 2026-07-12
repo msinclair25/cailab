@@ -16,6 +16,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/msinclair25/cailab/internal/agent"
 	"github.com/msinclair25/cailab/internal/app"
 	"github.com/msinclair25/cailab/internal/provider"
 	"github.com/msinclair25/cailab/internal/scenario"
@@ -36,13 +37,14 @@ var (
 )
 
 type CLI struct {
+	stdin  io.Reader
 	stdout io.Writer
 	stderr io.Writer
 	getenv func(string) string
 }
 
 func New(stdout, stderr io.Writer) *CLI {
-	return &CLI{stdout: stdout, stderr: stderr, getenv: os.Getenv}
+	return &CLI{stdin: os.Stdin, stdout: stdout, stderr: stderr, getenv: os.Getenv}
 }
 
 func (c *CLI) Run(ctx context.Context, args []string) int {
@@ -82,6 +84,8 @@ func (c *CLI) Run(ctx context.Context, args []string) int {
 		err = c.runDown(ctx, args[1:])
 	case "_runtime":
 		err = c.runInternalRuntime(ctx, args[1:])
+	case "_agent":
+		err = c.runInternalAgent(ctx, args[1:])
 	default:
 		fmt.Fprintf(c.stderr, "unknown command %q\n\n", args[0])
 		c.printUsage(c.stderr)
@@ -700,6 +704,22 @@ func (c *CLI) runInternalRuntime(ctx context.Context, args []string) error {
 		return provider.ServeGoogleRuntime(ctx, *config)
 	}
 	return provider.ServeOIDCRuntime(ctx, *config)
+}
+
+func (c *CLI) runInternalAgent(ctx context.Context, args []string) error {
+	if len(args) == 0 || args[0] != "reference" {
+		return errors.New("invalid private agent command")
+	}
+	fs := newFlagSet("_agent reference", c.stderr)
+	id := fs.String("id", "agent:reference", "agent identifier")
+	version := fs.String("version", "0.1.0", "agent version")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("invalid private reference-agent configuration")
+	}
+	return agent.ServeReferenceAgent(ctx, c.stdin, c.stdout, agent.ReferenceAgentConfig{ID: *id, Version: *version})
 }
 
 func newFlagSet(name string, output io.Writer) *flag.FlagSet {

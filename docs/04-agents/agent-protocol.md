@@ -8,7 +8,7 @@ last_reviewed: 2026-07-12
 
 ## Current scope
 
-CloudAILab now defines the typed and schema-backed contract for M3 agent runs, tool registration, protocol messages, decisions, redaction, and decision events. The current slice validates and encodes these artifacts; it does **not** yet launch subprocess agents or tools, enforce declared isolation, persist traces, resolve approvals interactively, or calculate aggregate agent metrics.
+CloudAILab now defines the typed and schema-backed contract for M3 agent runs, tool registration, protocol messages, decisions, redaction, and decision events. The internal session controller launches one explicitly selected subprocess, enforces protocol lifecycle and resource limits, and includes a deterministic no-tool reference agent. A supported end-user agent command, tool execution, authorization policy, enforced isolation, persisted traces, interactive approvals, and aggregate metrics remain later M3 work.
 
 The normative schemas are:
 
@@ -17,7 +17,7 @@ The normative schemas are:
 - [Protocol message](../../schemas/agent/v1alpha1/protocol-message.json)
 - [Decision event](../../schemas/agent/v1alpha1/decision-event.json)
 
-The executable validation contract is in [`internal/agent`](../../internal/agent). [ADR-0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) records the durable design and limitations.
+The executable validation and session contracts are in [`internal/agent`](../../internal/agent). [ADR-0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) defines the wire contract; [ADR-0012](../02-architecture/decisions/0012-owned-agent-subprocess-sessions.md) defines the owned-process lifecycle and its limitations.
 
 ## Framing
 
@@ -44,7 +44,13 @@ JSON Lines defines each line as a valid JSON value and recommends a line termina
 | `session.complete` | Agent | Reports completed, failed, or canceled agent work. |
 | `protocol.error` | Either | Reports a stable protocol error without changing authorization state. |
 
-`tool.result`, `approval.required`, and `approval.resolved` require `correlationId`. The future controller will also enforce message direction and lifecycle order; v1alpha1 decoding currently validates structure and semantics only.
+`tool.result`, `approval.required`, and `approval.resolved` require `correlationId`. The session controller additionally enforces direction, lifecycle order, expected agent identity/version, unique message IDs, declared-tool membership, and response correlation. Typed decoding by itself still validates only structure and payload semantics.
+
+## Subprocess lifecycle
+
+The internal controller requires an absolute executable path, an absolute working directory, and an explicit complete environment. It never invokes a shell and does not inherit the controller's environment by default. It sends `session.start`, requires a matching `agent.ready` before tool activity, bounds handshake and whole-session time, caps both frame count and retained transcript bytes, continuously drains bounded standard error, and waits for every direct child it starts. Captured standard error remains an explicit untrusted field and is not automatically copied into formatted errors.
+
+The deterministic reference agent emits `agent.ready` followed by `session.complete` and makes no tool calls. Package tests use it as a reproducible protocol and cleanup baseline. There is not yet a supported public `cailab agent run` workflow.
 
 ## Tool manifest
 
@@ -81,4 +87,4 @@ Sequence is authoritative for event order. Wall-clock time is diagnostic context
 
 ## Security boundary
 
-Protocol validation is not sandboxing. A declaration of `none`, `loopback`, or `read_only` becomes an isolation claim only when a runtime demonstrably enforces it. Until that implementation lands, user-selected subprocesses retain whatever authority their launcher grants them and CloudAILab must describe them as unisolated.
+Protocol validation and owned process cleanup are not sandboxing. A declaration of `none`, `loopback`, or `read_only` becomes an isolation claim only when a runtime demonstrably enforces it. The current controller limits inherited environment and protocol resources, but the subprocess can still access the host filesystem, network, OS APIs, and independently detached descendants with the launching user's authority. It must be treated as unisolated.
