@@ -14,7 +14,7 @@ This M1 scenario is training software, not a complete AWS emulator. Read the [op
 
 ## Prerequisites
 
-- Go 1.25.8 or newer
+- Go 1.25.12 or newer
 - Docker 20.10 or newer with a running engine
 - AWS CLI v2 for the interactive commands
 

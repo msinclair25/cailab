@@ -19,7 +19,7 @@ M0, the executable walking skeleton, is complete. M1 now includes a development 
 
 ## Build and try M0
 
-Prerequisites: Go 1.25.8 or newer. Docker is required for provider-backed scenarios.
+Prerequisites: Go 1.25.12 or newer. Docker is required for provider-backed scenarios.
 
 ```bash
 go build -o ./bin/cailab ./cmd/cailab

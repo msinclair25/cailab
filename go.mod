@@ -1,6 +1,6 @@
 module github.com/msinclair25/cailab
 
-go 1.25.8
+go 1.25.12
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.42.1
