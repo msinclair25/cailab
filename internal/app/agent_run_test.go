@@ -1,0 +1,205 @@
+package app
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/msinclair25/cailab/internal/agent"
+	"github.com/msinclair25/cailab/internal/scenario"
+	"github.com/msinclair25/cailab/internal/state"
+)
+
+const (
+	appAgentHelperEnvironment = "CAILAB_APP_AGENT_HELPER"
+	appToolHelperEnvironment  = "CAILAB_APP_TOOL_HELPER"
+)
+
+func TestRunAgentExecutesRegisteredToolAndPersistsTerminalEvidence(t *testing.T) {
+	ctx := context.Background()
+	store, service, rangeRun := appAgentTestService(t, ctx)
+	defer store.Close()
+	options := appAgentTestOptions(t, rangeRun.Compiled, "trial:1", "tool")
+	result, err := service.RunAgent(ctx, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Run.Status != "completed" || result.Session.Completion.Status != "completed" {
+		t.Fatalf("result = %+v", result)
+	}
+	if len(result.Decisions) != 1 || result.Decisions[0].Action != "test.read" || result.Decisions[0].Resource.ID != "resource:a" || result.Decisions[0].Decision.Effect != "allow" {
+		t.Fatalf("decisions = %+v", result.Decisions)
+	}
+	if len(result.Outcomes) != 1 || result.Outcomes[0].Outcome.Status != "succeeded" {
+		t.Fatalf("outcomes = %+v", result.Outcomes)
+	}
+	stored, err := store.AgentRun(ctx, rangeRun.ID, "trial:1")
+	if err != nil || stored.Status != "completed" || stored.EndedAt == nil {
+		t.Fatalf("stored run = %+v, error = %v", stored, err)
+	}
+}
+
+func TestRunAgentRejectsRegistrationOutsideCanonicalScenarioBeforePersistence(t *testing.T) {
+	ctx := context.Background()
+	store, service, rangeRun := appAgentTestService(t, ctx)
+	defer store.Close()
+	options := appAgentTestOptions(t, rangeRun.Compiled, "trial:invalid", "reference")
+	options.Tools[0].Manifest.Spec.Permissions[0].Resources[0] = "resource:missing"
+	if _, err := service.RunAgent(ctx, options); err == nil || !strings.Contains(err.Error(), "not in the active scenario") {
+		t.Fatalf("run error = %v", err)
+	}
+	if _, err := store.AgentRun(ctx, rangeRun.ID, "trial:invalid"); !errors.Is(err, state.ErrNoActiveAgentRun) {
+		t.Fatalf("persisted invalid run error = %v", err)
+	}
+}
+
+func TestRunAgentPersistsFailedTerminalRecordAfterProtocolFailure(t *testing.T) {
+	ctx := context.Background()
+	store, service, rangeRun := appAgentTestService(t, ctx)
+	defer store.Close()
+	options := appAgentTestOptions(t, rangeRun.Compiled, "trial:failed", "malformed")
+	result, err := service.RunAgent(ctx, options)
+	if err == nil || result.Run.Status != "failed" {
+		t.Fatalf("result = %+v, error = %v", result, err)
+	}
+	stored, readErr := store.AgentRun(ctx, rangeRun.ID, "trial:failed")
+	if readErr != nil || stored.Status != "failed" || stored.EndedAt == nil {
+		t.Fatalf("stored run = %+v, error = %v", stored, readErr)
+	}
+}
+
+func TestReferenceAgentRunOptionsAreValidForActiveScenario(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled := scenario.Compiled{Nodes: []scenario.Node{
+		{ID: "tenant:a", Kind: "tenant", Type: "organization"},
+		{ID: "resource:a", Kind: "resource", Tenant: "tenant:a", Type: "test", Classification: "internal"},
+	}}
+	options, err := ReferenceAgentRunOptions(compiled, executable, t.TempDir(), "trial:1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateAgentRunOptions(compiled, options); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAppAgentSubprocessHelper(t *testing.T) {
+	agentMode := os.Getenv(appAgentHelperEnvironment)
+	toolMode := os.Getenv(appToolHelperEnvironment)
+	if agentMode == "" && toolMode == "" {
+		return
+	}
+	if toolMode != "" {
+		if err := agent.ServeReferenceTool(context.Background(), os.Stdin, os.Stdout, "test.read"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(10)
+		}
+		os.Exit(0)
+	}
+	if agentMode == "malformed" {
+		fmt.Fprintln(os.Stdout, "not-json")
+		return
+	}
+	decoder := agent.NewDecoder(os.Stdin)
+	if _, err := decoder.Next(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(11)
+	}
+	encoder := agent.NewEncoder(os.Stdout)
+	if err := encoder.Write(appAgentMessage(agent.MessageAgentReady, "message:ready", "", agent.AgentReadyPayload{AgentID: "agent:test", AgentVersion: "0.1.0"})); err != nil {
+		os.Exit(12)
+	}
+	if agentMode == "tool" {
+		call := appAgentMessage(agent.MessageToolCall, "call:1", "", agent.ToolCallPayload{
+			Tool: "test.read", Action: "test.read", Resource: "resource:a", Arguments: json.RawMessage(`{"resource":"resource:a"}`),
+		})
+		if err := encoder.Write(call); err != nil {
+			os.Exit(13)
+		}
+		response, err := decoder.Next()
+		if err != nil || response.Type != agent.MessageToolResult || response.CorrelationID != call.ID {
+			os.Exit(14)
+		}
+	}
+	if err := encoder.Write(appAgentMessage(agent.MessageSessionComplete, "message:complete", "", agent.SessionCompletePayload{Status: "completed"})); err != nil {
+		os.Exit(15)
+	}
+	os.Exit(0)
+}
+
+func appAgentTestService(t *testing.T, ctx context.Context) (*state.Store, *Service, state.Run) {
+	t.Helper()
+	store, err := state.Open(ctx, filepath.Join(t.TempDir(), "state.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled := scenario.Compiled{
+		SchemaVersion: scenario.APIVersion, ScenarioName: "agent-test", ScenarioVersion: "0.1.0", Seed: 42,
+		Digest: strings.Repeat("a", 64),
+		Nodes: []scenario.Node{
+			{ID: "tenant:a", Kind: "tenant", Type: "organization", DisplayName: "Tenant A"},
+			{ID: "resource:a", Kind: "resource", Tenant: "tenant:a", Type: "test", DisplayName: "Resource A", Classification: "restricted"},
+		},
+	}
+	rangeRun, err := store.CreateRun(ctx, compiled)
+	if err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	service := New(store, nil)
+	current := time.Date(2026, 7, 12, 23, 0, 0, 0, time.UTC)
+	service.clock = func() time.Time {
+		current = current.Add(time.Second)
+		return current
+	}
+	return store, service, rangeRun
+}
+
+func appAgentTestOptions(t *testing.T, compiled scenario.Compiled, trialID, agentMode string) AgentRunOptions {
+	t.Helper()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	manifest := agent.ToolManifest{
+		APIVersion: agent.APIVersion, Kind: agent.ToolManifestKind,
+		Metadata: agent.Metadata{Name: "test.read", Version: "0.1.0", Description: "Read the synthetic test resource."},
+		Spec: agent.ToolManifestSpec{
+			Transport:   agent.ToolTransport{Type: "subprocess", Command: []string{executable, "-test.run=^TestAppAgentSubprocessHelper$"}},
+			InputSchema: json.RawMessage(`{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"resource":{"type":"string"}},"required":["resource"],"additionalProperties":false}`),
+			Permissions: []agent.Permission{{Tenant: "tenant:a", Actions: []string{"test.read"}, Resources: []string{"resource:a"}}},
+			Risk:        "low", TimeoutMillis: 2_000, Isolation: agent.Isolation{Network: "host", Filesystem: "host"},
+		},
+	}
+	policy := agent.GovernancePolicy{
+		APIVersion: agent.APIVersion, Kind: agent.GovernancePolicyKind, Version: "0.1.0", DefaultEffect: "deny",
+		Rules: []agent.PolicyRule{{
+			ID: "rule:allow", Effect: "allow", AgentID: "agent:test", Tool: "test.read", Action: "test.read",
+			Resource: "resource:a", ResourceTenant: "tenant:a", ResourceClassification: "restricted",
+		}},
+	}
+	return AgentRunOptions{
+		Agent:       agent.AgentRef{ID: "agent:test", Version: "0.1.0", Adapter: "subprocess", Provider: "test", Model: "deterministic"},
+		ActorTenant: "tenant:a",
+		Command:     []string{executable, "-test.run=^TestAppAgentSubprocessHelper$"}, Directory: directory,
+		Environment: []string{appAgentHelperEnvironment + "=" + agentMode},
+		Policy:      policy,
+		Tools:       []RegisteredTool{{Manifest: manifest, Directory: directory, Environment: []string{appToolHelperEnvironment + "=reference"}}},
+		PromptHash:  strings.Repeat("b", 64), TrialID: trialID, TrialIndex: 1, TrialCount: 1, SessionTimeout: 5 * time.Second,
+	}
+}
+
+func appAgentMessage(messageType, id, correlation string, payload any) agent.Message {
+	data, _ := json.Marshal(payload)
+	return agent.Message{ProtocolVersion: agent.ProtocolVersion, ID: id, Type: messageType, CorrelationID: correlation, Payload: data}
+}

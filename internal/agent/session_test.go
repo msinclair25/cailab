@@ -335,9 +335,9 @@ func TestSessionHelperProcess(t *testing.T) {
 			Decision: Decision{Effect: "deny", ReasonCode: "policy:deny", PolicyVersion: "0.1.0"},
 		}))
 	case "undeclared-tool":
-		mustWriteHelper(testMessage(MessageToolCall, "call:1", "", ToolCallPayload{Tool: "microsoft.graph.write", Arguments: json.RawMessage(`{}`)}))
+		mustWriteHelper(testMessage(MessageToolCall, "call:1", "", ToolCallPayload{Tool: "microsoft.graph.write", Action: "graph.write", Resource: "microsoft:directory", Arguments: json.RawMessage(`{}`)}))
 	case "tool", "approval":
-		call := testMessage(MessageToolCall, "call:1", "", ToolCallPayload{Tool: "google.drive.read", Arguments: json.RawMessage(`{"fileId":"google:file"}`)})
+		call := testMessage(MessageToolCall, "call:1", "", ToolCallPayload{Tool: "google.drive.read", Action: "drive.files.get", Resource: "google:file", Arguments: json.RawMessage(`{"fileId":"google:file"}`)})
 		mustWriteHelper(call)
 		response, err := input.Next()
 		expectedType := MessageToolResult

@@ -43,7 +43,7 @@ Milestones are capability gates, not date commitments. This document is the conc
 
 ## M3 — Agent governance harness
 
-**Status:** in development; versioned protocols, strict agent/tool subprocess lifecycle, deterministic references, exact-match policy, Draft 2020-12 input validation, protected tool execution, and append-only decision/outcome evidence are complete. Public registration/run UX, approval resolution, isolation, trace replay, and scoring remain.
+**Status:** in development; versioned protocols, supported reference/custom subprocess runs, scenario-bound registration, deterministic references, exact-match policy, Draft 2020-12 input validation, protected tool execution, immutable run metadata, and append-only decision/outcome evidence are complete. Approval resolution, isolation, trace replay, and scoring remain.
 
 - Add agent identity and run metadata.
 - Supervise protocol-compatible direct subprocesses with bounded lifecycle and diagnostics.

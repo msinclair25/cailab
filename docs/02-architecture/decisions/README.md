@@ -23,6 +23,7 @@ ADRs record significant decisions that affect system structure, security, compat
 - [ADR-0012: Owned agent subprocess sessions](0012-owned-agent-subprocess-sessions.md)
 - [ADR-0013: Deterministic tool policy and decision evidence](0013-deterministic-tool-policy-and-evidence.md)
 - [ADR-0014: Strict one-shot tool execution](0014-strict-one-shot-tool-execution.md)
+- [ADR-0015: Scenario-bound public agent runs](0015-scenario-bound-public-agent-runs.md)
 
 ## Lifecycle
 

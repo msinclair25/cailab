@@ -40,6 +40,8 @@ func ValidateMessage(message Message) error {
 		var payload ToolCallPayload
 		decodeMessagePayload(&issues, message.Payload, &payload)
 		validateID(&issues, "payload.tool", payload.Tool)
+		requireText(&issues, "payload.action", payload.Action)
+		validateID(&issues, "payload.resource", payload.Resource)
 		validateJSONObject(&issues, "payload.arguments", payload.Arguments)
 	case MessageToolResult:
 		requireCorrelation = true

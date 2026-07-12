@@ -7,7 +7,7 @@ import (
 
 const (
 	APIVersion      = "cloudailab.dev/agent/v1alpha1"
-	ProtocolVersion = "1.0"
+	ProtocolVersion = "1.1"
 	MaxFrameBytes   = 1 << 20
 
 	ToolManifestKind     = "ToolManifest"
@@ -207,6 +207,8 @@ type ToolExecutionRequest struct {
 	ProtocolVersion string          `json:"protocolVersion"`
 	CallID          string          `json:"callId"`
 	Tool            string          `json:"tool"`
+	Action          string          `json:"action"`
+	Resource        ResourceRef     `json:"resource"`
 	Arguments       json.RawMessage `json:"arguments"`
 }
 
@@ -258,6 +260,8 @@ type AgentReadyPayload struct {
 
 type ToolCallPayload struct {
 	Tool      string          `json:"tool"`
+	Action    string          `json:"action"`
+	Resource  string          `json:"resource"`
 	Arguments json.RawMessage `json:"arguments"`
 }
 

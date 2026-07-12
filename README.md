@@ -15,7 +15,7 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: versioned agent, policy, tool-execution, and outcome contracts; strict owned subprocesses; deterministic references; exact-match policy; Draft 2020-12 input validation; protected tool output; and append-only decision/outcome evidence are implemented and test-backed. These remain internal APIs; supported public registration/run commands, enforced isolation, full trace replay, interactive approval resolution, and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
+M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: versioned agent, policy, tool-execution, and outcome contracts; supported reference and custom subprocess runs; scenario-bound tool registration; exact-match policy; Draft 2020-12 input validation; protected tool output; immutable run metadata; and append-only decision/outcome evidence are implemented and test-backed. Enforced isolation, full trace replay, interactive approval resolution, and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
 
 ## Build and try the walking skeleton
 
@@ -91,7 +91,20 @@ The `acquisition-agent` scenario begins with both a contractor and an approved a
 ./bin/cailab verify
 ```
 
-External tools and AI agents can call the documented loopback APIs and invoke the `cailab federation` command. The internal M3 harness can launch a protocol-compatible agent, validate and govern resolved tool calls, execute allowed or redacted one-shot tools, protect successful output, and persist linked decision/outcome evidence. There is not yet a supported public registration/run workflow, and CloudAILab does not isolate or score those processes.
+External tools and AI agents can call the documented loopback APIs and invoke the `cailab federation` command. The supported M3 runner can launch a protocol-compatible agent, validate scenario-bound registrations, govern resolved tool calls, execute allowed or redacted one-shot tools, protect successful output, and persist run/decision/outcome evidence.
+
+## Run the deterministic agent baseline
+
+With any active scenario, the reference command launches the deterministic protocol agent, records immutable run metadata, and prints an evidence-safe summary. It makes no tool calls, so it verifies the public subprocess and persistence path without pretending to measure agent quality.
+
+```bash
+./bin/cailab up walking-skeleton
+./bin/cailab agent run reference
+```
+
+Protocol-compatible user agents can be launched with `cailab agent run subprocess`. Policies and tool manifests are selected explicitly for that trial and validated against the active scenario before a process starts. See the [agent-run guide](docs/07-guides/agent-run.md) for the complete workflow and security limitations.
+
+Agent and tool subprocesses are owned and bounded but **not isolated** from the launching user's filesystem, network, syscalls, or detached descendants. Do not run untrusted code in this mode.
 
 ## Development checks
 
@@ -139,6 +152,7 @@ go run ./internal/tools/doccheck .
 - [Cross-provider acquisition-agent lab](docs/07-guides/acquisition-agent-lab.md)
 - [Cross-provider federation compatibility matrix](docs/07-compatibility/cross-provider-federation.md)
 - [Agent protocol v1alpha1](docs/04-agents/agent-protocol.md)
+- [Agent-run guide](docs/07-guides/agent-run.md)
 
 ## Working vocabulary
 

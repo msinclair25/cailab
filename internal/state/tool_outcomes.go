@@ -27,6 +27,13 @@ func (s *Store) AppendToolOutcomeEvent(ctx context.Context, draft agent.ToolOutc
 	} else if err != nil {
 		return agent.ToolOutcomeEvent{}, fmt.Errorf("verify tool outcome run: %w", err)
 	}
+	if err := tx.QueryRowContext(ctx, `
+SELECT 1 FROM agent_runs
+WHERE run_id = ? AND trial_id = ? AND terminal_json IS NULL`, draft.RunID, draft.TrialID).Scan(&active); errors.Is(err, sql.ErrNoRows) {
+		return agent.ToolOutcomeEvent{}, ErrNoActiveAgentRun
+	} else if err != nil {
+		return agent.ToolOutcomeEvent{}, fmt.Errorf("verify active agent trial for tool outcome: %w", err)
+	}
 	var nextSequence int64
 	var headHash string
 	if err := tx.QueryRowContext(ctx, `
