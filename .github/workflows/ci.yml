@@ -88,3 +88,8 @@ jobs:
 
       - name: Build CLI
         run: go build ./cmd/cailab
+
+      - name: Test native Microsoft facade lifecycle
+        env:
+          CAILAB_NATIVE_INTEGRATION: "1"
+        run: go test -count=1 -run '^TestMicrosoftNativeIntegration$' -v ./internal/provider

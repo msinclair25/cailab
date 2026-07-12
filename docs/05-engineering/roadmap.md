@@ -21,7 +21,7 @@ Milestones are capability gates, not date commitments. This document is the conc
 
 ## M1 — AWS identity vertical slice
 
-**Status:** in development; the first IAM/STS/S3 trust-remediation workflow is executable.
+**Status:** complete; the IAM/STS/S3 trust-remediation workflow is executable and CI-backed.
 
 - Integrate pinned Floci runtime.
 - Support two AWS accounts and selected IAM, STS, and S3 operations.
@@ -31,6 +31,8 @@ Milestones are capability gates, not date commitments. This document is the conc
 **Exit:** the learner can discover and close a supported cross-account path with familiar AWS tooling.
 
 ## M2 — Microsoft and Google identity facades
+
+**Status:** in development; the first persistent Microsoft delegated-consent workflow is executable.
 
 - Implement scenario-required users, groups, applications, roles, and memberships.
 - Add local issuer and selected federation claims.

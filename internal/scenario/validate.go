@@ -12,6 +12,7 @@ var awsAccountPattern = regexp.MustCompile(`^[0-9]{12}$`)
 var awsRoleNamePattern = regexp.MustCompile(`^[A-Za-z0-9_+=,.@-]{1,64}$`)
 var awsBucketNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
 var awsRegionPattern = regexp.MustCompile(`^[a-z]{2}(-gov)?-[a-z]+-[0-9]$`)
+var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
 var (
 	providerTypes     = setOf("aws", "microsoft", "google", "local")
@@ -165,14 +166,16 @@ func Validate(s Scenario) error {
 }
 
 func validateRuntimes(issues *[]string, runtimes Runtimes) {
-	if runtimes.AWS == nil {
-		return
+	if runtimes.AWS != nil {
+		if runtimes.AWS.Engine != "floci" {
+			*issues = append(*issues, fmt.Sprintf("spec.runtimes.aws.engine has unsupported value %q", runtimes.AWS.Engine))
+		}
+		if runtimes.AWS.Image != FlociImage {
+			*issues = append(*issues, fmt.Sprintf("spec.runtimes.aws.image must be the supported pinned image %q", FlociImage))
+		}
 	}
-	if runtimes.AWS.Engine != "floci" {
-		*issues = append(*issues, fmt.Sprintf("spec.runtimes.aws.engine has unsupported value %q", runtimes.AWS.Engine))
-	}
-	if runtimes.AWS.Image != FlociImage {
-		*issues = append(*issues, fmt.Sprintf("spec.runtimes.aws.image must be the supported pinned image %q", FlociImage))
+	if runtimes.Microsoft != nil && runtimes.Microsoft.Engine != "native" {
+		*issues = append(*issues, fmt.Sprintf("spec.runtimes.microsoft.engine has unsupported value %q", runtimes.Microsoft.Engine))
 	}
 }
 
@@ -183,6 +186,7 @@ func validateProviders(
 	tenants, principals, resources map[string]struct{},
 	principalTenants, resourceTenants map[string]string,
 ) {
+	validateMicrosoftProvider(issues, providers.Microsoft, runtimes.Microsoft, tenants, principals, resources, principalTenants, resourceTenants)
 	if providers.AWS == nil {
 		return
 	}
@@ -280,6 +284,129 @@ func validateProviders(
 			}
 			objectKeys[object.Key] = struct{}{}
 		}
+	}
+}
+
+func validateMicrosoftProvider(
+	issues *[]string,
+	provider *MicrosoftProvider,
+	runtime *MicrosoftRuntime,
+	tenants, principals, resources map[string]struct{},
+	principalTenants, resourceTenants map[string]string,
+) {
+	if provider == nil {
+		if runtime != nil {
+			*issues = append(*issues, "spec.runtimes.microsoft requires spec.providers.microsoft")
+		}
+		return
+	}
+	if runtime == nil {
+		*issues = append(*issues, "spec.providers.microsoft requires spec.runtimes.microsoft")
+	}
+	checkReference(issues, "spec.providers.microsoft.tenant", provider.Tenant, tenants)
+	if !uuidPattern.MatchString(provider.TenantID) {
+		*issues = append(*issues, fmt.Sprintf("spec.providers.microsoft.tenantId has invalid UUID %q", provider.TenantID))
+	}
+	if len(provider.Users) == 0 {
+		*issues = append(*issues, "spec.providers.microsoft.users must contain at least one user")
+	}
+
+	objectIDs := make(map[string]string)
+	userIDs := make(map[string]struct{})
+	for i, user := range provider.Users {
+		prefix := fmt.Sprintf("spec.providers.microsoft.users[%d]", i)
+		validateMicrosoftObjectID(issues, prefix+".id", user.ID, objectIDs)
+		userIDs[user.ID] = struct{}{}
+		checkReference(issues, prefix+".node", user.Node, principals)
+		validateMicrosoftNodeTenant(issues, prefix+".node", user.Node, provider.Tenant, principalTenants)
+		requireText(issues, prefix+".displayName", user.DisplayName)
+		if !strings.Contains(user.UserPrincipalName, "@") {
+			*issues = append(*issues, fmt.Sprintf("%s.userPrincipalName must contain @", prefix))
+		}
+	}
+
+	applicationAppIDs := make(map[string]struct{})
+	for i, application := range provider.Applications {
+		prefix := fmt.Sprintf("spec.providers.microsoft.applications[%d]", i)
+		validateMicrosoftObjectID(issues, prefix+".id", application.ID, objectIDs)
+		validateMicrosoftUUID(issues, prefix+".appId", application.AppID)
+		if _, exists := applicationAppIDs[application.AppID]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s.appId %q is duplicated", prefix, application.AppID))
+		}
+		applicationAppIDs[application.AppID] = struct{}{}
+		checkReference(issues, prefix+".node", application.Node, principals)
+		validateMicrosoftNodeTenant(issues, prefix+".node", application.Node, provider.Tenant, principalTenants)
+		requireText(issues, prefix+".displayName", application.DisplayName)
+	}
+
+	servicePrincipalIDs := make(map[string]MicrosoftServicePrincipal)
+	for i, servicePrincipal := range provider.ServicePrincipals {
+		prefix := fmt.Sprintf("spec.providers.microsoft.servicePrincipals[%d]", i)
+		validateMicrosoftObjectID(issues, prefix+".id", servicePrincipal.ID, objectIDs)
+		validateMicrosoftUUID(issues, prefix+".appId", servicePrincipal.AppID)
+		requireText(issues, prefix+".displayName", servicePrincipal.DisplayName)
+		if (servicePrincipal.Node == "") == (servicePrincipal.ResourceNode == "") {
+			*issues = append(*issues, prefix+" must set exactly one of node or resourceNode")
+		}
+		if servicePrincipal.Node != "" {
+			checkReference(issues, prefix+".node", servicePrincipal.Node, principals)
+			validateMicrosoftNodeTenant(issues, prefix+".node", servicePrincipal.Node, provider.Tenant, principalTenants)
+			if _, exists := applicationAppIDs[servicePrincipal.AppID]; !exists {
+				*issues = append(*issues, fmt.Sprintf("%s.appId references unknown application appId %q", prefix, servicePrincipal.AppID))
+			}
+		}
+		if servicePrincipal.ResourceNode != "" {
+			checkReference(issues, prefix+".resourceNode", servicePrincipal.ResourceNode, resources)
+			validateMicrosoftNodeTenant(issues, prefix+".resourceNode", servicePrincipal.ResourceNode, provider.Tenant, resourceTenants)
+		}
+		servicePrincipalIDs[servicePrincipal.ID] = servicePrincipal
+	}
+
+	grantIDs := make(map[string]struct{})
+	for i, grant := range provider.OAuth2PermissionGrants {
+		prefix := fmt.Sprintf("spec.providers.microsoft.oauth2PermissionGrants[%d]", i)
+		validateMicrosoftUUID(issues, prefix+".id", grant.ID)
+		if _, exists := grantIDs[grant.ID]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s.id %q is duplicated", prefix, grant.ID))
+		}
+		grantIDs[grant.ID] = struct{}{}
+		client, clientExists := servicePrincipalIDs[grant.ClientID]
+		if !clientExists || client.Node == "" {
+			*issues = append(*issues, fmt.Sprintf("%s.clientId references unknown client service principal %q", prefix, grant.ClientID))
+		}
+		resource, resourceExists := servicePrincipalIDs[grant.ResourceID]
+		if !resourceExists || resource.ResourceNode == "" {
+			*issues = append(*issues, fmt.Sprintf("%s.resourceId references unknown resource service principal %q", prefix, grant.ResourceID))
+		}
+		if grant.ConsentType != "Principal" {
+			*issues = append(*issues, fmt.Sprintf("%s.consentType has unsupported value %q", prefix, grant.ConsentType))
+		}
+		if _, exists := userIDs[grant.PrincipalID]; !exists {
+			*issues = append(*issues, fmt.Sprintf("%s.principalId references unknown user %q", prefix, grant.PrincipalID))
+		}
+		if len(strings.Fields(grant.Scope)) == 0 {
+			*issues = append(*issues, prefix+".scope must contain at least one permission")
+		}
+	}
+}
+
+func validateMicrosoftObjectID(issues *[]string, field, value string, objects map[string]string) {
+	validateMicrosoftUUID(issues, field, value)
+	if previous, exists := objects[value]; exists {
+		*issues = append(*issues, fmt.Sprintf("%s %q duplicates %s", field, value, previous))
+	}
+	objects[value] = field
+}
+
+func validateMicrosoftUUID(issues *[]string, field, value string) {
+	if !uuidPattern.MatchString(value) {
+		*issues = append(*issues, fmt.Sprintf("%s has invalid UUID %q", field, value))
+	}
+}
+
+func validateMicrosoftNodeTenant(issues *[]string, field, node, tenant string, nodeTenants map[string]string) {
+	if actual, exists := nodeTenants[node]; exists && actual != tenant {
+		*issues = append(*issues, fmt.Sprintf("%s %q belongs to tenant %q, not %q", field, node, actual, tenant))
 	}
 }
 

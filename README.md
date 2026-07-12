@@ -2,7 +2,7 @@
 title: CloudAILab
 aliases:
   - CAL
-status: m1-development
+status: m2-development
 ---
 
 # CloudAILab
@@ -15,11 +15,11 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0, the executable walking skeleton, is complete. M1 now includes a development AWS vertical slice backed by a digest-pinned Floci runtime: two accounts, IAM role trust, STS role assumption, S3 data, live trust-path normalization, remediation-aware verification, reset, and cleanup. Microsoft, Google, and agent runtimes are not implemented yet. Provider compatibility is limited to the tested operations in the compatibility matrix.
+M0 and the M1 AWS identity slice are complete. M2 now includes a development Microsoft identity slice: a persistent native Microsoft Graph-shaped facade, users, applications, service principals, delegated permission grants, live consent-path normalization, scoped remediation, reset, and cleanup. Google, local OIDC federation, the full cross-provider chain, and agent governance remain planned. Provider compatibility is limited to the tested operations in the compatibility matrices.
 
-## Build and try M0
+## Build and try the walking skeleton
 
-Prerequisites: Go 1.25.12 or newer. Docker is required for provider-backed scenarios.
+Prerequisites: Go 1.25.12 or newer. Docker is required only for AWS/Floci scenarios.
 
 ```bash
 go build -o ./bin/cailab ./cmd/cailab
@@ -44,6 +44,17 @@ The initial `verify` is expected to fail because the scenario starts vulnerable.
 ./bin/cailab status
 ./bin/cailab mission
 ./bin/cailab graph path aws:parent-root aws:acquisition-data
+./bin/cailab verify
+```
+
+## Try the Microsoft identity slice
+
+This scenario starts with an ordinary analyst holding an excessive delegated Microsoft Graph grant. Follow the [Microsoft consent lab guide](docs/07-guides/microsoft-consent-lab.md) to inspect the local Graph-shaped endpoint, revoke only that grant, and preserve the approved administrator path. It does not require Docker, a Microsoft tenant, a global proxy, or a trusted local certificate.
+
+```bash
+./bin/cailab up microsoft-consent
+./bin/cailab status
+./bin/cailab graph path microsoft:analyst microsoft:directory-data
 ./bin/cailab verify
 ```
 
@@ -84,6 +95,8 @@ go run ./internal/tools/doccheck .
 - [Technical basis and source register](docs/06-research/technical-basis.md)
 - [AWS cross-account lab](docs/07-guides/aws-cross-account-lab.md)
 - [AWS/Floci compatibility matrix](docs/07-compatibility/aws-floci-1.5.32.md)
+- [Microsoft consent lab](docs/07-guides/microsoft-consent-lab.md)
+- [Microsoft Graph facade compatibility matrix](docs/07-compatibility/microsoft-graph-facade.md)
 
 ## Working vocabulary
 

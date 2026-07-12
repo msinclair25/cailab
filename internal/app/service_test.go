@@ -26,7 +26,7 @@ func (f *fakeProviderManager) Start(_ context.Context, _ string, _ scenario.Comp
 	return []provider.Instance{{Provider: "aws", Engine: "floci", Name: "test-runtime", Endpoint: "http://127.0.0.1:4566", Status: "ready"}}, nil
 }
 
-func (f *fakeProviderManager) Stop(_ context.Context, _ string, _ []provider.Instance) error {
+func (f *fakeProviderManager) Stop(_ context.Context, _ string, _ []provider.Instance, _ scenario.Compiled) error {
 	f.stopped = true
 	return nil
 }
