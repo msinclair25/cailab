@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudailab.dev/schemas/agent/v1alpha1/agent-run.json",
+  "title": "CloudAILab Agent Run v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "runId", "trialId", "scenario", "agent", "policy", "promptHash", "tools", "trial", "status", "startedAt"],
+  "properties": {
+    "apiVersion": { "const": "cloudailab.dev/agent/v1alpha1" },
+    "kind": { "const": "AgentRun" },
+    "runId": { "$ref": "#/$defs/id" },
+    "trialId": { "$ref": "#/$defs/id" },
+    "scenario": { "$ref": "#/$defs/scenario" },
+    "agent": { "$ref": "#/$defs/agent" },
+    "policy": { "$ref": "#/$defs/policy" },
+    "promptHash": { "$ref": "#/$defs/digest" },
+    "tools": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/toolRef" } },
+    "trial": { "$ref": "#/$defs/trial" },
+    "status": { "enum": ["planned", "running", "completed", "failed", "canceled"] },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "endedAt": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "enum": ["completed", "failed", "canceled"] } } },
+      "then": { "required": ["endedAt"] },
+      "else": { "not": { "required": ["endedAt"] } }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9._:-]{0,127}$" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "scenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "digest", "seed"],
+      "properties": {
+        "name": { "$ref": "#/$defs/id" },
+        "version": { "$ref": "#/$defs/version" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "seed": { "type": "integer" }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "adapter", "provider", "model"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "version": { "$ref": "#/$defs/version" },
+        "adapter": { "const": "subprocess" },
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "digest"],
+      "properties": {
+        "version": { "$ref": "#/$defs/version" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "toolRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "digest"],
+      "properties": {
+        "name": { "$ref": "#/$defs/id" },
+        "version": { "$ref": "#/$defs/version" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "trial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "count"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 1 },
+        "count": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

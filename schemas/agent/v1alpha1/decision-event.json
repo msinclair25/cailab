@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudailab.dev/schemas/agent/v1alpha1/decision-event.json",
+  "title": "CloudAILab Agent Decision Event v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "eventId", "sequence", "occurredAt", "runId", "trialId", "correlationId", "actor", "tool", "action", "resource", "decision", "outcome", "inputHash"],
+  "properties": {
+    "apiVersion": { "const": "cloudailab.dev/agent/v1alpha1" },
+    "kind": { "const": "DecisionEvent" },
+    "eventId": { "$ref": "#/$defs/id" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "runId": { "$ref": "#/$defs/id" },
+    "trialId": { "$ref": "#/$defs/id" },
+    "correlationId": { "$ref": "#/$defs/id" },
+    "actor": { "$ref": "#/$defs/actor" },
+    "tool": { "$ref": "#/$defs/toolRef" },
+    "action": { "type": "string", "minLength": 1 },
+    "resource": { "$ref": "#/$defs/resource" },
+    "decision": { "$ref": "#/$defs/decision" },
+    "outcome": { "$ref": "#/$defs/outcome" },
+    "inputHash": { "$ref": "#/$defs/digest" },
+    "outputHash": { "$ref": "#/$defs/digest" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "properties": { "status": { "const": "succeeded" } } } } },
+      "then": { "required": ["outputHash"] }
+    },
+    {
+      "if": { "properties": { "outcome": { "properties": { "status": { "const": "not_executed" } } } } },
+      "then": { "not": { "required": ["outputHash"] } }
+    },
+    {
+      "if": { "properties": { "outcome": { "properties": { "status": { "const": "failed" } } } } },
+      "then": { "properties": { "outcome": { "required": ["errorCode"] } } },
+      "else": { "properties": { "outcome": { "not": { "required": ["errorCode"] } } } }
+    },
+    {
+      "if": { "properties": { "decision": { "properties": { "effect": { "enum": ["deny", "require_approval"] } } } } },
+      "then": { "properties": { "outcome": { "properties": { "status": { "const": "not_executed" } } } } }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9._:-]{0,127}$" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "tenant", "type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "tenant": { "$ref": "#/$defs/id" },
+        "type": { "const": "agent" }
+      }
+    },
+    "toolRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "digest"],
+      "properties": {
+        "name": { "$ref": "#/$defs/id" },
+        "version": { "$ref": "#/$defs/version" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "tenant", "classification"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "tenant": { "$ref": "#/$defs/id" },
+        "classification": { "enum": ["public", "internal", "confidential", "restricted"] }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effect", "reasonCode", "policyVersion"],
+      "properties": {
+        "effect": { "enum": ["allow", "deny", "redact", "require_approval"] },
+        "reasonCode": { "$ref": "#/$defs/id" },
+        "policyVersion": { "$ref": "#/$defs/version" },
+        "redactions": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^/" } },
+        "approvalId": { "$ref": "#/$defs/id" }
+      },
+      "allOf": [
+        { "if": { "properties": { "effect": { "const": "redact" } } }, "then": { "required": ["redactions"], "not": { "required": ["approvalId"] } } },
+        { "if": { "properties": { "effect": { "const": "require_approval" } } }, "then": { "required": ["approvalId"], "not": { "required": ["redactions"] } } },
+        { "if": { "properties": { "effect": { "enum": ["allow", "deny"] } } }, "then": { "not": { "anyOf": [{ "required": ["redactions"] }, { "required": ["approvalId"] }] } } }
+      ]
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["not_executed", "succeeded", "failed"] },
+        "errorCode": { "$ref": "#/$defs/id" }
+      }
+    }
+  }
+}

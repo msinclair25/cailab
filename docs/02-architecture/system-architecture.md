@@ -41,6 +41,7 @@ flowchart TD
     Federation --> Providers
     AgentGateway["Agent control gateway"] --> Providers
     AgentGateway --> Audit["Append-only audit events"]
+    AgentProcess["Agent subprocess"] -->|"bounded JSON Lines"| AgentGateway
     Graph --> Evaluator["Invariant and path evaluator"]
     Audit --> Evaluator
     Evaluator --> Reporter["Markdown, JSON and JUnit reports"]
@@ -78,6 +79,8 @@ M1 tests Docker only. Floci runs as an unprivileged user with dropped capabiliti
 M2's Microsoft and Google facades and local identity issuer run as detached private commands of the same binary through one provider-neutral lifecycle manager. Each binds to a random IPv4 loopback port and uses an owner-only run directory plus authenticated run-scoped control. A PID is diagnostic rather than cleanup authority. See [ADR-0008](decisions/0008-managed-native-facade-processes.md) and [ADR-0009](decisions/0009-local-development-oidc-profile.md).
 
 The M2 federation command validates signed local identity, current Microsoft assignment state, and typed AWS web trust before invoking Floci for temporary credentials. The pinned Floci runtime remains directly reachable on loopback and does not enforce that gateway decision; direct access is outside the supported authorization contract. Enforced agent mediation and isolation are M3 work. See [ADR-0010](decisions/0010-authoritative-web-identity-gateway.md).
+
+M3 begins with an inert, versioned subprocess protocol rather than process execution. Tool manifests declare authority, risk, timeout, transport, and expected isolation; they do not cause a command to run. Protocol frames are strict UTF-8 JSON Lines objects capped at 1 MiB. Deterministic decisions and monotonic event sequences remain independent from subprocess logging and wall-clock order. See [ADR-0011](decisions/0011-versioned-agent-json-lines-protocol.md).
 
 ## Compatibility policy
 

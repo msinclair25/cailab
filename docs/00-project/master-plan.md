@@ -293,6 +293,8 @@ Exit gate:
 
 ### M3 — Agent governance harness
 
+**Status:** in development. The versioned agent-run, tool-manifest, JSON Lines message, decision, redaction, and decision-event contracts are implemented; process execution and enforcement remain.
+
 **Goal:** make an external agent a measurable principal in the range.
 
 Deliverables:
@@ -443,6 +445,6 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Define the versioned M3 agent-run, tool-manifest, decision-event, and approval protocols.
-2. Implement a deterministic reference subprocess agent and governed tool gateway.
-3. Add explicit isolation modes before making any agent-containment claim.
+1. Implement the strict subprocess lifecycle and deterministic reference agent on the accepted protocol.
+2. Add a gateway policy evaluator that authorizes declared tool calls and persists redacted decision events.
+3. Implement approval handling, then add explicit isolation modes before making any agent-containment claim.

@@ -53,6 +53,8 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SEC-009 | A persisted process identifier alone shall not authorize native-runtime cleanup. |
 | NFR-SEC-010 | Temporary federation credentials shall be written only to an owner-only file and shall not be printed to standard output. |
 | NFR-SEC-011 | A permissive provider emulator shall not be treated as the authoritative source for a CloudAILab authorization decision. |
+| NFR-SEC-012 | Agent protocol inputs shall reject oversized frames, invalid UTF-8, duplicate JSON keys, unknown typed fields, and malformed message contracts before side effects. |
+| NFR-SEC-013 | Tool isolation declarations shall not be described as enforced unless the runtime verifies the corresponding network and filesystem boundaries. |
 
 ### Reliability and reproducibility
 
@@ -63,6 +65,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-REL-003 | Reset and shutdown operations shall be idempotent. |
 | NFR-REL-004 | Verification output shall be stable for equivalent normalized state. |
 | NFR-REL-005 | Persistent state changes shall use versioned, tested migrations. |
+| NFR-REL-006 | Agent decision events shall use monotonic sequence numbers and stable correlation identifiers; timestamps shall not determine authorization or score. |
 
 ### Usability and portability
 

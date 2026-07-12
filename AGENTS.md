@@ -1,6 +1,6 @@
 # CloudAILab repository guidance
 
-CloudAILab is a local enterprise identity and AI-agent security range. M0, the scoped M1 AWS/Floci IAM, STS, and S3 slice, and the M2 flagship cross-provider identity chain are complete. External tools and agents can use the documented loopback surfaces and deterministic federation gateway. Governed agent runtimes, isolation, approvals, traces, and repeated-trial scoring remain planned for M3. Present only behavior covered by implementation, integration tests, and compatibility matrices.
+CloudAILab is a local enterprise identity and AI-agent security range. M0, the scoped M1 AWS/Floci IAM, STS, and S3 slice, and the M2 flagship cross-provider identity chain are complete. M3 contains test-backed agent-run, tool-manifest, JSON Lines message, decision, redaction, and decision-event contracts. Subprocess execution, enforced isolation, trace persistence, interactive approvals, and repeated-trial scoring remain planned. Present only behavior covered by implementation, tests, schemas, and compatibility records.
 
 ## Before changing the project
 

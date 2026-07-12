@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudailab.dev/schemas/agent/v1alpha1/protocol-message.json",
+  "title": "CloudAILab Agent JSON Lines Message v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "id", "type", "payload"],
+  "properties": {
+    "protocolVersion": { "const": "1.0" },
+    "id": { "$ref": "#/$defs/id" },
+    "type": { "enum": ["session.start", "agent.ready", "tool.call", "tool.result", "approval.required", "approval.resolved", "session.complete", "protocol.error"] },
+    "correlationId": { "$ref": "#/$defs/id" },
+    "payload": { "type": "object" }
+  },
+  "allOf": [
+    { "if": { "properties": { "type": { "const": "session.start" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/sessionStart" } } } },
+    { "if": { "properties": { "type": { "const": "agent.ready" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/agentReady" } } } },
+    { "if": { "properties": { "type": { "const": "tool.call" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/toolCall" } } } },
+    { "if": { "properties": { "type": { "const": "tool.result" } } }, "then": { "required": ["correlationId"], "properties": { "payload": { "$ref": "#/$defs/toolResult" } } } },
+    { "if": { "properties": { "type": { "const": "approval.required" } } }, "then": { "required": ["correlationId"], "properties": { "payload": { "$ref": "#/$defs/approvalRequired" } } } },
+    { "if": { "properties": { "type": { "const": "approval.resolved" } } }, "then": { "required": ["correlationId"], "properties": { "payload": { "$ref": "#/$defs/approvalResolved" } } } },
+    { "if": { "properties": { "type": { "const": "session.complete" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/sessionComplete" } } } },
+    { "if": { "properties": { "type": { "const": "protocol.error" } } }, "then": { "properties": { "payload": { "$ref": "#/$defs/protocolError" } } } }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9._:-]{0,127}$" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "toolRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "digest"],
+      "properties": {
+        "name": { "$ref": "#/$defs/id" },
+        "version": { "$ref": "#/$defs/version" },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effect", "reasonCode", "policyVersion"],
+      "properties": {
+        "effect": { "enum": ["allow", "deny", "redact", "require_approval"] },
+        "reasonCode": { "$ref": "#/$defs/id" },
+        "policyVersion": { "$ref": "#/$defs/version" },
+        "redactions": { "type": "array", "items": { "type": "string" } },
+        "approvalId": { "$ref": "#/$defs/id" }
+      },
+      "allOf": [
+        { "if": { "properties": { "effect": { "const": "redact" } } }, "then": { "required": ["redactions"], "not": { "required": ["approvalId"] } } },
+        { "if": { "properties": { "effect": { "const": "require_approval" } } }, "then": { "required": ["approvalId"], "not": { "required": ["redactions"] } } },
+        { "if": { "properties": { "effect": { "enum": ["allow", "deny"] } } }, "then": { "not": { "anyOf": [{ "required": ["redactions"] }, { "required": ["approvalId"] }] } } }
+      ]
+    },
+    "sessionStart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "trialId", "scenarioDigest", "policyVersion", "tools"],
+      "properties": {
+        "runId": { "$ref": "#/$defs/id" },
+        "trialId": { "$ref": "#/$defs/id" },
+        "scenarioDigest": { "$ref": "#/$defs/digest" },
+        "policyVersion": { "$ref": "#/$defs/version" },
+        "tools": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/toolRef" } }
+      }
+    },
+    "agentReady": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agentId", "agentVersion"],
+      "properties": {
+        "agentId": { "$ref": "#/$defs/id" },
+        "agentVersion": { "$ref": "#/$defs/version" }
+      }
+    },
+    "toolCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "arguments"],
+      "properties": {
+        "tool": { "$ref": "#/$defs/id" },
+        "arguments": { "type": "object" }
+      }
+    },
+    "toolResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "status", "decision"],
+      "properties": {
+        "tool": { "$ref": "#/$defs/id" },
+        "status": { "enum": ["succeeded", "failed", "not_executed"] },
+        "content": true,
+        "decision": { "$ref": "#/$defs/decision" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "decision": { "properties": { "effect": { "enum": ["deny", "require_approval"] } } } } },
+          "then": { "properties": { "status": { "const": "not_executed" } }, "not": { "required": ["content"] } }
+        }
+      ]
+    },
+    "approvalRequired": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approvalId", "toolCallId", "reason"],
+      "properties": {
+        "approvalId": { "$ref": "#/$defs/id" },
+        "toolCallId": { "$ref": "#/$defs/id" },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    },
+    "approvalResolved": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approvalId", "approved", "resolvedBy"],
+      "properties": {
+        "approvalId": { "$ref": "#/$defs/id" },
+        "approved": { "type": "boolean" },
+        "resolvedBy": { "$ref": "#/$defs/id" }
+      }
+    },
+    "sessionComplete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "enum": ["completed", "failed", "canceled"] },
+        "summary": { "type": "string" }
+      }
+    },
+    "protocolError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": { "$ref": "#/$defs/id" },
+        "message": { "type": "string", "minLength": 1 },
+        "retryable": { "type": "boolean" }
+      }
+    }
+  }
+}

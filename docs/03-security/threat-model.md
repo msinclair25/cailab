@@ -56,6 +56,9 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-019 | A forged token or stale group assignment obtains a temporary AWS-shaped credential because Floci accepts the request. | The federation command validates the active issuer/JWKS, signed claims, declared subject, current Microsoft app-role assignment, and typed AWS trust before calling Floci; negative and lifecycle regression tests cover each decision class. |
 | TM-020 | Federation credentials leak through terminal output or permissive file modes. | The CLI requires an explicit output path, writes through an owner-only temporary file, atomically publishes it, and prints only the path and expiration. |
 | TM-021 | An external tool bypasses the federation command and calls the permissive Floci endpoint directly. | Direct Floci web-identity calls are excluded from authorization evidence; agent-facing wrappers must withhold the endpoint, and no containment claim is made until M3 enforces network/tool boundaries. |
+| TM-022 | A malicious agent frame exhausts memory, exploits parser ambiguity, or smuggles a conflicting field. | UTF-8 JSON Lines objects are capped at 1 MiB and reject empty frames, duplicate keys, unknown typed fields, malformed payloads, and trailing values before execution. |
+| TM-023 | A tool manifest hides shell behavior or is mistaken for authorization/isolation. | Commands are explicit argv vectors with no implicit shell concatenation; manifests are inert until explicit registration; authority and isolation declarations require separate deterministic evaluation and enforcement. |
+| TM-024 | Raw tool inputs, outputs, or credentials leak into an audit trace. | Decision events store canonical payload hashes by default; sensitive fields use fail-closed RFC 6901 redaction before persistence; later persistence requires dedicated regression tests. |
 
 ## Security invariants
 
@@ -69,6 +72,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - CAL removes a provider container only when its persisted or discovered run label matches the active run.
 - CAL stops a native facade only through a run-matched control document and authenticated control endpoint; a persisted PID alone is insufficient.
 - The supported federation command returns credentials only after signed-token, live-assignment, and typed-trust checks succeed.
+- An agent protocol frame or valid tool manifest cannot by itself authorize or execute a host action.
 
 ## M1 residual risk
 
@@ -89,6 +93,13 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - Client secrets, codes, tokens, and RSA private keys are run-local synthetic credentials; local processes under the same OS account remain inside the documented trust boundary.
 - Floci's direct `AssumeRoleWithWebIdentity` route accepts invalid tokens in the pinned release, and unknown access keys are permissive. Any process given or able to discover the Floci endpoint can bypass the M2 CLI gateway. M2 is a learning range, not an enforced agent sandbox.
 - Removing an app-role assignment prevents new gateway exchanges but does not revoke already-issued Floci credentials before expiration.
+
+## M3 residual risk
+
+- The committed protocol and tool manifests are inert contracts. No subprocess isolation or governed execution is implemented yet.
+- JSON Lines framing provides no authentication, encryption, process containment, or network policy.
+- Tool input schemas are structurally constrained and hashed, but full input-instance evaluation enters with the gateway executor.
+- Declared `none`, `loopback`, or filesystem restrictions are requirements, not verified isolation claims, until an execution backend enforces them.
 
 ## Review triggers
 
