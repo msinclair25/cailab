@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/msinclair25/cailab/internal/graph"
@@ -66,6 +67,27 @@ func (s *Service) Mission(ctx context.Context) (scenario.Compiled, error) {
 		return scenario.Compiled{}, err
 	}
 	return run.Compiled, nil
+}
+
+func (s *Service) RotateIdentity(ctx context.Context) (provider.OIDCJWKSet, error) {
+	run, err := s.store.ActiveRun(ctx)
+	if err != nil {
+		return provider.OIDCJWKSet{}, err
+	}
+	return s.provider.RotateIdentity(ctx, run.ID, run.Runtimes)
+}
+
+func (s *Service) ValidateIdentity(ctx context.Context, token, tokenType, audience string) (provider.OIDCClaims, error) {
+	run, err := s.store.ActiveRun(ctx)
+	if err != nil {
+		return provider.OIDCClaims{}, err
+	}
+	for _, runtime := range run.Runtimes {
+		if runtime.Provider == "oidc" && runtime.Engine == "native" {
+			return provider.ValidateOIDCRuntimeToken(ctx, runtime.Endpoint, token, tokenType, audience)
+		}
+	}
+	return provider.OIDCClaims{}, errors.New("active scenario has no OIDC runtime")
 }
 
 func (s *Service) Verify(ctx context.Context) (verify.Report, error) {
@@ -143,5 +165,5 @@ func (s *Service) Down(ctx context.Context) (state.Run, error) {
 }
 
 func hasProviderRuntime(run state.Run) bool {
-	return len(run.Runtimes) > 0 || run.Compiled.Runtimes.AWS != nil || run.Compiled.Runtimes.Microsoft != nil
+	return len(run.Runtimes) > 0 || run.Compiled.Runtimes.AWS != nil || run.Compiled.Runtimes.Microsoft != nil || run.Compiled.Runtimes.Google != nil || run.Compiled.Runtimes.OIDC != nil
 }

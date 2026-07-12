@@ -124,6 +124,14 @@
           "properties": {
             "engine": { "const": "native" }
           }
+        },
+        "oidc": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["engine"],
+          "properties": {
+            "engine": { "const": "native" }
+          }
         }
       }
     },
@@ -133,7 +141,82 @@
       "properties": {
         "aws": { "$ref": "#/$defs/awsProvider" },
         "microsoft": { "$ref": "#/$defs/microsoftProvider" },
-        "google": { "$ref": "#/$defs/googleProvider" }
+        "google": { "$ref": "#/$defs/googleProvider" },
+        "oidc": { "$ref": "#/$defs/oidcProvider" }
+      }
+    },
+    "oidcProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenant", "codeTtlSeconds", "tokenTtlSeconds", "clients", "subjects"],
+      "properties": {
+        "tenant": { "$ref": "#/$defs/id" },
+        "codeTtlSeconds": { "type": "integer", "minimum": 15, "maximum": 300 },
+        "tokenTtlSeconds": { "type": "integer", "minimum": 60, "maximum": 3600 },
+        "clients": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/oidcClient" }
+        },
+        "subjects": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/oidcSubject" }
+        }
+      }
+    },
+    "oidcClient": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "clientId", "clientSecret", "redirectUris", "audiences", "scopes"],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" },
+        "clientId": { "$ref": "#/$defs/id" },
+        "clientSecret": { "type": "string", "pattern": "^cailab-synthetic-.{15,}$" },
+        "redirectUris": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^http://127\\.0\\.0\\.1:[0-9]+/[^#]*$" }
+        },
+        "audiences": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/oidcAudience" }
+        },
+        "scopes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "contains": { "const": "openid" },
+          "items": { "enum": ["openid", "profile", "email"] }
+        }
+      }
+    },
+    "oidcAudience": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "value"],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" },
+        "value": { "type": "string", "pattern": "^(https://[^#]+|urn:[^#]+)$" }
+      }
+    },
+    "oidcSubject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "subject", "email", "groups"],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" },
+        "subject": { "$ref": "#/$defs/id" },
+        "email": { "$ref": "#/$defs/googleEmail" },
+        "groups": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        }
       }
     },
     "googleObjectId": {

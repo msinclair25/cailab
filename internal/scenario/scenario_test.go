@@ -190,6 +190,17 @@ func TestRepositorySchemaAndReferenceScenario(t *testing.T) {
 	if googleCompiled.Providers.Google == nil || len(googleCompiled.Providers.Google.DrivePermissions) != 2 {
 		t.Fatalf("compiled Google provider = %+v", googleCompiled.Providers.Google)
 	}
+	oidc, err := Load(filepath.Join(root, "scenarios", "local-oidc", "scenario.yaml"))
+	if err != nil {
+		t.Fatalf("load OIDC scenario: %v", err)
+	}
+	oidcCompiled, err := Compile(oidc, oidc.Spec.Seed)
+	if err != nil {
+		t.Fatalf("compile OIDC scenario: %v", err)
+	}
+	if oidcCompiled.Providers.OIDC == nil || len(oidcCompiled.Providers.OIDC.Clients) != 1 {
+		t.Fatalf("compiled OIDC provider = %+v", oidcCompiled.Providers.OIDC)
+	}
 }
 
 func TestMicrosoftGrantReferencesDeclaredDirectoryObjects(t *testing.T) {
@@ -215,6 +226,19 @@ func TestGooglePermissionReferencesDeclaredDirectoryObject(t *testing.T) {
 	err = Validate(definition)
 	if err == nil || !strings.Contains(err.Error(), "references unknown Google user") {
 		t.Fatalf("Validate() Google reference error = %v", err)
+	}
+}
+
+func TestOIDCRedirectMustRemainOnIPv4Loopback(t *testing.T) {
+	t.Parallel()
+	definition, err := Load(filepath.Join("..", "..", "scenarios", "local-oidc", "scenario.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition.Spec.Providers.OIDC.Clients[0].RedirectURIs[0] = "https://attacker.example/callback"
+	err = Validate(definition)
+	if err == nil || !strings.Contains(err.Error(), "IPv4 loopback") {
+		t.Fatalf("Validate() OIDC redirect error = %v", err)
 	}
 }
 

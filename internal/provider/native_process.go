@@ -59,7 +59,7 @@ func NewMicrosoftProcessManager(stateDir string) *NativeProcessManager {
 
 func (m *NativeProcessManager) Start(ctx context.Context, runID string, compiled scenario.Compiled) ([]Instance, error) {
 	var instances []Instance
-	for _, name := range []string{"microsoft", "google"} {
+	for _, name := range []string{"oidc", "microsoft", "google"} {
 		if !nativeRuntimeConfigured(compiled, name) {
 			continue
 		}
@@ -79,6 +79,8 @@ func nativeRuntimeConfigured(compiled scenario.Compiled, name string) bool {
 		return compiled.Runtimes.Microsoft != nil
 	case "google":
 		return compiled.Runtimes.Google != nil
+	case "oidc":
+		return compiled.Runtimes.OIDC != nil
 	default:
 		return false
 	}
@@ -122,6 +124,11 @@ func (m *NativeProcessManager) startProvider(ctx context.Context, runID, name st
 			return Instance{}, errors.New("Google runtime is not supported by this CloudAILab build")
 		}
 		config = GoogleRuntimeConfig{NativeRuntimeControl: control, Provider: *compiled.Providers.Google}
+	case "oidc":
+		if compiled.Runtimes.OIDC.Engine != "native" || compiled.Providers.OIDC == nil {
+			return Instance{}, errors.New("OIDC runtime is not supported by this CloudAILab build")
+		}
+		config = OIDCRuntimeConfig{NativeRuntimeControl: control, Provider: *compiled.Providers.OIDC}
 	default:
 		return Instance{}, fmt.Errorf("unsupported native provider %q", name)
 	}
@@ -176,7 +183,7 @@ func nativeRuntimeCommand(executable, provider, configPath string) *exec.Cmd {
 
 func (m *NativeProcessManager) Snapshot(ctx context.Context, instances []Instance, compiled scenario.Compiled) (scenario.Compiled, error) {
 	snapshot := compiled
-	for _, name := range []string{"microsoft", "google"} {
+	for _, name := range []string{"oidc", "microsoft", "google"} {
 		if !nativeRuntimeConfigured(compiled, name) {
 			continue
 		}
@@ -187,7 +194,7 @@ func (m *NativeProcessManager) Snapshot(ctx context.Context, instances []Instanc
 		var err error
 		if name == "microsoft" {
 			snapshot, err = snapshotMicrosoft(ctx, instance.Endpoint, snapshot)
-		} else {
+		} else if name == "google" {
 			snapshot, err = snapshotGoogle(ctx, instance.Endpoint, snapshot)
 		}
 		if err != nil {
@@ -208,7 +215,7 @@ func nativeInstance(instances []Instance, provider string) (Instance, bool) {
 
 func (m *NativeProcessManager) Stop(ctx context.Context, runID string, instances []Instance, compiled scenario.Compiled) error {
 	var stopErrors []error
-	for _, name := range []string{"google", "microsoft"} {
+	for _, name := range []string{"google", "microsoft", "oidc"} {
 		providerInstances := make([]Instance, 0, 1)
 		for _, instance := range instances {
 			if instance.Provider == name && instance.Engine == "native" {
@@ -232,6 +239,61 @@ func (m *NativeProcessManager) Stop(ctx context.Context, runID string, instances
 		}
 	}
 	return errors.Join(stopErrors...)
+}
+
+func (m *NativeProcessManager) RotateOIDC(ctx context.Context, runID string, instances []Instance) (OIDCJWKSet, error) {
+	instance, found := nativeInstance(instances, "oidc")
+	if !found {
+		return OIDCJWKSet{}, errors.New("active scenario has no OIDC runtime")
+	}
+	expectedDir := m.runtimeDir(runID, "oidc")
+	expectedControl := filepath.Join(expectedDir, "control.json")
+	controlPath, err := filepath.Abs(instance.ControlPath)
+	if err != nil || controlPath != expectedControl {
+		return OIDCJWKSet{}, fmt.Errorf("refuse to rotate OIDC runtime: control path does not match run %q", runID)
+	}
+	data, err := os.ReadFile(controlPath)
+	if err != nil {
+		return OIDCJWKSet{}, fmt.Errorf("read OIDC runtime control: %w", err)
+	}
+	var control NativeRuntimeControl
+	if err := json.Unmarshal(data, &control); err != nil {
+		return OIDCJWKSet{}, fmt.Errorf("decode OIDC runtime control: %w", err)
+	}
+	if control.RunID != runID || control.ControlToken == "" || !isIPv4LoopbackEndpoint(instance.Endpoint) {
+		return OIDCJWKSet{}, fmt.Errorf("refuse to rotate OIDC runtime: ownership does not match run %q", runID)
+	}
+	readyData, err := os.ReadFile(filepath.Join(expectedDir, "ready.json"))
+	if err != nil {
+		return OIDCJWKSet{}, fmt.Errorf("read OIDC runtime ownership record: %w", err)
+	}
+	var ready nativeReady
+	if err := json.Unmarshal(readyData, &ready); err != nil {
+		return OIDCJWKSet{}, fmt.Errorf("decode OIDC runtime ownership record: %w", err)
+	}
+	if ready.RunID != runID || ready.Endpoint != instance.Endpoint || !isIPv4LoopbackEndpoint(ready.Endpoint) {
+		return OIDCJWKSet{}, fmt.Errorf("refuse to rotate OIDC runtime: endpoint ownership does not match run %q", runID)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(ready.Endpoint, "/")+"/_cailab/rotate", nil)
+	if err != nil {
+		return OIDCJWKSet{}, fmt.Errorf("build OIDC rotation request: %w", err)
+	}
+	request.Header.Set("Authorization", "Bearer "+control.ControlToken)
+	request.Header.Set("X-CloudAILab-Run", runID)
+	response, err := m.httpClient.Do(request)
+	if err != nil {
+		return OIDCJWKSet{}, fmt.Errorf("rotate OIDC signing key: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
+		return OIDCJWKSet{}, fmt.Errorf("OIDC runtime rejected rotation with status %d", response.StatusCode)
+	}
+	var set OIDCJWKSet
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&set); err != nil {
+		return OIDCJWKSet{}, fmt.Errorf("decode rotated OIDC key set: %w", err)
+	}
+	return set, nil
 }
 
 func (m *NativeProcessManager) staleInstance(runID, provider string) (*Instance, error) {

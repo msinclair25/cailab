@@ -17,6 +17,7 @@ ADRs record significant decisions that affect system structure, security, compat
 - [ADR-0006: Built-in invariant predicates before a policy DSL](0006-built-in-invariant-predicates.md)
 - [ADR-0007: Allowlisted and digest-pinned provider runtimes](0007-allowlisted-digest-pinned-runtimes.md)
 - [ADR-0008: Managed native facade processes](0008-managed-native-facade-processes.md)
+- [ADR-0009: Local development OIDC profile](0009-local-development-oidc-profile.md)
 
 ## Lifecycle
 

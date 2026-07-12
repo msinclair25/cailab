@@ -50,6 +50,9 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-013 | The provider container gains unnecessary host authority. | Non-root UID, all capabilities dropped, `no-new-privileges`, CPU/memory limits, no Docker socket mount for M1, loopback-only published API. |
 | TM-014 | Native-facade cleanup stops an unrelated process after PID reuse or control-file tampering. | Owner-only run directory, random control token, matching run ID, authenticated shutdown endpoint, exact control-path validation, PID treated as diagnostic only after startup. |
 | TM-015 | Another local process mutates the training facade. | IPv4 loopback binding, explicit synthetic bearer requirement, no production credentials, separate unprinted runtime-control credential; local OS-account isolation remains a documented boundary. |
+| TM-016 | A forged, replayed, expired, wrong-audience, or algorithm-confused local token crosses a trust boundary. | RS256 allowlist, asymmetric signatures, exact issuer and audience validation, explicit token types, one-time expiring codes, bounded token lifetime, RFC 7638 key IDs, and negative contract tests. |
+| TM-017 | Discovery redirects a validator to attacker-controlled signing keys. | HTTP redirect refusal, exact active issuer match, IPv4 loopback endpoint validation, and same-origin fixed `/jwks` enforcement in the reference validator. |
+| TM-018 | Key rotation invalidates legitimate unexpired tokens or exposes private signing material. | Owner-authenticated rotation, owner-only active private-key state, immediate retired-private-key discard, retired-public-key overlap through maximum token lifetime, public-only JWKS, persistence rollback, and run-scoped cleanup. |
 
 ## Security invariants
 
@@ -77,6 +80,9 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - Facades use HTTP on IPv4 loopback and must never be advertised as network services.
 - The supported Graph, Directory, and Drive surfaces are intentionally incomplete and do not enforce real provider roles, consent policy, sharing policy, inherited permissions, or OAuth semantics.
 - Synthetic Drive content is readable by any local process that receives the endpoint and static API token; scenarios must not contain real secrets.
+- The local development issuer's loopback HTTP transport does not meet OIDC/OAuth TLS requirements and must not carry real credentials or tokens.
+- `cailab_subject` is synthetic subject selection, not user authentication; any declared confidential client with its scenario secret can request a code for a declared subject.
+- Client secrets, codes, tokens, and RSA private keys are run-local synthetic credentials; local processes under the same OS account remain inside the documented trust boundary.
 
 ## Review triggers
 

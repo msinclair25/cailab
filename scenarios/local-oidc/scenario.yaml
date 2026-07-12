@@ -1,0 +1,100 @@
+apiVersion: cloudailab.dev/v1alpha1
+kind: Scenario
+metadata:
+  name: local-oidc
+  version: 0.1.0
+  title: Local Workload Federation Identity
+spec:
+  seed: 20260712
+  briefing: >-
+    Exercise a synthetic local Authorization Code flow, validate signed identity and
+    access-token claims through discovery and JWKS, and observe rollover behavior.
+  runtimes:
+    oidc:
+      engine: native
+  providers:
+    oidc:
+      tenant: tenant:identity-lab
+      codeTtlSeconds: 60
+      tokenTtlSeconds: 300
+      clients:
+        - node: principal:automation-client
+          clientId: cailab-automation-client
+          clientSecret: cailab-synthetic-local-oidc-secret
+          redirectUris:
+            - http://127.0.0.1:7777/callback
+          audiences:
+            - node: resource:identity-api
+              value: https://identity-api.cailab.local
+          scopes: [openid, profile, email]
+      subjects:
+        - node: principal:identity-engineer
+          subject: identity-engineer
+          email: identity.engineer@example.test
+          groups: [principal:identity-admins]
+  objectives:
+    - id: discover-issuer
+      description: Retrieve local development issuer metadata and signing keys.
+    - id: complete-code-flow
+      description: Exchange a one-time authorization code for signed synthetic tokens.
+    - id: validate-claims
+      description: Validate signature, issuer, audience, type, expiry, tenant, and canonical principal claims.
+    - id: observe-rollover
+      description: Confirm a rotated key signs new tokens while unexpired prior tokens remain verifiable.
+  tenants:
+    - id: tenant:identity-lab
+      name: Identity Engineering Lab
+      providers: [local]
+  principals:
+    - id: principal:automation-client
+      tenant: tenant:identity-lab
+      type: application
+      displayName: Automation Client
+    - id: principal:identity-admins
+      tenant: tenant:identity-lab
+      type: group
+      displayName: Identity Administrators
+    - id: principal:identity-engineer
+      tenant: tenant:identity-lab
+      type: human
+      displayName: Identity Engineer
+    - id: principal:unregistered-user
+      tenant: tenant:identity-lab
+      type: human
+      displayName: Unregistered User
+  resources:
+    - id: resource:identity-api
+      tenant: tenant:identity-lab
+      type: api
+      displayName: Identity Automation API
+      classification: confidential
+  relationships:
+    - id: identity:admin-membership
+      from: principal:identity-engineer
+      to: principal:identity-admins
+      type: member_of
+      actions: [member]
+    - id: identity:subject-client
+      from: principal:identity-engineer
+      to: principal:automation-client
+      type: assigned_to
+      actions: [openid]
+    - id: identity:client-api
+      from: principal:automation-client
+      to: resource:identity-api
+      type: can_access
+      actions: [api.read]
+  verification:
+    invariants:
+      - id: registered-subject-path
+        type: path_exists
+        from: principal:identity-engineer
+        to: resource:identity-api
+        severity: medium
+        description: The registered synthetic subject has the intended client-mediated API path.
+      - id: unregistered-subject-denied
+        type: path_absent
+        from: principal:unregistered-user
+        to: resource:identity-api
+        severity: high
+        description: An undeclared subject has no path through the local issuer client.

@@ -15,7 +15,7 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0 and the M1 AWS identity slice are complete. M2 now includes development Microsoft and Google identity slices. The Google slice provides a persistent native Directory/Drive-shaped facade, direct group membership, selected files and permissions, live path normalization, scoped permission deletion, reset, and cleanup. Local OIDC federation, the full cross-provider chain, and agent governance remain planned. Provider compatibility is limited to the tested operations in the compatibility matrices.
+M0 and the M1 AWS identity slice are complete. M2 now includes development Microsoft and Google identity slices plus a local development OIDC profile with discovery, JWKS, a synthetic Authorization Code flow, signed short-lived tokens, local validation, and overlap-safe key rotation. The full cross-provider federation chain and agent governance remain planned. Provider and protocol compatibility is limited to the tested operations in the compatibility matrices.
 
 ## Build and try the walking skeleton
 
@@ -69,6 +69,17 @@ This scenario starts with a contractor holding a direct permission on a restrict
 ./bin/cailab verify
 ```
 
+## Try the local identity issuer
+
+Follow the [local OIDC lab guide](docs/07-guides/local-oidc-lab.md) to retrieve discovery and JWKS, exchange a one-time synthetic code, validate RS256 ID and access tokens locally, and rotate signing keys. It requires no Docker, cloud identity provider, proxy, or certificate installation. Loopback HTTP and synthetic subject selection make this a development profile, not a production OpenID Provider.
+
+```bash
+./bin/cailab up local-oidc
+./bin/cailab status
+./bin/cailab identity rotate
+./bin/cailab verify
+```
+
 ## Development checks
 
 ```bash
@@ -110,6 +121,8 @@ go run ./internal/tools/doccheck .
 - [Microsoft Graph facade compatibility matrix](docs/07-compatibility/microsoft-graph-facade.md)
 - [Google Drive sharing lab](docs/07-guides/google-drive-sharing-lab.md)
 - [Google Workspace facade compatibility matrix](docs/07-compatibility/google-workspace-facade.md)
+- [Local development OIDC lab](docs/07-guides/local-oidc-lab.md)
+- [Local development OIDC compatibility matrix](docs/07-compatibility/local-oidc-profile.md)
 
 ## Working vocabulary
 

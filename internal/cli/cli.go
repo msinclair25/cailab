@@ -68,6 +68,8 @@ func (c *CLI) Run(ctx context.Context, args []string) int {
 		err = c.runStatus(ctx, args[1:])
 	case "mission":
 		err = c.runMission(ctx, args[1:])
+	case "identity":
+		err = c.runIdentity(ctx, args[1:])
 	case "graph":
 		err = c.runGraph(ctx, args[1:])
 	case "verify":
@@ -107,6 +109,7 @@ Commands:
   up                 Start and persist a scenario run
   status             Show the active run
   mission            Show the active mission
+  identity           Validate tokens or rotate the active local issuer key
   graph path         Explain a directed trust path
   verify             Evaluate deterministic invariants
   reset              Restore the active scenario state
@@ -376,6 +379,76 @@ func (c *CLI) runMission(ctx context.Context, args []string) error {
 	return nil
 }
 
+func (c *CLI) runIdentity(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: cailab identity <rotate|validate> [options]")
+	}
+	if args[0] == "validate" {
+		return c.runIdentityValidate(ctx, args[1:])
+	}
+	if args[0] != "rotate" {
+		return fmt.Errorf("unknown identity command %q", args[0])
+	}
+	fs, stateDir, err := c.parseStateFlags("identity rotate", args[1:])
+	if err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("identity rotate accepts no positional arguments")
+	}
+	service, closeStore, err := c.openService(ctx, stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	keys, err := service.RotateIdentity(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(c.stdout, "✓ local issuer signing key rotated; %d verification key(s) remain published\n", len(keys.Keys))
+	return nil
+}
+
+func (c *CLI) runIdentityValidate(ctx context.Context, args []string) error {
+	fs := newFlagSet("identity validate", c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	tokenFile := fs.String("token-file", "", "file containing one raw JWT")
+	tokenType := fs.String("type", "", "token type: id or access")
+	audience := fs.String("audience", "", "required token audience")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 || *tokenFile == "" || (*tokenType != "id" && *tokenType != "access") || *audience == "" {
+		return errors.New("usage: cailab identity validate --token-file FILE --type <id|access> --audience VALUE [--state-dir DIR]")
+	}
+	info, err := os.Stat(*tokenFile)
+	if err != nil {
+		return fmt.Errorf("inspect token file: %w", err)
+	}
+	if info.Size() > 64<<10 {
+		return errors.New("token file exceeds 64 KiB")
+	}
+	data, err := os.ReadFile(*tokenFile)
+	if err != nil {
+		return fmt.Errorf("read token file: %w", err)
+	}
+	service, closeStore, err := c.openService(ctx, *stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	claims, err := service.ValidateIdentity(ctx, strings.TrimSpace(string(data)), *tokenType, *audience)
+	if err != nil {
+		return err
+	}
+	encoded, err := json.MarshalIndent(claims, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode validated claims: %w", err)
+	}
+	fmt.Fprintln(c.stdout, string(encoded))
+	return nil
+}
+
 func (c *CLI) runGraph(ctx context.Context, args []string) error {
 	if len(args) == 0 || args[0] != "path" {
 		return errors.New("usage: cailab graph path [--state-dir DIR] <from> <to>")
@@ -524,7 +597,7 @@ func (c *CLI) openService(ctx context.Context, stateDir string) (*app.Service, f
 }
 
 func (c *CLI) runInternalRuntime(ctx context.Context, args []string) error {
-	if len(args) == 0 || (args[0] != "microsoft" && args[0] != "google") {
+	if len(args) == 0 || (args[0] != "microsoft" && args[0] != "google" && args[0] != "oidc") {
 		return errors.New("invalid private runtime command")
 	}
 	providerName := args[0]
@@ -539,7 +612,10 @@ func (c *CLI) runInternalRuntime(ctx context.Context, args []string) error {
 	if providerName == "microsoft" {
 		return provider.ServeMicrosoftRuntime(ctx, *config)
 	}
-	return provider.ServeGoogleRuntime(ctx, *config)
+	if providerName == "google" {
+		return provider.ServeGoogleRuntime(ctx, *config)
+	}
+	return provider.ServeOIDCRuntime(ctx, *config)
 }
 
 func newFlagSet(name string, output io.Writer) *flag.FlagSet {
