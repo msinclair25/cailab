@@ -168,6 +168,30 @@ func TestRepositorySchemaAndReferenceScenario(t *testing.T) {
 	if compiled.Digest == "" {
 		t.Fatal("reference scenario compiled without a digest")
 	}
+	microsoft, err := Load(filepath.Join(root, "scenarios", "microsoft-consent", "scenario.yaml"))
+	if err != nil {
+		t.Fatalf("load Microsoft scenario: %v", err)
+	}
+	microsoftCompiled, err := Compile(microsoft, microsoft.Spec.Seed)
+	if err != nil {
+		t.Fatalf("compile Microsoft scenario: %v", err)
+	}
+	if microsoftCompiled.Providers.Microsoft == nil || len(microsoftCompiled.Providers.Microsoft.OAuth2PermissionGrants) != 2 {
+		t.Fatalf("compiled Microsoft provider = %+v", microsoftCompiled.Providers.Microsoft)
+	}
+}
+
+func TestMicrosoftGrantReferencesDeclaredDirectoryObjects(t *testing.T) {
+	t.Parallel()
+	definition, err := Load(filepath.Join("..", "..", "scenarios", "microsoft-consent", "scenario.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition.Spec.Providers.Microsoft.OAuth2PermissionGrants[0].ClientID = "99999999-9999-4999-8999-999999999999"
+	err = Validate(definition)
+	if err == nil || !strings.Contains(err.Error(), "clientId references unknown client service principal") {
+		t.Fatalf("Validate() Microsoft reference error = %v", err)
+	}
 }
 
 func FuzzDecode(f *testing.F) {

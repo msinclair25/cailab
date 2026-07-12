@@ -1,6 +1,6 @@
 ---
 title: AWS Compatibility Matrix — Floci 1.5.32
-status: m1-development
+status: m1-complete
 last_reviewed: 2026-07-12
 runtime_digest: sha256:4f69631e560120d79ad82d2af9f7dda8c6ef7ecbbae0c43ddcffa109c6588a15
 ---

@@ -65,50 +65,63 @@ func Compile(s Scenario, seed int64) (Compiled, error) {
 
 func copyProviders(providers Providers) Providers {
 	result := Providers{}
-	if providers.AWS == nil {
-		return result
-	}
-	awsProvider := *providers.AWS
-	awsProvider.Accounts = append([]AWSAccount(nil), providers.AWS.Accounts...)
-	sort.Slice(awsProvider.Accounts, func(i, j int) bool { return awsProvider.Accounts[i].ID < awsProvider.Accounts[j].ID })
-	awsProvider.Roles = make([]AWSRole, len(providers.AWS.Roles))
-	for i, role := range providers.AWS.Roles {
-		awsProvider.Roles[i] = role
-		awsProvider.Roles[i].Trust = append([]string(nil), role.Trust...)
-		sort.Strings(awsProvider.Roles[i].Trust)
-		awsProvider.Roles[i].Policies = make([]AWSInlinePolicy, len(role.Policies))
-		for j, policy := range role.Policies {
-			awsProvider.Roles[i].Policies[j] = policy
-			awsProvider.Roles[i].Policies[j].Statements = make([]AWSPolicyStatement, len(policy.Statements))
-			for k, statement := range policy.Statements {
-				awsProvider.Roles[i].Policies[j].Statements[k] = statement
-				awsProvider.Roles[i].Policies[j].Statements[k].Actions = append([]string(nil), statement.Actions...)
-				awsProvider.Roles[i].Policies[j].Statements[k].Resources = append([]string(nil), statement.Resources...)
-				sort.Strings(awsProvider.Roles[i].Policies[j].Statements[k].Actions)
-				sort.Strings(awsProvider.Roles[i].Policies[j].Statements[k].Resources)
+	if providers.AWS != nil {
+		awsProvider := *providers.AWS
+		awsProvider.Accounts = append([]AWSAccount(nil), providers.AWS.Accounts...)
+		sort.Slice(awsProvider.Accounts, func(i, j int) bool { return awsProvider.Accounts[i].ID < awsProvider.Accounts[j].ID })
+		awsProvider.Roles = make([]AWSRole, len(providers.AWS.Roles))
+		for i, role := range providers.AWS.Roles {
+			awsProvider.Roles[i] = role
+			awsProvider.Roles[i].Trust = append([]string(nil), role.Trust...)
+			sort.Strings(awsProvider.Roles[i].Trust)
+			awsProvider.Roles[i].Policies = make([]AWSInlinePolicy, len(role.Policies))
+			for j, policy := range role.Policies {
+				awsProvider.Roles[i].Policies[j] = policy
+				awsProvider.Roles[i].Policies[j].Statements = make([]AWSPolicyStatement, len(policy.Statements))
+				for k, statement := range policy.Statements {
+					awsProvider.Roles[i].Policies[j].Statements[k] = statement
+					awsProvider.Roles[i].Policies[j].Statements[k].Actions = append([]string(nil), statement.Actions...)
+					awsProvider.Roles[i].Policies[j].Statements[k].Resources = append([]string(nil), statement.Resources...)
+					sort.Strings(awsProvider.Roles[i].Policies[j].Statements[k].Actions)
+					sort.Strings(awsProvider.Roles[i].Policies[j].Statements[k].Resources)
+				}
 			}
+			sort.Slice(awsProvider.Roles[i].Policies, func(j, k int) bool {
+				return awsProvider.Roles[i].Policies[j].Name < awsProvider.Roles[i].Policies[k].Name
+			})
 		}
-		sort.Slice(awsProvider.Roles[i].Policies, func(j, k int) bool {
-			return awsProvider.Roles[i].Policies[j].Name < awsProvider.Roles[i].Policies[k].Name
+		sort.Slice(awsProvider.Roles, func(i, j int) bool {
+			left, right := awsProvider.Roles[i], awsProvider.Roles[j]
+			return left.Account < right.Account || left.Account == right.Account && left.Name < right.Name
 		})
-	}
-	sort.Slice(awsProvider.Roles, func(i, j int) bool {
-		left, right := awsProvider.Roles[i], awsProvider.Roles[j]
-		return left.Account < right.Account || left.Account == right.Account && left.Name < right.Name
-	})
-	awsProvider.Buckets = make([]AWSBucket, len(providers.AWS.Buckets))
-	for i, bucket := range providers.AWS.Buckets {
-		awsProvider.Buckets[i] = bucket
-		awsProvider.Buckets[i].Objects = append([]AWSObject(nil), bucket.Objects...)
-		sort.Slice(awsProvider.Buckets[i].Objects, func(j, k int) bool {
-			return awsProvider.Buckets[i].Objects[j].Key < awsProvider.Buckets[i].Objects[k].Key
+		awsProvider.Buckets = make([]AWSBucket, len(providers.AWS.Buckets))
+		for i, bucket := range providers.AWS.Buckets {
+			awsProvider.Buckets[i] = bucket
+			awsProvider.Buckets[i].Objects = append([]AWSObject(nil), bucket.Objects...)
+			sort.Slice(awsProvider.Buckets[i].Objects, func(j, k int) bool {
+				return awsProvider.Buckets[i].Objects[j].Key < awsProvider.Buckets[i].Objects[k].Key
+			})
+		}
+		sort.Slice(awsProvider.Buckets, func(i, j int) bool {
+			left, right := awsProvider.Buckets[i], awsProvider.Buckets[j]
+			return left.Account < right.Account || left.Account == right.Account && left.Name < right.Name
 		})
+		result.AWS = &awsProvider
 	}
-	sort.Slice(awsProvider.Buckets, func(i, j int) bool {
-		left, right := awsProvider.Buckets[i], awsProvider.Buckets[j]
-		return left.Account < right.Account || left.Account == right.Account && left.Name < right.Name
-	})
-	result.AWS = &awsProvider
+	if providers.Microsoft != nil {
+		microsoft := *providers.Microsoft
+		microsoft.Users = append([]MicrosoftUser(nil), providers.Microsoft.Users...)
+		microsoft.Applications = append([]MicrosoftApplication(nil), providers.Microsoft.Applications...)
+		microsoft.ServicePrincipals = append([]MicrosoftServicePrincipal(nil), providers.Microsoft.ServicePrincipals...)
+		microsoft.OAuth2PermissionGrants = append([]MicrosoftPermissionGrant(nil), providers.Microsoft.OAuth2PermissionGrants...)
+		sort.Slice(microsoft.Users, func(i, j int) bool { return microsoft.Users[i].ID < microsoft.Users[j].ID })
+		sort.Slice(microsoft.Applications, func(i, j int) bool { return microsoft.Applications[i].ID < microsoft.Applications[j].ID })
+		sort.Slice(microsoft.ServicePrincipals, func(i, j int) bool { return microsoft.ServicePrincipals[i].ID < microsoft.ServicePrincipals[j].ID })
+		sort.Slice(microsoft.OAuth2PermissionGrants, func(i, j int) bool {
+			return microsoft.OAuth2PermissionGrants[i].ID < microsoft.OAuth2PermissionGrants[j].ID
+		})
+		result.Microsoft = &microsoft
+	}
 	return result
 }
 
@@ -117,6 +130,10 @@ func copyRuntimes(runtimes Runtimes) Runtimes {
 	if runtimes.AWS != nil {
 		awsRuntime := *runtimes.AWS
 		result.AWS = &awsRuntime
+	}
+	if runtimes.Microsoft != nil {
+		microsoftRuntime := *runtimes.Microsoft
+		result.Microsoft = &microsoftRuntime
 	}
 	return result
 }

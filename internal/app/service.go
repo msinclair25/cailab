@@ -48,7 +48,7 @@ func (s *Service) Up(ctx context.Context, options UpOptions) (state.Run, error) 
 		return state.Run{}, err
 	}
 	if err := s.store.SetRuntimes(ctx, run.ID, instances); err != nil {
-		_ = s.provider.Stop(context.Background(), run.ID, instances)
+		_ = s.provider.Stop(context.Background(), run.ID, instances, compiled)
 		_, _ = s.store.StopActiveRun(context.Background())
 		return state.Run{}, err
 	}
@@ -102,8 +102,8 @@ func (s *Service) Reset(ctx context.Context) (state.Run, error) {
 	if err != nil {
 		return state.Run{}, err
 	}
-	if len(run.Runtimes) > 0 || run.Compiled.Runtimes.AWS != nil {
-		if err := s.provider.Stop(ctx, run.ID, run.Runtimes); err != nil {
+	if hasProviderRuntime(run) {
+		if err := s.provider.Stop(ctx, run.ID, run.Runtimes, run.Compiled); err != nil {
 			return state.Run{}, err
 		}
 	}
@@ -115,13 +115,16 @@ func (s *Service) Reset(ctx context.Context) (state.Run, error) {
 		return state.Run{}, err
 	}
 	if err := s.store.SetRuntimes(ctx, run.ID, instances); err != nil {
-		_ = s.provider.Stop(context.Background(), run.ID, instances)
+		_ = s.provider.Stop(context.Background(), run.ID, instances, run.Compiled)
 		return state.Run{}, err
 	}
-	run, err = s.store.ResetActiveRun(ctx)
+	resetRun, err := s.store.ResetActiveRun(ctx)
 	if err != nil {
+		_ = s.provider.Stop(context.Background(), run.ID, instances, run.Compiled)
+		_ = s.store.SetRuntimes(context.Background(), run.ID, nil)
 		return state.Run{}, err
 	}
+	run = resetRun
 	run.Runtimes = instances
 	return run, nil
 }
@@ -131,10 +134,14 @@ func (s *Service) Down(ctx context.Context) (state.Run, error) {
 	if err != nil {
 		return state.Run{}, err
 	}
-	if len(run.Runtimes) > 0 || run.Compiled.Runtimes.AWS != nil {
-		if err := s.provider.Stop(ctx, run.ID, run.Runtimes); err != nil {
+	if hasProviderRuntime(run) {
+		if err := s.provider.Stop(ctx, run.ID, run.Runtimes, run.Compiled); err != nil {
 			return state.Run{}, err
 		}
 	}
 	return s.store.StopActiveRun(ctx)
+}
+
+func hasProviderRuntime(run state.Run) bool {
+	return len(run.Runtimes) > 0 || run.Compiled.Runtimes.AWS != nil || run.Compiled.Runtimes.Microsoft != nil
 }

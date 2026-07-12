@@ -34,7 +34,8 @@ type Spec struct {
 }
 
 type Runtimes struct {
-	AWS *AWSRuntime `json:"aws,omitempty" yaml:"aws,omitempty"`
+	AWS       *AWSRuntime       `json:"aws,omitempty" yaml:"aws,omitempty"`
+	Microsoft *MicrosoftRuntime `json:"microsoft,omitempty" yaml:"microsoft,omitempty"`
 }
 
 type AWSRuntime struct {
@@ -43,8 +44,53 @@ type AWSRuntime struct {
 	IAMEnforcement bool   `json:"iamEnforcement" yaml:"iamEnforcement"`
 }
 
+type MicrosoftRuntime struct {
+	Engine string `json:"engine" yaml:"engine"`
+}
+
 type Providers struct {
-	AWS *AWSProvider `json:"aws,omitempty" yaml:"aws,omitempty"`
+	AWS       *AWSProvider       `json:"aws,omitempty" yaml:"aws,omitempty"`
+	Microsoft *MicrosoftProvider `json:"microsoft,omitempty" yaml:"microsoft,omitempty"`
+}
+
+type MicrosoftProvider struct {
+	Tenant                 string                      `json:"tenant" yaml:"tenant"`
+	TenantID               string                      `json:"tenantId" yaml:"tenantId"`
+	Users                  []MicrosoftUser             `json:"users" yaml:"users"`
+	Applications           []MicrosoftApplication      `json:"applications" yaml:"applications"`
+	ServicePrincipals      []MicrosoftServicePrincipal `json:"servicePrincipals" yaml:"servicePrincipals"`
+	OAuth2PermissionGrants []MicrosoftPermissionGrant  `json:"oauth2PermissionGrants" yaml:"oauth2PermissionGrants"`
+}
+
+type MicrosoftUser struct {
+	Node              string `json:"node" yaml:"node"`
+	ID                string `json:"id" yaml:"id"`
+	DisplayName       string `json:"displayName" yaml:"displayName"`
+	UserPrincipalName string `json:"userPrincipalName" yaml:"userPrincipalName"`
+}
+
+type MicrosoftApplication struct {
+	Node        string `json:"node" yaml:"node"`
+	ID          string `json:"id" yaml:"id"`
+	AppID       string `json:"appId" yaml:"appId"`
+	DisplayName string `json:"displayName" yaml:"displayName"`
+}
+
+type MicrosoftServicePrincipal struct {
+	Node         string `json:"node,omitempty" yaml:"node,omitempty"`
+	ResourceNode string `json:"resourceNode,omitempty" yaml:"resourceNode,omitempty"`
+	ID           string `json:"id" yaml:"id"`
+	AppID        string `json:"appId" yaml:"appId"`
+	DisplayName  string `json:"displayName" yaml:"displayName"`
+}
+
+type MicrosoftPermissionGrant struct {
+	ID          string `json:"id" yaml:"id"`
+	ClientID    string `json:"clientId" yaml:"clientId"`
+	ConsentType string `json:"consentType" yaml:"consentType"`
+	PrincipalID string `json:"principalId,omitempty" yaml:"principalId,omitempty"`
+	ResourceID  string `json:"resourceId" yaml:"resourceId"`
+	Scope       string `json:"scope" yaml:"scope"`
 }
 
 type AWSProvider struct {

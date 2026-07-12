@@ -49,6 +49,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SEC-006 | Agent execution shall not be described as isolated unless network and filesystem boundaries are enforced. |
 | NFR-SEC-007 | Declarative scenarios shall not select executable provider images outside a code-owned allowlist. |
 | NFR-SEC-008 | Runtime cleanup shall verify CloudAILab ownership and run identity before removing host resources. |
+| NFR-SEC-009 | A persisted process identifier alone shall not authorize native-runtime cleanup. |
 
 ### Reliability and reproducibility
 

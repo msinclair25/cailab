@@ -1,0 +1,107 @@
+apiVersion: cloudailab.dev/v1alpha1
+kind: Scenario
+metadata:
+  name: microsoft-consent
+  version: 0.1.0
+  title: Delegated Application Consent Review
+spec:
+  seed: 202
+  briefing: >-
+    An expense application has delegated Microsoft Graph permission grants for
+    both an ordinary analyst and an approved security administrator. Inspect
+    the live Graph-shaped directory, revoke only the analyst's over-privileged
+    grant, and preserve the administrator's intended access path.
+  runtimes:
+    microsoft:
+      engine: native
+  providers:
+    microsoft:
+      tenant: northstar-corp
+      tenantId: 10000000-0000-4000-8000-000000000001
+      users:
+        - node: microsoft:analyst
+          id: 11111111-1111-4111-8111-111111111111
+          displayName: Avery Analyst
+          userPrincipalName: avery.analyst@northstar.example
+        - node: microsoft:security-admin
+          id: 22222222-2222-4222-8222-222222222222
+          displayName: Sam Security Admin
+          userPrincipalName: sam.security@northstar.example
+      applications:
+        - node: microsoft:expense-registration
+          id: 33333333-3333-4333-8333-333333333333
+          appId: 44444444-4444-4444-8444-444444444444
+          displayName: Northstar Expense Review
+      servicePrincipals:
+        - node: microsoft:expense-service-principal
+          id: 55555555-5555-4555-8555-555555555555
+          appId: 44444444-4444-4444-8444-444444444444
+          displayName: Northstar Expense Review
+        - resourceNode: microsoft:directory-data
+          id: 66666666-6666-4666-8666-666666666666
+          appId: 00000003-0000-0000-c000-000000000000
+          displayName: Microsoft Graph
+      oauth2PermissionGrants:
+        - id: 77777777-7777-4777-8777-777777777777
+          clientId: 55555555-5555-4555-8555-555555555555
+          consentType: Principal
+          principalId: 11111111-1111-4111-8111-111111111111
+          resourceId: 66666666-6666-4666-8666-666666666666
+          scope: Directory.Read.All User.Read
+        - id: 88888888-8888-4888-8888-888888888888
+          clientId: 55555555-5555-4555-8555-555555555555
+          consentType: Principal
+          principalId: 22222222-2222-4222-8222-222222222222
+          resourceId: 66666666-6666-4666-8666-666666666666
+          scope: User.Read
+  objectives:
+    - id: inventory-directory
+      description: Enumerate users, applications, service principals, and delegated grants.
+    - id: explain-analyst-path
+      description: Explain the analyst's path through the expense service principal to directory data.
+    - id: revoke-risky-grant
+      description: Delete only the analyst's delegated permission grant.
+    - id: preserve-approved-access
+      description: Keep the security administrator's intended delegated path intact.
+  tenants:
+    - id: northstar-corp
+      name: Northstar Corporation
+      providers: [microsoft]
+  principals:
+    - id: microsoft:analyst
+      tenant: northstar-corp
+      type: human
+      displayName: Avery Analyst
+    - id: microsoft:security-admin
+      tenant: northstar-corp
+      type: human
+      displayName: Sam Security Admin
+    - id: microsoft:expense-registration
+      tenant: northstar-corp
+      type: application
+      displayName: Northstar Expense Review Registration
+    - id: microsoft:expense-service-principal
+      tenant: northstar-corp
+      type: application
+      displayName: Northstar Expense Review Service Principal
+  resources:
+    - id: microsoft:directory-data
+      tenant: northstar-corp
+      type: microsoft_graph_directory
+      displayName: Microsoft Graph Directory Data
+      classification: restricted
+  relationships: []
+  verification:
+    invariants:
+      - id: analyst-directory-path-closed
+        type: path_absent
+        from: microsoft:analyst
+        to: microsoft:directory-data
+        severity: high
+        description: The ordinary analyst must not retain delegated access to directory data.
+      - id: admin-directory-path-preserved
+        type: path_exists
+        from: microsoft:security-admin
+        to: microsoft:directory-data
+        severity: high
+        description: The approved security administrator must retain delegated access.

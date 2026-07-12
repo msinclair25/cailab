@@ -1,6 +1,6 @@
 ---
 title: AWS Cross-Account Acquisition Data Lab
-status: m1-development
+status: m1-complete
 last_reviewed: 2026-07-12
 ---
 
@@ -22,7 +22,7 @@ Build and check the host:
 
 ```bash
 go build -o ./bin/cailab ./cmd/cailab
-./bin/cailab doctor
+./bin/cailab doctor aws-cross-account
 ```
 
 ## 1. Start the range

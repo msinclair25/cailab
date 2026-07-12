@@ -80,6 +80,10 @@
       "type": "string",
       "pattern": "^[a-z][a-z0-9._:-]{0,127}$"
     },
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+    },
     "objective": {
       "type": "object",
       "additionalProperties": false,
@@ -104,6 +108,14 @@
             },
             "iamEnforcement": { "type": "boolean" }
           }
+        },
+        "microsoft": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["engine"],
+          "properties": {
+            "engine": { "const": "native" }
+          }
         }
       }
     },
@@ -111,7 +123,85 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "aws": { "$ref": "#/$defs/awsProvider" }
+        "aws": { "$ref": "#/$defs/awsProvider" },
+        "microsoft": { "$ref": "#/$defs/microsoftProvider" }
+      }
+    },
+    "microsoftProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenant", "tenantId", "users", "applications", "servicePrincipals", "oauth2PermissionGrants"],
+      "properties": {
+        "tenant": { "$ref": "#/$defs/id" },
+        "tenantId": { "$ref": "#/$defs/uuid" },
+        "users": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/microsoftUser" }
+        },
+        "applications": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/microsoftApplication" }
+        },
+        "servicePrincipals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/microsoftServicePrincipal" }
+        },
+        "oauth2PermissionGrants": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/microsoftPermissionGrant" }
+        }
+      }
+    },
+    "microsoftUser": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "id", "displayName", "userPrincipalName"],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" },
+        "id": { "$ref": "#/$defs/uuid" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "userPrincipalName": { "type": "string", "pattern": "^[^@\\s]+@[^@\\s]+$" }
+      }
+    },
+    "microsoftApplication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "id", "appId", "displayName"],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" },
+        "id": { "$ref": "#/$defs/uuid" },
+        "appId": { "$ref": "#/$defs/uuid" },
+        "displayName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "microsoftServicePrincipal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "appId", "displayName"],
+      "oneOf": [
+        { "required": ["node"], "not": { "required": ["resourceNode"] } },
+        { "required": ["resourceNode"], "not": { "required": ["node"] } }
+      ],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" },
+        "resourceNode": { "$ref": "#/$defs/id" },
+        "id": { "$ref": "#/$defs/uuid" },
+        "appId": { "$ref": "#/$defs/uuid" },
+        "displayName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "microsoftPermissionGrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "clientId", "consentType", "principalId", "resourceId", "scope"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "clientId": { "$ref": "#/$defs/uuid" },
+        "consentType": { "const": "Principal" },
+        "principalId": { "$ref": "#/$defs/uuid" },
+        "resourceId": { "$ref": "#/$defs/uuid" },
+        "scope": { "type": "string", "minLength": 1 }
       }
     },
     "awsProvider": {

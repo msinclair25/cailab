@@ -76,6 +76,8 @@ func (c *CLI) Run(ctx context.Context, args []string) int {
 		err = c.runReset(ctx, args[1:])
 	case "down":
 		err = c.runDown(ctx, args[1:])
+	case "_runtime":
+		err = c.runInternalRuntime(ctx, args[1:])
 	default:
 		fmt.Fprintf(c.stderr, "unknown command %q\n\n", args[0])
 		c.printUsage(c.stderr)
@@ -107,7 +109,7 @@ Commands:
   mission            Show the active mission
   graph path         Explain a directed trust path
   verify             Evaluate deterministic invariants
-  reset              Restore the active M0 run state
+  reset              Restore the active scenario state
   down               Stop the active run
   version            Print build information
 
@@ -117,11 +119,26 @@ Run cailab <command> -h for command options.`)
 func (c *CLI) runDoctor(ctx context.Context, args []string) error {
 	fs := newFlagSet("doctor", c.stderr)
 	jsonOutput := fs.Bool("json", false, "emit JSON")
+	scenarioRoot := fs.String("scenario-root", "scenarios", "scenario catalog directory")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() != 0 {
-		return errors.New("doctor accepts no positional arguments")
+	if fs.NArg() > 1 {
+		return errors.New("usage: cailab doctor [--scenario-root DIR] [scenario]")
+	}
+	requireDocker := false
+	var scenarioName string
+	if fs.NArg() == 1 {
+		path, err := scenario.Resolve(*scenarioRoot, fs.Arg(0))
+		if err != nil {
+			return err
+		}
+		definition, err := scenario.Load(path)
+		if err != nil {
+			return err
+		}
+		scenarioName = definition.Metadata.Name
+		requireDocker = definition.Spec.Runtimes.AWS != nil
 	}
 
 	type check struct {
@@ -130,33 +147,44 @@ func (c *CLI) runDoctor(ctx context.Context, args []string) error {
 		Detail string `json:"detail"`
 	}
 	checks := []check{{Name: "platform", Status: "pass", Detail: runtime.GOOS + "/" + runtime.GOARCH}}
-	path, err := exec.LookPath("docker")
-	if err != nil {
-		checks = append(checks, check{Name: "docker-cli", Status: "fail", Detail: "Docker CLI not found"})
+	if scenarioName != "" {
+		checks = append(checks, check{Name: "scenario", Status: "pass", Detail: scenarioName})
+	}
+	dockerFailureStatus := "warn"
+	if requireDocker {
+		dockerFailureStatus = "fail"
+	}
+	if scenarioName != "" && !requireDocker {
+		checks = append(checks, check{Name: "docker", Status: "pass", Detail: "not required by this scenario"})
 	} else {
-		checks = append(checks, check{Name: "docker-cli", Status: "pass", Detail: path})
-		dockerCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-		output, dockerErr := exec.CommandContext(dockerCtx, path, "info", "--format", "{{.ServerVersion}}").CombinedOutput()
-		if dockerErr != nil {
-			detail := strings.TrimSpace(string(output))
-			if detail == "" {
-				detail = dockerErr.Error()
-			}
-			checks = append(checks, check{Name: "docker-engine", Status: "fail", Detail: detail})
+		path, err := exec.LookPath("docker")
+		if err != nil {
+			checks = append(checks, check{Name: "docker-cli", Status: dockerFailureStatus, Detail: "Docker CLI not found; required only for AWS/Floci scenarios"})
 		} else {
-			version := strings.TrimSpace(string(output))
-			if dockerVersionSupported(version) {
-				checks = append(checks, check{Name: "docker-engine", Status: "pass", Detail: "server " + version})
+			checks = append(checks, check{Name: "docker-cli", Status: "pass", Detail: path})
+			dockerCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+			output, dockerErr := exec.CommandContext(dockerCtx, path, "info", "--format", "{{.ServerVersion}}").CombinedOutput()
+			if dockerErr != nil {
+				detail := strings.TrimSpace(string(output))
+				if detail == "" {
+					detail = dockerErr.Error()
+				}
+				checks = append(checks, check{Name: "docker-engine", Status: dockerFailureStatus, Detail: detail})
 			} else {
-				checks = append(checks, check{Name: "docker-engine", Status: "fail", Detail: "server " + version + "; CloudAILab requires Docker 20.10+"})
+				version := strings.TrimSpace(string(output))
+				if dockerVersionSupported(version) {
+					checks = append(checks, check{Name: "docker-engine", Status: "pass", Detail: "server " + version})
+				} else {
+					checks = append(checks, check{Name: "docker-engine", Status: dockerFailureStatus, Detail: "server " + version + "; AWS/Floci scenarios require Docker 20.10+"})
+				}
 			}
 		}
 	}
 
 	failed := false
 	for _, item := range checks {
-		if item.Status != "pass" {
+		if item.Status == "fail" {
 			failed = true
 		}
 	}
@@ -173,7 +201,9 @@ func (c *CLI) runDoctor(ctx context.Context, args []string) error {
 	}
 	for _, item := range checks {
 		mark := "✓"
-		if item.Status != "pass" {
+		if item.Status == "warn" {
+			mark = "!"
+		} else if item.Status != "pass" {
 			mark = "✗"
 		}
 		fmt.Fprintf(c.stdout, "%s %-16s %s\n", mark, item.Name, item.Detail)
@@ -286,6 +316,9 @@ func (c *CLI) runUp(ctx context.Context, args []string) error {
 	}
 	for _, runtime := range run.Runtimes {
 		fmt.Fprintf(c.stdout, "  %s endpoint: %s\n", strings.ToUpper(runtime.Provider), runtime.Endpoint)
+		if runtime.Provider == "microsoft" {
+			fmt.Fprintf(c.stdout, "  Microsoft authorization: Bearer %s\n", provider.LocalGraphToken)
+		}
 	}
 	fmt.Fprintln(c.stdout, "\nRun `cailab mission` to inspect the lab.")
 	return nil
@@ -487,7 +520,22 @@ func (c *CLI) openService(ctx context.Context, stateDir string) (*app.Service, f
 	if err != nil {
 		return nil, nil, err
 	}
-	return app.New(store, provider.NewDockerManager()), func() { _ = store.Close() }, nil
+	return app.New(store, provider.NewManager(stateDir)), func() { _ = store.Close() }, nil
+}
+
+func (c *CLI) runInternalRuntime(ctx context.Context, args []string) error {
+	if len(args) == 0 || args[0] != "microsoft" {
+		return errors.New("invalid private runtime command")
+	}
+	fs := newFlagSet("_runtime microsoft", c.stderr)
+	config := fs.String("config", "", "private runtime configuration")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 || *config == "" {
+		return errors.New("invalid private Microsoft runtime configuration")
+	}
+	return provider.ServeMicrosoftRuntime(ctx, *config)
 }
 
 func newFlagSet(name string, output io.Writer) *flag.FlagSet {

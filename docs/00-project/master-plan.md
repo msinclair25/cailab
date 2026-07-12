@@ -2,8 +2,8 @@
 title: CloudAILab Master Plan
 status: active
 plan_version: 0.1.0
-last_reviewed: 2026-07-11
-current_milestone: M1
+last_reviewed: 2026-07-12
+current_milestone: M2
 ---
 
 # CloudAILab master plan
@@ -247,7 +247,7 @@ Exit gate:
 
 ### M1 — AWS identity vertical slice
 
-**Status:** in development. The first IAM/STS/S3 trust-remediation slice is executable and undergoing compatibility and release hardening.
+**Status:** complete. The IAM/STS/S3 trust-remediation slice is executable, documented, and CI-backed.
 
 **Goal:** prove the adapter, normalization, policy, and remediation loop against Floci.
 
@@ -269,6 +269,8 @@ Exit gate:
 - The scenario can be run twice without leaked containers, ports, or state.
 
 ### M2 — Cross-provider enterprise identity
+
+**Status:** in development. The first persistent Microsoft delegated-consent slice is executable; Google, local OIDC, and cross-provider federation remain.
 
 **Goal:** complete one credible Google → Microsoft → AWS trust chain.
 
@@ -441,8 +443,8 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Complete the M1 Floci compatibility matrix and link every claim to automated evidence.
-2. Exercise the AWS CLI mission on Linux, macOS, and Windows documentation paths.
-3. Add failure-path tests for interrupted startup, unavailable Docker, and stale runtime metadata.
-4. Decide whether signature validation enters M1 or remains an explicitly documented emulator limitation.
-5. Record two consecutive clean scenario runs with no leaked containers, ports, or active state before the M1 exit decision.
+1. Complete and harden the scoped Microsoft Graph facade contract.
+2. Add the scenario-required Google Directory and Drive facade operations.
+3. Implement local OIDC discovery, JWKS, claims, expiry, and rotation.
+4. Connect Google, Microsoft, and AWS representations through one tested federation chain.
+5. Publish the M2 cross-provider compatibility matrix and end-to-end evidence.

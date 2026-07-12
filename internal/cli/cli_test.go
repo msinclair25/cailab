@@ -100,6 +100,21 @@ func TestDockerVersionSupported(t *testing.T) {
 	}
 }
 
+func TestDoctorUsesScenarioSpecificPrerequisites(t *testing.T) {
+	t.Parallel()
+	var stdout, stderr bytes.Buffer
+	c := New(&stdout, &stderr)
+	code := c.Run(context.Background(), []string{
+		"doctor", "--scenario-root", filepath.Join("..", "..", "scenarios"), "microsoft-consent",
+	})
+	if code != ExitOK {
+		t.Fatalf("doctor code = %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "docker") || !strings.Contains(stdout.String(), "not required by this scenario") {
+		t.Fatalf("doctor output = %q", stdout.String())
+	}
+}
+
 func writeScenario(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "scenario.yaml")

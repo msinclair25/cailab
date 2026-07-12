@@ -9,7 +9,7 @@ status: draft
 
 A scenario is a versioned, reproducible enterprise topology plus a mission, intentional weaknesses, observable events, and deterministic verification rules.
 
-The normative schema is [schemas/scenario/v1alpha1.json](../../schemas/scenario/v1alpha1.json). Executable references are [scenarios/walking-skeleton/scenario.yaml](../../scenarios/walking-skeleton/scenario.yaml) and [scenarios/aws-cross-account/scenario.yaml](../../scenarios/aws-cross-account/scenario.yaml). This document explains the authoring contract but does not override the schema or typed validator.
+The normative schema is [schemas/scenario/v1alpha1.json](../../schemas/scenario/v1alpha1.json). Executable references are [scenarios/walking-skeleton/scenario.yaml](../../scenarios/walking-skeleton/scenario.yaml), [scenarios/aws-cross-account/scenario.yaml](../../scenarios/aws-cross-account/scenario.yaml), and [scenarios/microsoft-consent/scenario.yaml](../../scenarios/microsoft-consent/scenario.yaml). This document explains the authoring contract but does not override the schema or typed validator.
 
 ## Required sections
 
@@ -87,6 +87,8 @@ spec:
 - Provider runtimes must be code-allowlisted and pinned to the exact digest accepted by the schema.
 - AWS provider topology uses typed accounts, roles, inline policies, buckets, and synthetic objects; scenario-provided shell hooks are not supported.
 - AWS account principal references and role/bucket nodes must resolve to canonical principals and resources.
+- Microsoft directory object IDs use GUID syntax and map explicitly to canonical principal or resource nodes.
+- Microsoft delegated grants must reference a declared user, client service principal, and resource service principal. The current schema accepts only principal-specific consent.
 
 ## Flagship scenario acceptance criteria
 

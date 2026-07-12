@@ -70,9 +70,11 @@ Accepted choices and their constraints are recorded in ADRs.
 
 ## Runtime deployment
 
-The target default is one `cailab` binary plus Docker or Podman. The binary runs embedded services and manages pinned external containers. Transparent HTTPS interception, host certificate installation, and hosted AI are optional advanced modes.
+The target default is one `cailab` binary, with Docker or Podman required only for container-backed scenarios. The binary starts run-scoped native facade subprocesses and manages pinned external containers. Transparent HTTPS interception, host certificate installation, and hosted AI are optional advanced modes.
 
-M1 currently tests Docker only. Floci runs as an unprivileged user with dropped capabilities, resource limits, no Docker socket mount, and a random loopback-only API port. Podman remains a target rather than an implemented compatibility claim.
+M1 tests Docker only. Floci runs as an unprivileged user with dropped capabilities, resource limits, no Docker socket mount, and a random loopback-only API port. Podman remains a target rather than an implemented compatibility claim.
+
+M2's Microsoft facade runs as a detached private command of the same binary, binds to a random IPv4 loopback port, and uses an owner-only run directory plus authenticated run-scoped shutdown. The PID is diagnostic rather than cleanup authority. See [ADR-0008](decisions/0008-managed-native-facade-processes.md).
 
 ## Compatibility policy
 
