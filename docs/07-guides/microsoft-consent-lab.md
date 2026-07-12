@@ -1,6 +1,6 @@
 ---
 title: Microsoft Delegated Consent Lab
-status: m2-development
+status: m2-complete
 last_reviewed: 2026-07-12
 ---
 

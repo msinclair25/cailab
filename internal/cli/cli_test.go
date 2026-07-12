@@ -3,11 +3,38 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestWriteOwnerOnlyJSON(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "credentials.json")
+	value := map[string]string{"accessKeyId": "synthetic-access", "secretAccessKey": "synthetic-secret"}
+	if err := writeOwnerOnlyJSON(path, value); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("credential mode = %o, want 600", info.Mode().Perm())
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]string
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded["secretAccessKey"] != "synthetic-secret" {
+		t.Fatalf("credential JSON = %+v", decoded)
+	}
+}
 
 func TestWalkingSkeletonLifecycle(t *testing.T) {
 	ctx := context.Background()

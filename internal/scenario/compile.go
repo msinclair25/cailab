@@ -72,6 +72,10 @@ func copyProviders(providers Providers) Providers {
 		awsProvider.Roles = make([]AWSRole, len(providers.AWS.Roles))
 		for i, role := range providers.AWS.Roles {
 			awsProvider.Roles[i] = role
+			if role.WebIdentity != nil {
+				webIdentity := *role.WebIdentity
+				awsProvider.Roles[i].WebIdentity = &webIdentity
+			}
 			awsProvider.Roles[i].Trust = append([]string(nil), role.Trust...)
 			sort.Strings(awsProvider.Roles[i].Trust)
 			awsProvider.Roles[i].Policies = make([]AWSInlinePolicy, len(role.Policies))
@@ -111,14 +115,27 @@ func copyProviders(providers Providers) Providers {
 	if providers.Microsoft != nil {
 		microsoft := *providers.Microsoft
 		microsoft.Users = append([]MicrosoftUser(nil), providers.Microsoft.Users...)
+		microsoft.Groups = append([]MicrosoftGroup(nil), providers.Microsoft.Groups...)
 		microsoft.Applications = append([]MicrosoftApplication(nil), providers.Microsoft.Applications...)
-		microsoft.ServicePrincipals = append([]MicrosoftServicePrincipal(nil), providers.Microsoft.ServicePrincipals...)
+		microsoft.ServicePrincipals = make([]MicrosoftServicePrincipal, len(providers.Microsoft.ServicePrincipals))
+		for i, servicePrincipal := range providers.Microsoft.ServicePrincipals {
+			microsoft.ServicePrincipals[i] = servicePrincipal
+			microsoft.ServicePrincipals[i].AppRoles = append([]MicrosoftAppRole(nil), servicePrincipal.AppRoles...)
+			sort.Slice(microsoft.ServicePrincipals[i].AppRoles, func(j, k int) bool {
+				return microsoft.ServicePrincipals[i].AppRoles[j].ID < microsoft.ServicePrincipals[i].AppRoles[k].ID
+			})
+		}
 		microsoft.OAuth2PermissionGrants = append([]MicrosoftPermissionGrant(nil), providers.Microsoft.OAuth2PermissionGrants...)
+		microsoft.AppRoleAssignments = append([]MicrosoftAppRoleAssignment(nil), providers.Microsoft.AppRoleAssignments...)
 		sort.Slice(microsoft.Users, func(i, j int) bool { return microsoft.Users[i].ID < microsoft.Users[j].ID })
+		sort.Slice(microsoft.Groups, func(i, j int) bool { return microsoft.Groups[i].ID < microsoft.Groups[j].ID })
 		sort.Slice(microsoft.Applications, func(i, j int) bool { return microsoft.Applications[i].ID < microsoft.Applications[j].ID })
 		sort.Slice(microsoft.ServicePrincipals, func(i, j int) bool { return microsoft.ServicePrincipals[i].ID < microsoft.ServicePrincipals[j].ID })
 		sort.Slice(microsoft.OAuth2PermissionGrants, func(i, j int) bool {
 			return microsoft.OAuth2PermissionGrants[i].ID < microsoft.OAuth2PermissionGrants[j].ID
+		})
+		sort.Slice(microsoft.AppRoleAssignments, func(i, j int) bool {
+			return microsoft.AppRoleAssignments[i].ID < microsoft.AppRoleAssignments[j].ID
 		})
 		result.Microsoft = &microsoft
 	}

@@ -53,6 +53,16 @@ jobs:
           CAILAB_DOCKER_INTEGRATION: "1"
         run: go test -count=1 -run '^TestFlociIntegration$' -v ./internal/provider
 
+      - name: Test flagship cross-provider federation
+        env:
+          CAILAB_CROSS_PROVIDER_INTEGRATION: "1"
+        run: go test -count=1 -run '^TestCrossProviderFederationIntegration$' -v ./internal/provider
+
+      - name: Test flagship public CLI workflow
+        env:
+          CAILAB_CROSS_PROVIDER_E2E: "1"
+        run: go test -count=1 -run '^TestCrossProviderCLIE2E$' -v ./internal/cli
+
       - name: Check documentation
         run: go run ./internal/tools/doccheck .
 

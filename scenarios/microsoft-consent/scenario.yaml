@@ -27,6 +27,7 @@ spec:
           id: 22222222-2222-4222-8222-222222222222
           displayName: Sam Security Admin
           userPrincipalName: sam.security@northstar.example
+      groups: []
       applications:
         - node: microsoft:expense-registration
           id: 33333333-3333-4333-8333-333333333333
@@ -54,6 +55,7 @@ spec:
           principalId: 22222222-2222-4222-8222-222222222222
           resourceId: 66666666-6666-4666-8666-666666666666
           scope: User.Read
+      appRoleAssignments: []
   objectives:
     - id: inventory-directory
       description: Enumerate users, applications, service principals, and delegated grants.

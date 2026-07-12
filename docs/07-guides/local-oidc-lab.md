@@ -1,6 +1,6 @@
 ---
 title: Local Development OIDC Lab
-status: m2-development
+status: m2-complete
 last_reviewed: 2026-07-12
 ---
 
@@ -8,7 +8,7 @@ last_reviewed: 2026-07-12
 
 ## Outcome
 
-This lab exercises issuer discovery, JWKS, a synthetic Authorization Code flow, signed ID and access tokens, local validation, replay prevention, and signing-key rollover. It prepares the identity foundation for later Google → Microsoft → AWS federation scenarios.
+This lab exercises issuer discovery, JWKS, a synthetic Authorization Code flow, signed ID and access tokens, local validation, replay prevention, and signing-key rollover. The same issuer participates in the completed `acquisition-agent` Google → Microsoft → AWS federation scenario.
 
 This is a [documented local development profile](../07-compatibility/local-oidc-profile.md), not production authentication. The issuer is loopback HTTP, and `cailab_subject` selects a declared synthetic subject without proving a human logged in.
 
@@ -134,7 +134,7 @@ The registered subject has the intended client-mediated API path, while an undec
 
 ## External agents
 
-A local agent can complete the same HTTP flow and present the resulting access token to future token-consuming scenario services. In this slice, CloudAILab validates token structure and identity claims but does not yet provide the complete Microsoft/AWS federation consumer. The agent remains an independently launched process with whatever host authority you grant it; this lab does not sandbox it.
+A local agent can complete the same HTTP flow. The [acquisition-agent lab](acquisition-agent-lab.md) documents the scoped Microsoft/AWS federation consumer. The agent remains an independently launched process with whatever host authority you grant it; this lab does not sandbox it.
 
 ## Reset and cleanup
 

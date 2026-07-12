@@ -1,6 +1,6 @@
 ---
 title: Local Development OIDC Profile Compatibility Matrix
-status: m2-development
+status: m2-complete
 last_reviewed: 2026-07-12
 profile_version: 0.1.0
 ---
@@ -9,7 +9,7 @@ profile_version: 0.1.0
 
 ## Claim boundary
 
-CloudAILab implements a deliberately scoped local development identity issuer for the `local-oidc` scenario. It uses standard-shaped OpenID Connect Discovery, OAuth Authorization Code, JWKS, ID-token, and JWT access-token fields. It is **not a conformant production OpenID Provider**: the random issuer uses HTTP on IPv4 loopback, and `cailab_subject` selects a declared synthetic identity without authenticating a human.
+CloudAILab implements a deliberately scoped local development identity issuer for the `local-oidc` and `acquisition-agent` scenarios. It uses standard-shaped OpenID Connect Discovery, OAuth Authorization Code, JWKS, ID-token, and JWT access-token fields. It is **not a conformant production OpenID Provider**: the random issuer uses HTTP on IPv4 loopback, and `cailab_subject` selects a declared synthetic identity without authenticating a human.
 
 The authoritative tests are `TestOIDCAuthorizationCodeContract`, `TestOIDCRejectsRedirectClientAndTokenTampering`, `TestOIDCRotationRetainsUnexpiredKeys`, `TestOIDCRuntimeValidatorUsesBoundDiscoveryAndJWKS`, and the cross-platform `TestOIDCNativeIntegration` in [`internal/provider`](../../internal/provider).
 
@@ -31,7 +31,8 @@ The authoritative tests are `TestOIDCAuthorizationCodeContract`, `TestOIDCReject
 | Authorization | `GET /authorize`; `response_type=code`, declared client, exact registered redirect, `openid` scope, optional state/nonce, declared `cailab_subject`; 302 response | `cailab_subject` is synthetic selection, not authentication. No login/consent UI, PKCE, prompt, claims parameter, response modes, or hybrid/implicit flow. |
 | Token | `POST /token`; form-encoded Authorization Code grant, `client_secret_basic`, one-time code, client and redirect binding | No public clients, refresh tokens, client credentials, token exchange, private-key JWT, or mTLS. |
 | ID token | RS256 compact JWT with `typ=JWT`, issuer, subject, client audience, expiry, issued-at, token ID, nonce, tenant, canonical principal, and scope-controlled email/groups | Public subjects only; no `auth_time`, `acr`, `amr`, `azp`, pairwise subjects, encryption, or distributed claims. |
-| Access token | RFC 9068-shaped RS256 compact JWT with `typ=at+jwt`, one default resource audience, subject, expiry, issued-at, token ID, client ID, scope, tenant, and canonical principal | No authorization-server access-policy engine or token introspection. The canonical graph remains authoritative for scenario verification. |
+| Access token | RFC 9068-shaped RS256 compact JWT with `typ=at+jwt`, one default resource audience, subject, expiry, issued-at, token ID, client ID, scope, tenant, canonical principal, and scope-controlled email/groups | No general authorization-server policy engine or token introspection. The flagship gateway checks claims against current scenario/provider state; the canonical graph remains authoritative for verification. |
+| AWS federation consumer | `cailab federation assume-aws` validates an access token and current scenario trust before requesting a local temporary credential response | Supports only the typed `acquisition-agent` role trust; this is not general OAuth token exchange or production workload federation. |
 | Rotation | `cailab identity rotate`; retired private keys are discarded, new tokens use a new `kid`, and retired public keys remain published through the maximum prior token lifetime plus 30 seconds | Rotation is local run administration, not an OIDC endpoint. No scheduled or external KMS rotation. |
 | Validation | `cailab identity validate`; refuses HTTP redirects and pins active loopback discovery, exact issuer, same-origin `/jwks`, RS256, token type, signature, audience, issue/expiry times, subject, and token ID | Validates only this profile; it is not a general JWT or OIDC validation utility. |
 

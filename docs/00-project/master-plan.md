@@ -3,7 +3,7 @@ title: CloudAILab Master Plan
 status: active
 plan_version: 0.1.0
 last_reviewed: 2026-07-12
-current_milestone: M2
+current_milestone: M3
 ---
 
 # CloudAILab master plan
@@ -270,7 +270,7 @@ Exit gate:
 
 ### M2 — Cross-provider enterprise identity
 
-**Status:** in development. Persistent Microsoft delegated-consent, Google Directory/Drive sharing, and local development OIDC slices are executable; cross-provider federation remains.
+**Status:** complete. The flagship Google → Microsoft → local OIDC → AWS chain is executable, deterministic, documented, and covered by a lifecycle integration test.
 
 **Goal:** complete one credible Google → Microsoft → AWS trust chain.
 
@@ -280,7 +280,7 @@ Deliverables:
 - Google facade for selected Directory and Drive operations
 - Local OIDC discovery, JWKS, claims, expiry, and rotation
 - Directory synchronization and cross-provider trust edges
-- SDK examples using local endpoints
+- Contract-tested HTTP, AWS SDK, and AWS CLI examples using local endpoints
 - Provider-specific error and pagination behavior required by the scenario
 - Cross-provider compatibility matrix and end-to-end tests
 
@@ -443,6 +443,6 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Connect Google, Microsoft, and AWS representations through one tested federation chain.
-2. Publish the M2 cross-provider compatibility matrix and end-to-end evidence.
-3. Add contract-tested SDK examples for supported local endpoints.
+1. Define the versioned M3 agent-run, tool-manifest, decision-event, and approval protocols.
+2. Implement a deterministic reference subprocess agent and governed tool gateway.
+3. Add explicit isolation modes before making any agent-containment claim.

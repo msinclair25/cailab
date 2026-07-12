@@ -149,6 +149,18 @@ func (f *microsoftFacade) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resource := strings.TrimPrefix(r.URL.Path, "/v1.0/")
 	if strings.Contains(resource, "/") {
 		parts := strings.Split(resource, "/")
+		if len(parts) == 3 && parts[0] == "servicePrincipals" && parts[2] == "appRoleAssignedTo" && r.Method == http.MethodGet {
+			f.listAppRoleAssignments(w, r, "resource", parts[1])
+			return
+		}
+		if len(parts) == 3 && parts[0] == "groups" && parts[2] == "appRoleAssignments" && r.Method == http.MethodGet {
+			f.listAppRoleAssignments(w, r, "principal", parts[1])
+			return
+		}
+		if len(parts) == 4 && parts[0] == "servicePrincipals" && parts[2] == "appRoleAssignedTo" && r.Method == http.MethodDelete {
+			f.deleteAppRoleAssignment(w, parts[1], parts[3])
+			return
+		}
 		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 			writeGraphError(w, http.StatusNotFound, "Request_ResourceNotFound", "The requested resource was not found.")
 			return
@@ -184,9 +196,13 @@ func (f *microsoftFacade) listObjects(w http.ResponseWriter, r *http.Request, re
 		for _, application := range f.provider.Applications {
 			values = append(values, map[string]any{"id": application.ID, "appId": application.AppID, "displayName": application.DisplayName})
 		}
+	case "groups":
+		for _, group := range f.provider.Groups {
+			values = append(values, map[string]any{"id": group.ID, "displayName": group.DisplayName})
+		}
 	case "servicePrincipals":
 		for _, servicePrincipal := range f.provider.ServicePrincipals {
-			values = append(values, map[string]any{"id": servicePrincipal.ID, "appId": servicePrincipal.AppID, "displayName": servicePrincipal.DisplayName})
+			values = append(values, servicePrincipalObject(servicePrincipal))
 		}
 	case "oauth2PermissionGrants":
 		for _, grant := range f.provider.OAuth2PermissionGrants {
@@ -230,10 +246,17 @@ func (f *microsoftFacade) getObject(w http.ResponseWriter, resource, id string) 
 				break
 			}
 		}
+	case "groups":
+		for _, group := range f.provider.Groups {
+			if group.ID == id {
+				value = map[string]any{"id": group.ID, "displayName": group.DisplayName}
+				break
+			}
+		}
 	case "servicePrincipals":
 		for _, servicePrincipal := range f.provider.ServicePrincipals {
 			if servicePrincipal.ID == id {
-				value = map[string]any{"id": servicePrincipal.ID, "appId": servicePrincipal.AppID, "displayName": servicePrincipal.DisplayName}
+				value = servicePrincipalObject(servicePrincipal)
 				break
 			}
 		}
@@ -253,6 +276,56 @@ func (f *microsoftFacade) getObject(w http.ResponseWriter, resource, id string) 
 		return
 	}
 	writeJSON(w, http.StatusOK, value)
+}
+
+func (f *microsoftFacade) listAppRoleAssignments(w http.ResponseWriter, r *http.Request, filter, objectID string) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	values := make([]map[string]any, 0)
+	for _, assignment := range f.provider.AppRoleAssignments {
+		if filter == "resource" && assignment.ResourceID != objectID {
+			continue
+		}
+		if filter == "principal" && assignment.PrincipalID != objectID {
+			continue
+		}
+		values = append(values, appRoleAssignmentObject(assignment))
+	}
+	page, nextLink, err := paginateGraph(r, values, f.baseURL)
+	if err != nil {
+		writeGraphError(w, http.StatusBadRequest, "Request_UnsupportedQuery", err.Error())
+		return
+	}
+	response := map[string]any{"@odata.context": "https://graph.microsoft.com/v1.0/$metadata#appRoleAssignments", "value": page}
+	if nextLink != "" {
+		response["@odata.nextLink"] = nextLink
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (f *microsoftFacade) deleteAppRoleAssignment(w http.ResponseWriter, resourceID, assignmentID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	index := -1
+	for i, assignment := range f.provider.AppRoleAssignments {
+		if assignment.ResourceID == resourceID && assignment.ID == assignmentID {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		writeGraphError(w, http.StatusNotFound, "Request_ResourceNotFound", "The requested app-role assignment was not found.")
+		return
+	}
+	previous := append([]scenario.MicrosoftAppRoleAssignment(nil), f.provider.AppRoleAssignments...)
+	f.provider.AppRoleAssignments = append(f.provider.AppRoleAssignments[:index], f.provider.AppRoleAssignments[index+1:]...)
+	if err := f.persistLocked(); err != nil {
+		f.provider.AppRoleAssignments = previous
+		writeGraphError(w, http.StatusInternalServerError, "InternalServerError", "The local facade could not persist the mutation.")
+		return
+	}
+	w.Header().Del("Content-Type")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (f *microsoftFacade) deleteGrant(w http.ResponseWriter, id string) {
@@ -302,6 +375,18 @@ func grantObject(grant scenario.MicrosoftPermissionGrant) map[string]any {
 		"id": grant.ID, "clientId": grant.ClientID, "consentType": grant.ConsentType,
 		"principalId": grant.PrincipalID, "resourceId": grant.ResourceID, "scope": grant.Scope,
 	}
+}
+
+func servicePrincipalObject(servicePrincipal scenario.MicrosoftServicePrincipal) map[string]any {
+	appRoles := make([]map[string]any, 0, len(servicePrincipal.AppRoles))
+	for _, appRole := range servicePrincipal.AppRoles {
+		appRoles = append(appRoles, map[string]any{"id": appRole.ID, "value": appRole.Value, "displayName": appRole.DisplayName})
+	}
+	return map[string]any{"id": servicePrincipal.ID, "appId": servicePrincipal.AppID, "displayName": servicePrincipal.DisplayName, "appRoles": appRoles}
+}
+
+func appRoleAssignmentObject(assignment scenario.MicrosoftAppRoleAssignment) map[string]any {
+	return map[string]any{"id": assignment.ID, "principalId": assignment.PrincipalID, "resourceId": assignment.ResourceID, "appRoleId": assignment.AppRoleID}
 }
 
 func paginateGraph(r *http.Request, values []map[string]any, baseURL string) ([]map[string]any, string, error) {
@@ -368,11 +453,20 @@ func snapshotMicrosoftWithClient(ctx context.Context, endpoint string, compiled 
 	if err != nil {
 		return scenario.Compiled{}, err
 	}
+	assignments, err := fetchMicrosoftAppRoleAssignments(ctx, endpoint, compiled.Providers.Microsoft.ServicePrincipals, client)
+	if err != nil {
+		return scenario.Compiled{}, err
+	}
 	users := make(map[string]string)
+	groups := make(map[string]string)
 	clients := make(map[string]scenario.MicrosoftServicePrincipal)
 	resources := make(map[string]string)
+	appRoleValues := make(map[string]map[string]string)
 	for _, user := range compiled.Providers.Microsoft.Users {
 		users[user.ID] = user.Node
+	}
+	for _, group := range compiled.Providers.Microsoft.Groups {
+		groups[group.ID] = group.Node
 	}
 	for _, servicePrincipal := range compiled.Providers.Microsoft.ServicePrincipals {
 		if servicePrincipal.Node != "" {
@@ -381,16 +475,21 @@ func snapshotMicrosoftWithClient(ctx context.Context, endpoint string, compiled 
 		if servicePrincipal.ResourceNode != "" {
 			resources[servicePrincipal.ID] = servicePrincipal.ResourceNode
 		}
+		roles := make(map[string]string)
+		for _, appRole := range servicePrincipal.AppRoles {
+			roles[appRole.ID] = appRole.Value
+		}
+		appRoleValues[servicePrincipal.ID] = roles
 	}
-	nodes := make([]scenario.Node, 0, len(compiled.Nodes)+len(grants))
+	nodes := make([]scenario.Node, 0, len(compiled.Nodes)+len(grants)+len(assignments))
 	for _, node := range compiled.Nodes {
-		if !strings.HasPrefix(node.ID, "microsoft:grant:") {
+		if !strings.HasPrefix(node.ID, "microsoft:grant:") && !strings.HasPrefix(node.ID, "microsoft:app-role-assignment:") {
 			nodes = append(nodes, node)
 		}
 	}
-	edges := make([]scenario.Relationship, 0, len(compiled.Edges)+2*len(grants))
+	edges := make([]scenario.Relationship, 0, len(compiled.Edges)+2*len(grants)+2*len(assignments))
 	for _, edge := range compiled.Edges {
-		if !strings.HasPrefix(edge.ID, "microsoft:grant:") {
+		if !strings.HasPrefix(edge.ID, "microsoft:grant:") && !strings.HasPrefix(edge.ID, "microsoft:app-role-assignment:") {
 			edges = append(edges, edge)
 		}
 	}
@@ -413,10 +512,32 @@ func snapshotMicrosoftWithClient(ctx context.Context, endpoint string, compiled 
 			scenario.Relationship{ID: grantNode + ":resource", From: grantNode, To: resource, Type: "can_access", Actions: append([]string(nil), actions...)},
 		)
 	}
+	for _, assignment := range assignments {
+		principal, principalOK := groups[assignment.PrincipalID]
+		resource, resourceOK := clients[assignment.ResourceID]
+		roleValue, roleOK := appRoleValues[assignment.ResourceID][assignment.AppRoleID]
+		if !principalOK || !resourceOK || !roleOK {
+			return scenario.Compiled{}, fmt.Errorf("Microsoft app-role assignment %q references an object outside the compiled scenario", assignment.ID)
+		}
+		assignmentNode := "microsoft:app-role-assignment:" + assignment.ID
+		actions := []string{roleValue}
+		nodes = append(nodes, scenario.Node{
+			ID: assignmentNode, Kind: "authorization", Tenant: compiled.Providers.Microsoft.Tenant,
+			Type: "app_role_assignment", DisplayName: roleValue + " assignment to " + resource.DisplayName,
+		})
+		edges = append(edges,
+			scenario.Relationship{ID: assignmentNode + ":principal", From: principal, To: assignmentNode, Type: "assigned_to", Actions: actions},
+			scenario.Relationship{ID: assignmentNode + ":resource", From: assignmentNode, To: resource.Node, Type: "can_access", Actions: actions},
+		)
+	}
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].ID < nodes[j].ID })
 	sort.Slice(edges, func(i, j int) bool { return edges[i].ID < edges[j].ID })
 	compiled.Nodes = nodes
 	compiled.Edges = edges
+	liveProvider := *compiled.Providers.Microsoft
+	liveProvider.OAuth2PermissionGrants = append([]scenario.MicrosoftPermissionGrant(nil), grants...)
+	liveProvider.AppRoleAssignments = append([]scenario.MicrosoftAppRoleAssignment(nil), assignments...)
+	compiled.Providers.Microsoft = &liveProvider
 	return compiled, nil
 }
 
@@ -449,4 +570,40 @@ func fetchMicrosoftGrants(ctx context.Context, endpoint string, client *http.Cli
 		next = page.NextLink
 	}
 	return grants, nil
+}
+
+func fetchMicrosoftAppRoleAssignments(ctx context.Context, endpoint string, servicePrincipals []scenario.MicrosoftServicePrincipal, client *http.Client) ([]scenario.MicrosoftAppRoleAssignment, error) {
+	var assignments []scenario.MicrosoftAppRoleAssignment
+	for _, servicePrincipal := range servicePrincipals {
+		if servicePrincipal.Node == "" || len(servicePrincipal.AppRoles) == 0 {
+			continue
+		}
+		next := strings.TrimRight(endpoint, "/") + "/v1.0/servicePrincipals/" + url.PathEscape(servicePrincipal.ID) + "/appRoleAssignedTo?$top=100"
+		for next != "" {
+			request, err := http.NewRequestWithContext(ctx, http.MethodGet, next, nil)
+			if err != nil {
+				return nil, fmt.Errorf("build Microsoft app-role assignment snapshot request: %w", err)
+			}
+			request.Header.Set("Authorization", "Bearer "+LocalGraphToken)
+			response, err := client.Do(request)
+			if err != nil {
+				return nil, fmt.Errorf("list Microsoft app-role assignments: %w", err)
+			}
+			var page struct {
+				Value    []scenario.MicrosoftAppRoleAssignment `json:"value"`
+				NextLink string                                `json:"@odata.nextLink"`
+			}
+			decodeErr := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&page)
+			response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				return nil, fmt.Errorf("list Microsoft app-role assignments: status %d", response.StatusCode)
+			}
+			if decodeErr != nil {
+				return nil, fmt.Errorf("decode Microsoft app-role assignments: %w", decodeErr)
+			}
+			assignments = append(assignments, page.Value...)
+			next = page.NextLink
+		}
+	}
+	return assignments, nil
 }

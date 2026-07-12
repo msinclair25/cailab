@@ -62,7 +62,7 @@ func TestOIDCAuthorizationCodeContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if accessClaims.ClientID != testOIDCClientID || accessClaims.Scope != "email openid profile" || accessClaims.Tenant != "tenant:identity-lab" {
+	if accessClaims.ClientID != testOIDCClientID || accessClaims.Scope != "email openid profile" || accessClaims.Tenant != "tenant:identity-lab" || accessClaims.Email != "identity.engineer@example.test" || len(accessClaims.Groups) != 1 {
 		t.Fatalf("access claims = %+v", accessClaims)
 	}
 

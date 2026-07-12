@@ -13,7 +13,7 @@ CloudAILab is a local control plane that compiles scenarios, orchestrates provid
 flowchart LR
     Author["Scenario author"] --> CLI["cailab CLI"]
     Learner["Engineer or learner"] --> APIs["Provider-compatible APIs"]
-    Agent["Agent under test"] --> Gateway["Governed tool gateway"]
+    Agent["Agent under test"] -. M3 .-> Gateway["Governed tool gateway"]
     CLI --> Core["CloudAILab control plane"]
     Core --> APIs
     Gateway --> APIs
@@ -37,7 +37,8 @@ flowchart TD
     State --> Graph["Identity and trust graph"]
     Providers --> Collector["Snapshot collectors"]
     Collector --> Graph
-    Issuer["Local identity issuer"] --> Providers
+    Issuer["Local identity issuer"] --> Federation["Authoritative federation gateway"]
+    Federation --> Providers
     AgentGateway["Agent control gateway"] --> Providers
     AgentGateway --> Audit["Append-only audit events"]
     Graph --> Evaluator["Invariant and path evaluator"]
@@ -75,6 +76,8 @@ The target default is one `cailab` binary, with Docker or Podman required only f
 M1 tests Docker only. Floci runs as an unprivileged user with dropped capabilities, resource limits, no Docker socket mount, and a random loopback-only API port. Podman remains a target rather than an implemented compatibility claim.
 
 M2's Microsoft and Google facades and local identity issuer run as detached private commands of the same binary through one provider-neutral lifecycle manager. Each binds to a random IPv4 loopback port and uses an owner-only run directory plus authenticated run-scoped control. A PID is diagnostic rather than cleanup authority. See [ADR-0008](decisions/0008-managed-native-facade-processes.md) and [ADR-0009](decisions/0009-local-development-oidc-profile.md).
+
+The M2 federation command validates signed local identity, current Microsoft assignment state, and typed AWS web trust before invoking Floci for temporary credentials. The pinned Floci runtime remains directly reachable on loopback and does not enforce that gateway decision; direct access is outside the supported authorization contract. Enforced agent mediation and isolation are M3 work. See [ADR-0010](decisions/0010-authoritative-web-identity-gateway.md).
 
 ## Compatibility policy
 

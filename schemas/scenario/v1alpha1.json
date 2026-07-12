@@ -201,7 +201,7 @@
       "required": ["node", "value"],
       "properties": {
         "node": { "$ref": "#/$defs/id" },
-        "value": { "type": "string", "pattern": "^(https://[^#]+|urn:[^#]+)$" }
+        "value": { "type": "string", "pattern": "^(https://[^#]+|urn:[^#]+|[a-z0-9](?:[a-z0-9.-]{0,253}[a-z0-9])?)$" }
       }
     },
     "oidcSubject": {
@@ -318,7 +318,7 @@
     "microsoftProvider": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tenant", "tenantId", "users", "applications", "servicePrincipals", "oauth2PermissionGrants"],
+      "required": ["tenant", "tenantId", "users", "groups", "applications", "servicePrincipals", "oauth2PermissionGrants", "appRoleAssignments"],
       "properties": {
         "tenant": { "$ref": "#/$defs/id" },
         "tenantId": { "$ref": "#/$defs/uuid" },
@@ -326,6 +326,10 @@
           "type": "array",
           "minItems": 1,
           "items": { "$ref": "#/$defs/microsoftUser" }
+        },
+        "groups": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/microsoftGroup" }
         },
         "applications": {
           "type": "array",
@@ -338,6 +342,10 @@
         "oauth2PermissionGrants": {
           "type": "array",
           "items": { "$ref": "#/$defs/microsoftPermissionGrant" }
+        },
+        "appRoleAssignments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/microsoftAppRoleAssignment" }
         }
       }
     },
@@ -363,6 +371,16 @@
         "displayName": { "type": "string", "minLength": 1 }
       }
     },
+    "microsoftGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "id", "displayName"],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" },
+        "id": { "$ref": "#/$defs/uuid" },
+        "displayName": { "type": "string", "minLength": 1 }
+      }
+    },
     "microsoftServicePrincipal": {
       "type": "object",
       "additionalProperties": false,
@@ -376,7 +394,32 @@
         "resourceNode": { "$ref": "#/$defs/id" },
         "id": { "$ref": "#/$defs/uuid" },
         "appId": { "$ref": "#/$defs/uuid" },
+        "displayName": { "type": "string", "minLength": 1 },
+        "appRoles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/microsoftAppRole" }
+        }
+      }
+    },
+    "microsoftAppRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "value", "displayName"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "value": { "type": "string", "minLength": 1 },
         "displayName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "microsoftAppRoleAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "principalId", "resourceId", "appRoleId"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuid" },
+        "principalId": { "$ref": "#/$defs/uuid" },
+        "resourceId": { "$ref": "#/$defs/uuid" },
+        "appRoleId": { "$ref": "#/$defs/uuid" }
       }
     },
     "microsoftPermissionGrant": {
@@ -440,7 +483,20 @@
         "policies": {
           "type": "array",
           "items": { "$ref": "#/$defs/awsInlinePolicy" }
+        },
+        "webIdentity": {
+          "$ref": "#/$defs/awsWebIdentityTrust"
         }
+      }
+    },
+    "awsWebIdentityTrust": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clientNode", "audienceNode", "audience"],
+      "properties": {
+        "clientNode": { "$ref": "#/$defs/id" },
+        "audienceNode": { "$ref": "#/$defs/id" },
+        "audience": { "type": "string", "pattern": "^(https://[^#]+|urn:[^#]+|[a-z0-9](?:[a-z0-9.-]{0,253}[a-z0-9])?)$" }
       }
     },
     "awsInlinePolicy": {
