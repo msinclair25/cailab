@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -208,7 +209,7 @@ func TestGatewayPersistsBeforeReturningNonExecutingResult(t *testing.T) {
 	if err := json.Unmarshal(response.Payload, &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.Status != "not_executed" || result.Decision.Effect != "allow" {
+	if result.Status != "succeeded" || result.Decision.Effect != "allow" || len(store.outcomes) != 1 {
 		t.Fatalf("tool result = %+v", result)
 	}
 	eventData, err := json.Marshal(store.events[0])
@@ -236,6 +237,38 @@ func TestGatewayReturnsApprovalOnlyAfterEvidenceCommit(t *testing.T) {
 	}
 }
 
+func TestGatewayRedactsDeclaredSensitiveOutputBeforeResponseAndHash(t *testing.T) {
+	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:allow", "allow")})
+	request.Manifest.Spec.SensitiveFields = []string{"/token"}
+	manifestDigest, err := DigestToolManifest(request.Manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Run.Tools[0].Digest = manifestDigest
+	store := &memoryEventAppender{}
+	gateway := testGateway(policy, request, store)
+	gateway.Executor = fakeToolExecutor{result: ToolExecutionResult{
+		Status: "succeeded", Content: json.RawMessage(`{"ok":true,"token":"raw-secret"}`),
+	}}
+	call := testMessage(MessageToolCall, "call:output", "", ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments})
+	var payload ToolCallPayload
+	_ = json.Unmarshal(call.Payload, &payload)
+	response, err := gateway.HandleToolCall(context.Background(), call, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(response.Payload, []byte("raw-secret")) || !bytes.Contains(response.Payload, []byte("[REDACTED]")) {
+		t.Fatalf("response did not protect output: %s", response.Payload)
+	}
+	wantHash, err := DigestJSON([]byte(`{"ok":true,"token":"[REDACTED]"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.outcomes) != 1 || store.outcomes[0].OutputHash != wantHash {
+		t.Fatalf("outcomes = %+v, want hash %q", store.outcomes, wantHash)
+	}
+}
+
 func TestGatewayFailsClosedWhenEvidenceCannotCommit(t *testing.T) {
 	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:allow", "allow")})
 	store := &memoryEventAppender{err: errors.New("disk unavailable")}
@@ -248,12 +281,73 @@ func TestGatewayFailsClosedWhenEvidenceCannotCommit(t *testing.T) {
 	}
 }
 
+func TestGatewayDoesNotExecuteInvalidInput(t *testing.T) {
+	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:allow", "allow")})
+	store := &memoryEventAppender{}
+	gateway := testGateway(policy, request, store)
+	gateway.Executor = panicToolExecutor{}
+	invalid := json.RawMessage(`{"fileId":"google:agent-runbook","unexpected":true}`)
+	call := testMessage(MessageToolCall, "call:invalid", "", ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: invalid})
+	response, err := gateway.HandleToolCall(context.Background(), call, ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: invalid})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result ToolResultPayload
+	if err := json.Unmarshal(response.Payload, &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "not_executed" || result.Decision.ReasonCode != "schema:invalid_input" || len(store.outcomes) != 0 {
+		t.Fatalf("result=%+v outcomes=%+v", result, store.outcomes)
+	}
+}
+
+func TestGatewayRecordsExecutorFailureAsOutcome(t *testing.T) {
+	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:allow", "allow")})
+	store := &memoryEventAppender{}
+	gateway := testGateway(policy, request, store)
+	gateway.Executor = fakeToolExecutor{err: &ToolExecutionError{Code: "executor:timeout", Err: context.DeadlineExceeded}}
+	call := testMessage(MessageToolCall, "call:timeout", "", ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments})
+	response, err := gateway.HandleToolCall(context.Background(), call, ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result ToolResultPayload
+	if err := json.Unmarshal(response.Payload, &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Status != "failed" || result.ErrorCode != "executor:timeout" || len(store.outcomes) != 1 || store.outcomes[0].Outcome.ErrorCode != "executor:timeout" {
+		t.Fatalf("result=%+v outcomes=%+v", result, store.outcomes)
+	}
+}
+
+func TestGatewayWithholdsResultWhenOutcomeCannotCommit(t *testing.T) {
+	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:allow", "allow")})
+	store := &memoryEventAppender{outcomeErr: errors.New("disk full")}
+	gateway := testGateway(policy, request, store)
+	call := testMessage(MessageToolCall, "call:outcome-failure", "", ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments})
+	if _, err := gateway.HandleToolCall(context.Background(), call, ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments}); err == nil || !strings.Contains(err.Error(), "persist tool outcome") {
+		t.Fatalf("error = %v", err)
+	}
+	if len(store.events) != 1 || len(store.outcomes) != 0 {
+		t.Fatalf("events=%+v outcomes=%+v", store.events, store.outcomes)
+	}
+}
+
 func TestSessionUsesGovernedGatewayHandler(t *testing.T) {
 	config := testSessionConfig(t, "tool")
+	config.HandshakeTimeout = 2 * time.Second
+	config.SessionTimeout = 15 * time.Second
 	manifest := validToolManifest()
 	manifest.Metadata.Name = "google.drive.read"
 	manifest.Metadata.Version = "0.1.0"
+	manifest.Spec.InputSchema = policyInputSchema()
+	manifest.Spec.SensitiveFields = nil
 	manifest.Spec.Permissions = []Permission{{Tenant: "tenant:northstar", Actions: []string{"drive.files.get"}, Resources: []string{"google:agent-runbook"}}}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.Spec.Transport.Command = []string{executable, "-test.run=^TestToolExecutionHelperProcess$"}
 	manifestDigest, err := DigestToolManifest(manifest)
 	if err != nil {
 		t.Fatal(err)
@@ -271,20 +365,25 @@ func TestSessionUsesGovernedGatewayHandler(t *testing.T) {
 		Resolver: ToolCallResolverFunc(func(context.Context, Message, ToolCallPayload) (ToolCallResolution, error) {
 			return ToolCallResolution{Manifest: manifest, Action: "drive.files.get", Resource: ResourceRef{ID: "google:agent-runbook", Tenant: "tenant:northstar", Classification: "restricted"}}, nil
 		}),
+		Executor: SubprocessToolExecutor{
+			Directory: t.TempDir(), Environment: []string{toolHelperMode + "=success"}, CleanupTimeout: 250 * time.Millisecond,
+		},
 		Events: store, Clock: func() time.Time { return time.Date(2026, 7, 12, 22, 0, 0, 0, time.UTC) },
 	}
 	result, err := RunSession(context.Background(), config, gateway)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Completion.Status != "completed" || len(store.events) != 1 || store.events[0].Outcome.Status != "not_executed" {
+	if result.Completion.Status != "completed" || len(store.events) != 1 || len(store.outcomes) != 1 || store.outcomes[0].Outcome.Status != "succeeded" {
 		t.Fatalf("result=%+v events=%+v", result, store.events)
 	}
 }
 
 type memoryEventAppender struct {
-	events []DecisionEvent
-	err    error
+	events     []DecisionEvent
+	outcomes   []ToolOutcomeEvent
+	err        error
+	outcomeErr error
 }
 
 func (s *memoryEventAppender) AppendDecisionEvent(_ context.Context, draft DecisionEventDraft) (DecisionEvent, error) {
@@ -299,13 +398,49 @@ func (s *memoryEventAppender) AppendDecisionEvent(_ context.Context, draft Decis
 	return event, nil
 }
 
-func testGateway(policy GovernancePolicy, request AuthorizationRequest, store DecisionEventAppender) *Gateway {
+func (s *memoryEventAppender) AppendToolOutcomeEvent(_ context.Context, draft ToolOutcomeEventDraft) (ToolOutcomeEvent, error) {
+	if s.outcomeErr != nil {
+		return ToolOutcomeEvent{}, s.outcomeErr
+	}
+	if s.err != nil {
+		return ToolOutcomeEvent{}, s.err
+	}
+	event, err := BuildToolOutcomeEvent(draft, deterministicIdentifier("outcome", draft.CorrelationID))
+	if err != nil {
+		return ToolOutcomeEvent{}, err
+	}
+	s.outcomes = append(s.outcomes, event)
+	return event, nil
+}
+
+type panicToolExecutor struct{}
+
+func (panicToolExecutor) Execute(context.Context, ToolManifest, string, json.RawMessage) (ToolExecutionResult, error) {
+	panic("executor must not be called")
+}
+
+type fakeToolExecutor struct {
+	result ToolExecutionResult
+	err    error
+}
+
+func (e fakeToolExecutor) Execute(context.Context, ToolManifest, string, json.RawMessage) (ToolExecutionResult, error) {
+	if e.err != nil {
+		return ToolExecutionResult{}, e.err
+	}
+	if e.result.Status != "" {
+		return e.result, nil
+	}
+	return ToolExecutionResult{Status: "succeeded", Content: json.RawMessage(`{"ok":true}`)}, nil
+}
+
+func testGateway(policy GovernancePolicy, request AuthorizationRequest, store ToolEvidenceAppender) *Gateway {
 	return &Gateway{
 		Run: request.Run, Actor: request.Actor, Policy: policy,
 		Resolver: ToolCallResolverFunc(func(context.Context, Message, ToolCallPayload) (ToolCallResolution, error) {
 			return ToolCallResolution{Manifest: request.Manifest, Action: request.Action, Resource: request.Resource}, nil
 		}),
-		Events: store, Clock: func() time.Time { return time.Date(2026, 7, 12, 22, 0, 0, 0, time.UTC) },
+		Executor: fakeToolExecutor{}, Events: store, Clock: func() time.Time { return time.Date(2026, 7, 12, 22, 0, 0, 0, time.UTC) },
 	}
 }
 
@@ -314,7 +449,9 @@ func policyRequest(t *testing.T, rules []PolicyRule) (GovernancePolicy, Authoriz
 	manifest := validToolManifest()
 	manifest.Metadata.Name = "google.drive.read"
 	manifest.Metadata.Version = "0.1.0"
+	manifest.Spec.InputSchema = policyInputSchema()
 	manifest.Spec.Permissions = []Permission{{Tenant: "tenant:northstar", Actions: []string{"drive.files.get"}, Resources: []string{"google:agent-runbook"}}}
+	manifest.Spec.SensitiveFields = nil
 	manifestDigest, err := DigestToolManifest(manifest)
 	if err != nil {
 		t.Fatal(err)
@@ -346,4 +483,18 @@ func policyRule(id, effect string, redactions ...string) PolicyRule {
 		Resource: "google:agent-runbook", ResourceTenant: "tenant:northstar", ResourceClassification: "restricted",
 		Redactions: redactions,
 	}
+}
+
+func policyInputSchema() json.RawMessage {
+	return json.RawMessage(`{
+      "$schema":"https://json-schema.org/draft/2020-12/schema",
+      "type":"object",
+      "properties":{
+        "fileId":{"type":"string"},
+        "token":{"type":"string"},
+        "nested":{"type":"object","properties":{"password":{"type":"string"}},"additionalProperties":false}
+      },
+      "required":["fileId"],
+      "additionalProperties":false
+    }`)
 }

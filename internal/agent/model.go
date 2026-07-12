@@ -14,6 +14,7 @@ const (
 	AgentRunKind         = "AgentRun"
 	DecisionEventKind    = "DecisionEvent"
 	GovernancePolicyKind = "GovernancePolicy"
+	ToolOutcomeEventKind = "ToolOutcomeEvent"
 )
 
 const (
@@ -177,6 +178,46 @@ type DecisionEventDraft struct {
 	OutputHash    string
 }
 
+type ToolOutcomeEvent struct {
+	APIVersion      string    `json:"apiVersion"`
+	Kind            string    `json:"kind"`
+	EventID         string    `json:"eventId"`
+	OccurredAt      time.Time `json:"occurredAt"`
+	RunID           string    `json:"runId"`
+	TrialID         string    `json:"trialId"`
+	CorrelationID   string    `json:"correlationId"`
+	DecisionEventID string    `json:"decisionEventId"`
+	Tool            ToolRef   `json:"tool"`
+	Outcome         Outcome   `json:"outcome"`
+	OutputHash      string    `json:"outputHash,omitempty"`
+}
+
+type ToolOutcomeEventDraft struct {
+	OccurredAt      time.Time
+	RunID           string
+	TrialID         string
+	CorrelationID   string
+	DecisionEventID string
+	Tool            ToolRef
+	Outcome         Outcome
+	OutputHash      string
+}
+
+type ToolExecutionRequest struct {
+	ProtocolVersion string          `json:"protocolVersion"`
+	CallID          string          `json:"callId"`
+	Tool            string          `json:"tool"`
+	Arguments       json.RawMessage `json:"arguments"`
+}
+
+type ToolExecutionResponse struct {
+	ProtocolVersion string          `json:"protocolVersion"`
+	CallID          string          `json:"callId"`
+	Status          string          `json:"status"`
+	Content         json.RawMessage `json:"content,omitempty"`
+	ErrorCode       string          `json:"errorCode,omitempty"`
+}
+
 type ActorRef struct {
 	ID     string `json:"id"`
 	Tenant string `json:"tenant"`
@@ -221,10 +262,11 @@ type ToolCallPayload struct {
 }
 
 type ToolResultPayload struct {
-	Tool     string          `json:"tool"`
-	Status   string          `json:"status"`
-	Content  json.RawMessage `json:"content,omitempty"`
-	Decision Decision        `json:"decision"`
+	Tool      string          `json:"tool"`
+	Status    string          `json:"status"`
+	Content   json.RawMessage `json:"content,omitempty"`
+	ErrorCode string          `json:"errorCode,omitempty"`
+	Decision  Decision        `json:"decision"`
 }
 
 type ApprovalRequiredPayload struct {

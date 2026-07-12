@@ -72,6 +72,7 @@ Use only public CLI commands and documented workflows. The flagship scenario is 
 - Subprocess tests cover ordering, direction, correlation, malformed output, bounded diagnostics, timeouts, cancellation, unexpected exit, and cleanup.
 - Policy tests cover manifest ceilings, default deny, fixed precedence, rule-order independence, redaction failure, stable approvals, evidence-before-response, and persistence failure.
 - Decision-store tests cover migrations, monotonic sequences, duplicate correlations, reopen, inactive runs, and mutation/deletion integrity failures.
+- Tool-execution tests cover Draft 2020-12 instances, offline references, invalid-input non-execution, success/failure, correlation, malformed/extra output, timeout, exit status, bounded diagnostics, output redaction, and linked outcome persistence.
 - Deliberately unsafe fixtures establish that findings trigger.
 - Nondeterministic models run multiple trials.
 - Reports include denominators, configuration, errors, and incomplete trials.

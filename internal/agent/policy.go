@@ -162,6 +162,13 @@ func EvaluatePolicy(policy GovernancePolicy, request AuthorizationRequest) (Eval
 		return Evaluation{}, fmt.Errorf("hash authorization input: %w", err)
 	}
 	evaluation := Evaluation{Tool: tool, InputHash: inputHash}
+	if err := ValidateToolInput(request.Manifest.Spec.InputSchema, canonicalArguments); err != nil {
+		if errors.Is(err, ErrToolInput) {
+			evaluation.Decision = Decision{Effect: "deny", ReasonCode: "schema:invalid_input", PolicyVersion: policy.Version}
+			return evaluation, nil
+		}
+		return Evaluation{}, err
+	}
 	if !manifestAllows(request.Manifest, request.Action, request.Resource) {
 		evaluation.Decision = Decision{Effect: "deny", ReasonCode: "manifest:permission_denied", PolicyVersion: policy.Version}
 		return evaluation, nil

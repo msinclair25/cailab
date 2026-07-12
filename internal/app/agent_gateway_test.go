@@ -60,7 +60,7 @@ func TestGovernedToolCallPersistsEvidenceInActiveRunStore(t *testing.T) {
 				Resource: agent.ResourceRef{ID: "google:agent-runbook", Tenant: "tenant:northstar", Classification: "restricted"},
 			}, nil
 		}),
-		Events: store, Clock: func() time.Time { return time.Date(2026, 7, 12, 22, 1, 0, 0, time.UTC) },
+		Executor: integrationExecutor{}, Events: store, Clock: func() time.Time { return time.Date(2026, 7, 12, 22, 1, 0, 0, time.UTC) },
 	}
 	arguments := json.RawMessage(`{"fileId":"google:agent-runbook","token":"synthetic-secret"}`)
 	call := integrationMessage(t, "call:1", manifest.Metadata.Name, arguments)
@@ -85,6 +85,19 @@ func TestGovernedToolCallPersistsEvidenceInActiveRunStore(t *testing.T) {
 	if strings.Contains(string(encoded), "synthetic-secret") {
 		t.Fatalf("persisted evidence leaked raw arguments: %s", encoded)
 	}
+	outcomes, err := store.ToolOutcomeEvents(ctx, rangeRun.ID, agentRun.TrialID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outcomes) != 1 || outcomes[0].Outcome.Status != "succeeded" || outcomes[0].OutputHash == "" {
+		t.Fatalf("outcomes = %+v", outcomes)
+	}
+}
+
+type integrationExecutor struct{}
+
+func (integrationExecutor) Execute(context.Context, agent.ToolManifest, string, json.RawMessage) (agent.ToolExecutionResult, error) {
+	return agent.ToolExecutionResult{Status: "succeeded", Content: json.RawMessage(`{"ok":true}`)}, nil
 }
 
 func integrationToolManifest() agent.ToolManifest {
@@ -96,7 +109,7 @@ func integrationToolManifest() agent.ToolManifest {
 			InputSchema: json.RawMessage(`{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"fileId":{"type":"string"},"token":{"type":"string"}},"required":["fileId"],"additionalProperties":false}`),
 			Permissions: []agent.Permission{{Tenant: "tenant:northstar", Actions: []string{"drive.files.get"}, Resources: []string{"google:agent-runbook"}}},
 			Risk:        "medium", TimeoutMillis: 5000,
-			Isolation: agent.Isolation{Network: "loopback", Filesystem: "none"}, SensitiveFields: []string{"/token"},
+			Isolation: agent.Isolation{Network: "loopback", Filesystem: "none"},
 		},
 	}
 }

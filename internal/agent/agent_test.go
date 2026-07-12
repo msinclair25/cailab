@@ -192,7 +192,7 @@ func TestProtocolRejectsOversizedAndInvalidUTF8Frames(t *testing.T) {
 }
 
 func TestCommittedAgentSchemasAreValidJSON(t *testing.T) {
-	for _, name := range []string{"tool-manifest.json", "agent-run.json", "protocol-message.json", "decision-event.json", "governance-policy.json"} {
+	for _, name := range []string{"tool-manifest.json", "agent-run.json", "protocol-message.json", "decision-event.json", "governance-policy.json", "tool-execution-message.json", "tool-outcome-event.json"} {
 		data, err := os.ReadFile(filepath.Join("..", "..", "schemas", "agent", "v1alpha1", name))
 		if err != nil {
 			t.Fatal(err)

@@ -240,6 +240,9 @@ func validateToolInputSchema(issues *[]string, raw json.RawMessage) {
 	if schema.AdditionalProperties == nil || *schema.AdditionalProperties {
 		*issues = append(*issues, "spec.inputSchema.additionalProperties must be false")
 	}
+	if _, err := compileToolInputSchema(raw); err != nil {
+		*issues = append(*issues, "spec.inputSchema does not compile: "+err.Error())
+	}
 }
 
 func validateToolRef(issues *[]string, prefix string, tool ToolRef) {
