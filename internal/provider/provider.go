@@ -25,6 +25,11 @@ type Manager interface {
 	Start(context.Context, string, scenario.Compiled) ([]Instance, error)
 	Stop(context.Context, string, []Instance, scenario.Compiled) error
 	Snapshot(context.Context, []Instance, scenario.Compiled) (scenario.Compiled, error)
+	RotateIdentity(context.Context, string, []Instance) (OIDCJWKSet, error)
+}
+
+func (m *CompositeManager) RotateIdentity(ctx context.Context, runID string, instances []Instance) (OIDCJWKSet, error) {
+	return m.native.RotateOIDC(ctx, runID, instances)
 }
 
 type CompositeManager struct {
@@ -55,7 +60,7 @@ func (m *CompositeManager) Stop(ctx context.Context, runID string, instances []I
 	var nativeInstances, dockerInstances []Instance
 	for _, instance := range instances {
 		switch instance.Provider {
-		case "microsoft", "google":
+		case "microsoft", "google", "oidc":
 			nativeInstances = append(nativeInstances, instance)
 		case "aws":
 			dockerInstances = append(dockerInstances, instance)

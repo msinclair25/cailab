@@ -32,7 +32,7 @@ Milestones are capability gates, not date commitments. This document is the conc
 
 ## M2 — Microsoft and Google identity facades
 
-**Status:** in development; persistent Microsoft delegated-consent and Google Directory/Drive sharing workflows are executable.
+**Status:** in development; persistent Microsoft delegated-consent, Google Directory/Drive sharing, and local development OIDC workflows are executable.
 
 - Implement scenario-required users, groups, applications, roles, and memberships.
 - Add local issuer and selected federation claims.

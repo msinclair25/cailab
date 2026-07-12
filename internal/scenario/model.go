@@ -37,6 +37,7 @@ type Runtimes struct {
 	AWS       *AWSRuntime       `json:"aws,omitempty" yaml:"aws,omitempty"`
 	Microsoft *MicrosoftRuntime `json:"microsoft,omitempty" yaml:"microsoft,omitempty"`
 	Google    *GoogleRuntime    `json:"google,omitempty" yaml:"google,omitempty"`
+	OIDC      *OIDCRuntime      `json:"oidc,omitempty" yaml:"oidc,omitempty"`
 }
 
 type AWSRuntime struct {
@@ -53,10 +54,44 @@ type GoogleRuntime struct {
 	Engine string `json:"engine" yaml:"engine"`
 }
 
+type OIDCRuntime struct {
+	Engine string `json:"engine" yaml:"engine"`
+}
+
 type Providers struct {
 	AWS       *AWSProvider       `json:"aws,omitempty" yaml:"aws,omitempty"`
 	Microsoft *MicrosoftProvider `json:"microsoft,omitempty" yaml:"microsoft,omitempty"`
 	Google    *GoogleProvider    `json:"google,omitempty" yaml:"google,omitempty"`
+	OIDC      *OIDCProvider      `json:"oidc,omitempty" yaml:"oidc,omitempty"`
+}
+
+type OIDCProvider struct {
+	Tenant          string        `json:"tenant" yaml:"tenant"`
+	CodeTTLSeconds  int           `json:"codeTtlSeconds" yaml:"codeTtlSeconds"`
+	TokenTTLSeconds int           `json:"tokenTtlSeconds" yaml:"tokenTtlSeconds"`
+	Clients         []OIDCClient  `json:"clients" yaml:"clients"`
+	Subjects        []OIDCSubject `json:"subjects" yaml:"subjects"`
+}
+
+type OIDCClient struct {
+	Node         string         `json:"node" yaml:"node"`
+	ClientID     string         `json:"clientId" yaml:"clientId"`
+	ClientSecret string         `json:"clientSecret" yaml:"clientSecret"`
+	RedirectURIs []string       `json:"redirectUris" yaml:"redirectUris"`
+	Audiences    []OIDCAudience `json:"audiences" yaml:"audiences"`
+	Scopes       []string       `json:"scopes" yaml:"scopes"`
+}
+
+type OIDCAudience struct {
+	Node  string `json:"node" yaml:"node"`
+	Value string `json:"value" yaml:"value"`
+}
+
+type OIDCSubject struct {
+	Node    string   `json:"node" yaml:"node"`
+	Subject string   `json:"subject" yaml:"subject"`
+	Email   string   `json:"email" yaml:"email"`
+	Groups  []string `json:"groups" yaml:"groups"`
 }
 
 type GoogleProvider struct {

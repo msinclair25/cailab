@@ -2,6 +2,7 @@ package scenario
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"sort"
 	"strings"
@@ -84,6 +85,7 @@ func Validate(s Scenario) error {
 	principalIDs := make(map[string]struct{}, len(s.Spec.Principals))
 	resourceIDs := make(map[string]struct{}, len(s.Spec.Resources))
 	principalTenants := make(map[string]string, len(s.Spec.Principals))
+	principalKinds := make(map[string]string, len(s.Spec.Principals))
 	resourceTenants := make(map[string]string, len(s.Spec.Resources))
 	for id := range tenantIDs {
 		nodeIDs[id] = struct{}{}
@@ -93,6 +95,7 @@ func Validate(s Scenario) error {
 		checkUniqueID(&issues, prefix+".id", principal.ID, nodeIDs)
 		principalIDs[principal.ID] = struct{}{}
 		principalTenants[principal.ID] = principal.Tenant
+		principalKinds[principal.ID] = principal.Type
 		checkReference(&issues, prefix+".tenant", principal.Tenant, tenantIDs)
 		if _, ok := principalTypes[principal.Type]; !ok {
 			issues = append(issues, fmt.Sprintf("%s.type has unsupported value %q", prefix, principal.Type))
@@ -111,7 +114,7 @@ func Validate(s Scenario) error {
 			issues = append(issues, fmt.Sprintf("%s.classification has unsupported value %q", prefix, resource.Classification))
 		}
 	}
-	validateProviders(&issues, s.Spec.Providers, s.Spec.Runtimes, tenantIDs, principalIDs, resourceIDs, principalTenants, resourceTenants)
+	validateProviders(&issues, s.Spec.Providers, s.Spec.Runtimes, tenantIDs, principalIDs, resourceIDs, principalTenants, resourceTenants, principalKinds)
 
 	objectiveIDs := make(map[string]struct{})
 	for i, objective := range s.Spec.Objectives {
@@ -182,6 +185,9 @@ func validateRuntimes(issues *[]string, runtimes Runtimes) {
 	if runtimes.Google != nil && runtimes.Google.Engine != "native" {
 		*issues = append(*issues, fmt.Sprintf("spec.runtimes.google.engine has unsupported value %q", runtimes.Google.Engine))
 	}
+	if runtimes.OIDC != nil && runtimes.OIDC.Engine != "native" {
+		*issues = append(*issues, fmt.Sprintf("spec.runtimes.oidc.engine has unsupported value %q", runtimes.OIDC.Engine))
+	}
 }
 
 func validateProviders(
@@ -189,10 +195,11 @@ func validateProviders(
 	providers Providers,
 	runtimes Runtimes,
 	tenants, principals, resources map[string]struct{},
-	principalTenants, resourceTenants map[string]string,
+	principalTenants, resourceTenants, principalKinds map[string]string,
 ) {
 	validateMicrosoftProvider(issues, providers.Microsoft, runtimes.Microsoft, tenants, principals, resources, principalTenants, resourceTenants)
 	validateGoogleProvider(issues, providers.Google, runtimes.Google, tenants, principals, resources, principalTenants, resourceTenants)
+	validateOIDCProvider(issues, providers.OIDC, runtimes.OIDC, tenants, principals, resources, principalTenants, resourceTenants, principalKinds)
 	if providers.AWS == nil {
 		return
 	}
@@ -291,6 +298,155 @@ func validateProviders(
 			objectKeys[object.Key] = struct{}{}
 		}
 	}
+}
+
+func validateOIDCProvider(
+	issues *[]string,
+	provider *OIDCProvider,
+	runtime *OIDCRuntime,
+	tenants, principals, resources map[string]struct{},
+	principalTenants, resourceTenants, principalKinds map[string]string,
+) {
+	if provider == nil {
+		if runtime != nil {
+			*issues = append(*issues, "spec.runtimes.oidc requires spec.providers.oidc")
+		}
+		return
+	}
+	if runtime == nil {
+		*issues = append(*issues, "spec.providers.oidc requires spec.runtimes.oidc")
+	}
+	checkReference(issues, "spec.providers.oidc.tenant", provider.Tenant, tenants)
+	if provider.CodeTTLSeconds < 15 || provider.CodeTTLSeconds > 300 {
+		*issues = append(*issues, "spec.providers.oidc.codeTtlSeconds must be from 15 through 300")
+	}
+	if provider.TokenTTLSeconds < 60 || provider.TokenTTLSeconds > 3600 {
+		*issues = append(*issues, "spec.providers.oidc.tokenTtlSeconds must be from 60 through 3600")
+	}
+	if len(provider.Clients) == 0 {
+		*issues = append(*issues, "spec.providers.oidc.clients must contain at least one client")
+	}
+	if len(provider.Subjects) == 0 {
+		*issues = append(*issues, "spec.providers.oidc.subjects must contain at least one subject")
+	}
+
+	clientIDs := make(map[string]struct{})
+	clientNodes := make(map[string]struct{})
+	for i, client := range provider.Clients {
+		prefix := fmt.Sprintf("spec.providers.oidc.clients[%d]", i)
+		checkReference(issues, prefix+".node", client.Node, principals)
+		validateMicrosoftNodeTenant(issues, prefix+".node", client.Node, provider.Tenant, principalTenants)
+		if kind := principalKinds[client.Node]; kind != "application" && kind != "workload" && kind != "agent" {
+			*issues = append(*issues, fmt.Sprintf("%s.node must reference an application, workload, or agent principal", prefix))
+		}
+		if _, exists := clientNodes[client.Node]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s.node %q is duplicated", prefix, client.Node))
+		}
+		clientNodes[client.Node] = struct{}{}
+		checkID(issues, prefix+".clientId", client.ClientID)
+		if client.ClientID == "" {
+			*issues = append(*issues, prefix+".clientId must not be empty")
+		} else if _, exists := clientIDs[client.ClientID]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s.clientId %q is duplicated", prefix, client.ClientID))
+		}
+		clientIDs[client.ClientID] = struct{}{}
+		if !strings.HasPrefix(client.ClientSecret, "cailab-synthetic-") || len(client.ClientSecret) < 32 {
+			*issues = append(*issues, prefix+".clientSecret must be visibly synthetic and at least 32 characters")
+		}
+		validateOIDCStringSet(issues, prefix+".redirectUris", client.RedirectURIs, func(value string) bool {
+			parsed, err := url.Parse(value)
+			return err == nil && parsed.Scheme == "http" && parsed.Hostname() == "127.0.0.1" && parsed.Port() != "" && parsed.User == nil && parsed.Fragment == ""
+		}, "must contain only IPv4 loopback HTTP redirect URIs with explicit ports and no fragments")
+		if len(client.Audiences) != 1 {
+			*issues = append(*issues, prefix+".audiences must contain exactly one default audience in this profile")
+		}
+		audienceValues := make(map[string]struct{})
+		audienceNodes := make(map[string]struct{})
+		for j, audience := range client.Audiences {
+			audiencePrefix := fmt.Sprintf("%s.audiences[%d]", prefix, j)
+			checkReference(issues, audiencePrefix+".node", audience.Node, resources)
+			validateMicrosoftNodeTenant(issues, audiencePrefix+".node", audience.Node, provider.Tenant, resourceTenants)
+			parsed, err := url.Parse(audience.Value)
+			if err != nil || !((parsed.Scheme == "https" && parsed.Host != "") || (parsed.Scheme == "urn" && parsed.Opaque != "")) || parsed.Fragment != "" {
+				*issues = append(*issues, fmt.Sprintf("%s.value must be an absolute HTTPS or URN audience identifier without a fragment: %q", audiencePrefix, audience.Value))
+			}
+			if _, exists := audienceValues[audience.Value]; exists {
+				*issues = append(*issues, fmt.Sprintf("%s.value %q is duplicated", audiencePrefix, audience.Value))
+			}
+			audienceValues[audience.Value] = struct{}{}
+			if _, exists := audienceNodes[audience.Node]; exists {
+				*issues = append(*issues, fmt.Sprintf("%s.node %q is duplicated", audiencePrefix, audience.Node))
+			}
+			audienceNodes[audience.Node] = struct{}{}
+		}
+		validateOIDCStringSet(issues, prefix+".scopes", client.Scopes, func(value string) bool {
+			return value == "openid" || value == "profile" || value == "email"
+		}, "contains an unsupported scope")
+		if !containsString(client.Scopes, "openid") {
+			*issues = append(*issues, prefix+".scopes must include openid")
+		}
+	}
+
+	subjects := make(map[string]struct{})
+	subjectNodes := make(map[string]struct{})
+	for i, subject := range provider.Subjects {
+		prefix := fmt.Sprintf("spec.providers.oidc.subjects[%d]", i)
+		checkReference(issues, prefix+".node", subject.Node, principals)
+		validateMicrosoftNodeTenant(issues, prefix+".node", subject.Node, provider.Tenant, principalTenants)
+		if kind := principalKinds[subject.Node]; kind != "human" && kind != "agent" && kind != "workload" {
+			*issues = append(*issues, fmt.Sprintf("%s.node must reference a human, agent, or workload principal", prefix))
+		}
+		if _, exists := subjectNodes[subject.Node]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s.node %q is duplicated", prefix, subject.Node))
+		}
+		subjectNodes[subject.Node] = struct{}{}
+		checkID(issues, prefix+".subject", subject.Subject)
+		if subject.Subject == "" {
+			*issues = append(*issues, prefix+".subject must not be empty")
+		} else if _, exists := subjects[subject.Subject]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s.subject %q is duplicated", prefix, subject.Subject))
+		}
+		subjects[subject.Subject] = struct{}{}
+		validateGoogleEmail(issues, prefix+".email", subject.Email)
+		seenGroups := make(map[string]struct{})
+		for _, group := range subject.Groups {
+			checkReference(issues, prefix+".groups[]", group, principals)
+			validateMicrosoftNodeTenant(issues, prefix+".groups[]", group, provider.Tenant, principalTenants)
+			if principalKinds[group] != "group" {
+				*issues = append(*issues, fmt.Sprintf("%s.groups references non-group principal %q", prefix, group))
+			}
+			if _, exists := seenGroups[group]; exists {
+				*issues = append(*issues, fmt.Sprintf("%s.groups contains duplicate %q", prefix, group))
+			}
+			seenGroups[group] = struct{}{}
+		}
+	}
+}
+
+func validateOIDCStringSet(issues *[]string, field string, values []string, valid func(string) bool, invalidMessage string) {
+	if len(values) == 0 {
+		*issues = append(*issues, field+" must not be empty")
+		return
+	}
+	seen := make(map[string]struct{})
+	for _, value := range values {
+		if !valid(value) {
+			*issues = append(*issues, fmt.Sprintf("%s %s: %q", field, invalidMessage, value))
+		}
+		if _, exists := seen[value]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s contains duplicate %q", field, value))
+		}
+		seen[value] = struct{}{}
+	}
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func validateGoogleProvider(

@@ -144,6 +144,28 @@ func copyProviders(providers Providers) Providers {
 		})
 		result.Google = &google
 	}
+	if providers.OIDC != nil {
+		oidc := *providers.OIDC
+		oidc.Clients = make([]OIDCClient, len(providers.OIDC.Clients))
+		for i, client := range providers.OIDC.Clients {
+			oidc.Clients[i] = client
+			oidc.Clients[i].RedirectURIs = append([]string(nil), client.RedirectURIs...)
+			oidc.Clients[i].Audiences = append([]OIDCAudience(nil), client.Audiences...)
+			oidc.Clients[i].Scopes = append([]string(nil), client.Scopes...)
+			sort.Strings(oidc.Clients[i].RedirectURIs)
+			sort.Slice(oidc.Clients[i].Audiences, func(j, k int) bool { return oidc.Clients[i].Audiences[j].Value < oidc.Clients[i].Audiences[k].Value })
+			sort.Strings(oidc.Clients[i].Scopes)
+		}
+		oidc.Subjects = make([]OIDCSubject, len(providers.OIDC.Subjects))
+		for i, subject := range providers.OIDC.Subjects {
+			oidc.Subjects[i] = subject
+			oidc.Subjects[i].Groups = append([]string(nil), subject.Groups...)
+			sort.Strings(oidc.Subjects[i].Groups)
+		}
+		sort.Slice(oidc.Clients, func(i, j int) bool { return oidc.Clients[i].ClientID < oidc.Clients[j].ClientID })
+		sort.Slice(oidc.Subjects, func(i, j int) bool { return oidc.Subjects[i].Subject < oidc.Subjects[j].Subject })
+		result.OIDC = &oidc
+	}
 	return result
 }
 
@@ -160,6 +182,10 @@ func copyRuntimes(runtimes Runtimes) Runtimes {
 	if runtimes.Google != nil {
 		googleRuntime := *runtimes.Google
 		result.Google = &googleRuntime
+	}
+	if runtimes.OIDC != nil {
+		oidcRuntime := *runtimes.OIDC
+		result.OIDC = &oidcRuntime
 	}
 	return result
 }

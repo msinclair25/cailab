@@ -1,6 +1,6 @@
 # CloudAILab repository guidance
 
-CloudAILab is a local enterprise identity and AI-agent security range. M0 and the scoped M1 AWS/Floci IAM, STS, and S3 slice are complete. M2 contains development native Microsoft delegated-consent and Google Directory/Drive sharing slices; local OIDC, the complete cross-provider chain, and agent runtimes remain planned. Present only behavior covered by the implementation, integration tests, and compatibility matrices as available.
+CloudAILab is a local enterprise identity and AI-agent security range. M0 and the scoped M1 AWS/Floci IAM, STS, and S3 slice are complete. M2 contains development native Microsoft delegated-consent, Google Directory/Drive sharing, and local development OIDC slices; the complete cross-provider chain and agent runtimes remain planned. Present only behavior covered by the implementation, integration tests, and compatibility matrices as available.
 
 ## Before changing the project
 

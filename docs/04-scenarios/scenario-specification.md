@@ -9,7 +9,7 @@ status: draft
 
 A scenario is a versioned, reproducible enterprise topology plus a mission, intentional weaknesses, observable events, and deterministic verification rules.
 
-The normative schema is [schemas/scenario/v1alpha1.json](../../schemas/scenario/v1alpha1.json). Executable references are [scenarios/walking-skeleton/scenario.yaml](../../scenarios/walking-skeleton/scenario.yaml), [scenarios/aws-cross-account/scenario.yaml](../../scenarios/aws-cross-account/scenario.yaml), [scenarios/microsoft-consent/scenario.yaml](../../scenarios/microsoft-consent/scenario.yaml), and [scenarios/google-drive-sharing/scenario.yaml](../../scenarios/google-drive-sharing/scenario.yaml). This document explains the authoring contract but does not override the schema or typed validator.
+The normative schema is [schemas/scenario/v1alpha1.json](../../schemas/scenario/v1alpha1.json). Executable references are [scenarios/walking-skeleton/scenario.yaml](../../scenarios/walking-skeleton/scenario.yaml), [scenarios/aws-cross-account/scenario.yaml](../../scenarios/aws-cross-account/scenario.yaml), [scenarios/microsoft-consent/scenario.yaml](../../scenarios/microsoft-consent/scenario.yaml), [scenarios/google-drive-sharing/scenario.yaml](../../scenarios/google-drive-sharing/scenario.yaml), and [scenarios/local-oidc/scenario.yaml](../../scenarios/local-oidc/scenario.yaml). This document explains the authoring contract but does not override the schema or typed validator.
 
 ## Required sections
 
@@ -92,6 +92,9 @@ spec:
 - Google user, group, member, file, and permission IDs use the provider's scoped identifier syntax and map explicitly to canonical nodes.
 - Google member email addresses must reference declared users; Drive user/group permissions must reference the corresponding declared principal and file.
 - The current Google slice accepts direct `USER` group members and direct `user` or `group` Drive permissions with `reader`, `commenter`, or `writer` roles.
+- Local issuer clients map to canonical application, workload, or agent principals; subjects map to declared human, workload, or agent principals; group claims reference canonical groups.
+- Local issuer redirect URIs are IPv4 loopback HTTP URLs with explicit ports. Each client has one canonical audience resource in the current profile.
+- Code and token lifetimes are bounded by the schema. Scenarios cannot select algorithms, keys, listeners, arbitrary claims, or external redirect origins.
 
 ## Flagship scenario acceptance criteria
 

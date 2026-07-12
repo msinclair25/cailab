@@ -16,6 +16,7 @@ type fakeProviderManager struct {
 	startErr error
 	started  bool
 	stopped  bool
+	rotated  bool
 }
 
 func (f *fakeProviderManager) Start(_ context.Context, _ string, _ scenario.Compiled) ([]provider.Instance, error) {
@@ -33,6 +34,11 @@ func (f *fakeProviderManager) Stop(_ context.Context, _ string, _ []provider.Ins
 
 func (f *fakeProviderManager) Snapshot(_ context.Context, _ []provider.Instance, compiled scenario.Compiled) (scenario.Compiled, error) {
 	return compiled, nil
+}
+
+func (f *fakeProviderManager) RotateIdentity(_ context.Context, _ string, _ []provider.Instance) (provider.OIDCJWKSet, error) {
+	f.rotated = true
+	return provider.OIDCJWKSet{}, nil
 }
 
 func TestServicePersistsAndStopsProviderRuntime(t *testing.T) {
@@ -58,6 +64,12 @@ func TestServicePersistsAndStopsProviderRuntime(t *testing.T) {
 	}
 	if len(persisted.Runtimes) != 1 || persisted.Runtimes[0].Name != "test-runtime" {
 		t.Fatalf("persisted runtimes = %+v", persisted.Runtimes)
+	}
+	if _, err := service.RotateIdentity(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !manager.rotated {
+		t.Fatal("identity signing key was not rotated")
 	}
 	if _, err := service.Down(ctx); err != nil {
 		t.Fatal(err)
