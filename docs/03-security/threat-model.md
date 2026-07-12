@@ -60,6 +60,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-023 | A tool manifest hides shell behavior or is mistaken for authorization/isolation. | Commands are explicit argv vectors with no implicit shell concatenation; manifests are inert until explicit registration; authority and isolation declarations require separate deterministic evaluation and enforcement. |
 | TM-024 | Raw tool inputs, outputs, or credentials leak into an audit trace. | Decision events store canonical payload hashes by default; sensitive fields use fail-closed RFC 6901 redaction before persistence; later persistence requires dedicated regression tests. |
 | TM-025 | An agent inherits host credentials, floods diagnostics, violates protocol order, or survives a canceled session. | Absolute direct execution without a shell, explicit non-inherited environment, frame/message/stderr/time limits, direction and lifecycle validation, direct-child cancellation, bounded pipe cleanup, and wait-on-all-started-paths tests. |
+| TM-026 | Rule ordering, permissive manifests, failed audit writes, or stored-record mutation hides or widens an agent action. | Default deny, manifest permission ceiling, fixed deny-first precedence, evidence-before-response, transactional sequence/correlation constraints, canonical event hashes, chain/head verification, and mutation/deletion regression tests. |
 
 ## Security invariants
 
@@ -97,11 +98,12 @@ It does not assert containment for arbitrary agent processes unless an isolation
 
 ## M3 residual risk
 
-- The session controller can launch one explicitly configured direct subprocess through an internal API, but no supported public agent-run workflow or governed execution path exists yet.
+- The internal gateway evaluates resolved tool metadata and persists `not_executed` decision evidence, but no supported public agent-run workflow or tool execution path exists yet.
 - JSON Lines framing and direct-child ownership provide no authentication, encryption, filesystem isolation, syscall isolation, or network policy.
 - Cancellation targets the direct child. Independently detached descendants may outlive it until an isolation backend owns a process boundary.
 - An agent receives an empty environment by default but still runs with the launching OS user's ambient filesystem and network authority.
-- Tool input schemas are structurally constrained and hashed, but full input-instance evaluation enters with the gateway executor.
+- Tool input schemas are structurally constrained and hashed, but full input-instance evaluation enters with the executor.
+- The SQLite hash chain detects inconsistent stored records but is not tamper-proof against the launching OS account, which can rewrite both records and chain metadata.
 - Declared `none`, `loopback`, or filesystem restrictions are requirements, not verified isolation claims, until an execution backend enforces them.
 
 ## Review triggers

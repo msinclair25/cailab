@@ -136,6 +136,13 @@ VALUES(?, 'legacy', '0.1.0', 1, 'active', ?, '2026-07-11T00:00:00Z', '2026-07-11
 	if defaultValue != "'[]'" {
 		t.Fatalf("runtimes_json default = %q", defaultValue)
 	}
+	var eventColumns int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('agent_decision_events')`).Scan(&eventColumns); err != nil {
+		t.Fatal(err)
+	}
+	if eventColumns != 8 {
+		t.Fatalf("agent_decision_events columns = %d, want 8", eventColumns)
+	}
 	active, err := store.ActiveRun(ctx)
 	if err != nil {
 		t.Fatal(err)

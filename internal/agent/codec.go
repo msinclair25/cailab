@@ -54,6 +54,20 @@ func DecodeDecisionEvent(data []byte) (DecisionEvent, error) {
 	return event, nil
 }
 
+func DecodeGovernancePolicy(data []byte) (GovernancePolicy, error) {
+	if len(data) > MaxFrameBytes {
+		return GovernancePolicy{}, fmt.Errorf("governance policy exceeds %d bytes", MaxFrameBytes)
+	}
+	var policy GovernancePolicy
+	if err := decodeStrict(data, &policy); err != nil {
+		return GovernancePolicy{}, fmt.Errorf("decode governance policy: %w", err)
+	}
+	if err := ValidateGovernancePolicy(policy); err != nil {
+		return GovernancePolicy{}, err
+	}
+	return policy, nil
+}
+
 func DigestToolManifest(manifest ToolManifest) (string, error) {
 	if err := ValidateToolManifest(manifest); err != nil {
 		return "", err

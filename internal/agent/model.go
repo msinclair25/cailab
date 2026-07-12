@@ -10,9 +10,10 @@ const (
 	ProtocolVersion = "1.0"
 	MaxFrameBytes   = 1 << 20
 
-	ToolManifestKind  = "ToolManifest"
-	AgentRunKind      = "AgentRun"
-	DecisionEventKind = "DecisionEvent"
+	ToolManifestKind     = "ToolManifest"
+	AgentRunKind         = "AgentRun"
+	DecisionEventKind    = "DecisionEvent"
+	GovernancePolicyKind = "GovernancePolicy"
 )
 
 const (
@@ -63,6 +64,26 @@ type Permission struct {
 type Isolation struct {
 	Network    string `json:"network"`
 	Filesystem string `json:"filesystem"`
+}
+
+type GovernancePolicy struct {
+	APIVersion    string       `json:"apiVersion"`
+	Kind          string       `json:"kind"`
+	Version       string       `json:"version"`
+	DefaultEffect string       `json:"defaultEffect"`
+	Rules         []PolicyRule `json:"rules"`
+}
+
+type PolicyRule struct {
+	ID                     string   `json:"id"`
+	Effect                 string   `json:"effect"`
+	AgentID                string   `json:"agentId"`
+	Tool                   string   `json:"tool"`
+	Action                 string   `json:"action"`
+	Resource               string   `json:"resource"`
+	ResourceTenant         string   `json:"resourceTenant"`
+	ResourceClassification string   `json:"resourceClassification"`
+	Redactions             []string `json:"redactions,omitempty"`
 }
 
 type AgentRun struct {
@@ -137,6 +158,23 @@ type DecisionEvent struct {
 	Outcome       Outcome     `json:"outcome"`
 	InputHash     string      `json:"inputHash"`
 	OutputHash    string      `json:"outputHash,omitempty"`
+}
+
+// DecisionEventDraft contains a complete decision record except for the
+// append-only event identifier and sequence assigned by the evidence store.
+type DecisionEventDraft struct {
+	OccurredAt    time.Time
+	RunID         string
+	TrialID       string
+	CorrelationID string
+	Actor         ActorRef
+	Tool          ToolRef
+	Action        string
+	Resource      ResourceRef
+	Decision      Decision
+	Outcome       Outcome
+	InputHash     string
+	OutputHash    string
 }
 
 type ActorRef struct {
