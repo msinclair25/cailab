@@ -8,6 +8,10 @@ import (
 )
 
 var idPattern = regexp.MustCompile(`^[a-z][a-z0-9._:-]{0,127}$`)
+var awsAccountPattern = regexp.MustCompile(`^[0-9]{12}$`)
+var awsRoleNamePattern = regexp.MustCompile(`^[A-Za-z0-9_+=,.@-]{1,64}$`)
+var awsBucketNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$`)
+var awsRegionPattern = regexp.MustCompile(`^[a-z]{2}(-gov)?-[a-z]+-[0-9]$`)
 
 var (
 	providerTypes     = setOf("aws", "microsoft", "google", "local")
@@ -35,6 +39,7 @@ func Validate(s Scenario) error {
 	requireText(&issues, "metadata.version", s.Metadata.Version)
 	requireText(&issues, "metadata.title", s.Metadata.Title)
 	requireText(&issues, "spec.briefing", s.Spec.Briefing)
+	validateRuntimes(&issues, s.Spec.Runtimes)
 
 	if len(s.Spec.Objectives) == 0 {
 		issues = append(issues, "spec.objectives must contain at least one objective")
@@ -73,12 +78,18 @@ func Validate(s Scenario) error {
 	}
 
 	nodeIDs := make(map[string]struct{}, len(tenantIDs)+len(s.Spec.Principals)+len(s.Spec.Resources))
+	principalIDs := make(map[string]struct{}, len(s.Spec.Principals))
+	resourceIDs := make(map[string]struct{}, len(s.Spec.Resources))
+	principalTenants := make(map[string]string, len(s.Spec.Principals))
+	resourceTenants := make(map[string]string, len(s.Spec.Resources))
 	for id := range tenantIDs {
 		nodeIDs[id] = struct{}{}
 	}
 	for i, principal := range s.Spec.Principals {
 		prefix := fmt.Sprintf("spec.principals[%d]", i)
 		checkUniqueID(&issues, prefix+".id", principal.ID, nodeIDs)
+		principalIDs[principal.ID] = struct{}{}
+		principalTenants[principal.ID] = principal.Tenant
 		checkReference(&issues, prefix+".tenant", principal.Tenant, tenantIDs)
 		if _, ok := principalTypes[principal.Type]; !ok {
 			issues = append(issues, fmt.Sprintf("%s.type has unsupported value %q", prefix, principal.Type))
@@ -88,6 +99,8 @@ func Validate(s Scenario) error {
 	for i, resource := range s.Spec.Resources {
 		prefix := fmt.Sprintf("spec.resources[%d]", i)
 		checkUniqueID(&issues, prefix+".id", resource.ID, nodeIDs)
+		resourceIDs[resource.ID] = struct{}{}
+		resourceTenants[resource.ID] = resource.Tenant
 		checkReference(&issues, prefix+".tenant", resource.Tenant, tenantIDs)
 		requireText(&issues, prefix+".type", resource.Type)
 		requireText(&issues, prefix+".displayName", resource.DisplayName)
@@ -95,6 +108,7 @@ func Validate(s Scenario) error {
 			issues = append(issues, fmt.Sprintf("%s.classification has unsupported value %q", prefix, resource.Classification))
 		}
 	}
+	validateProviders(&issues, s.Spec.Providers, s.Spec.Runtimes, tenantIDs, principalIDs, resourceIDs, principalTenants, resourceTenants)
 
 	objectiveIDs := make(map[string]struct{})
 	for i, objective := range s.Spec.Objectives {
@@ -148,6 +162,160 @@ func Validate(s Scenario) error {
 	}
 	sort.Strings(issues)
 	return &ValidationError{Issues: issues}
+}
+
+func validateRuntimes(issues *[]string, runtimes Runtimes) {
+	if runtimes.AWS == nil {
+		return
+	}
+	if runtimes.AWS.Engine != "floci" {
+		*issues = append(*issues, fmt.Sprintf("spec.runtimes.aws.engine has unsupported value %q", runtimes.AWS.Engine))
+	}
+	if runtimes.AWS.Image != FlociImage {
+		*issues = append(*issues, fmt.Sprintf("spec.runtimes.aws.image must be the supported pinned image %q", FlociImage))
+	}
+}
+
+func validateProviders(
+	issues *[]string,
+	providers Providers,
+	runtimes Runtimes,
+	tenants, principals, resources map[string]struct{},
+	principalTenants, resourceTenants map[string]string,
+) {
+	if providers.AWS == nil {
+		return
+	}
+	if runtimes.AWS == nil {
+		*issues = append(*issues, "spec.providers.aws requires spec.runtimes.aws")
+	} else if !runtimes.AWS.IAMEnforcement {
+		*issues = append(*issues, "spec.providers.aws requires IAM enforcement")
+	}
+	awsProvider := providers.AWS
+	if !awsRegionPattern.MatchString(awsProvider.Region) {
+		*issues = append(*issues, fmt.Sprintf("spec.providers.aws.region has invalid value %q", awsProvider.Region))
+	}
+	if len(awsProvider.Accounts) == 0 {
+		*issues = append(*issues, "spec.providers.aws.accounts must contain at least one account")
+	}
+	accounts := make(map[string]AWSAccount)
+	accountPrincipals := make(map[string]AWSAccount)
+	for i, account := range awsProvider.Accounts {
+		prefix := fmt.Sprintf("spec.providers.aws.accounts[%d]", i)
+		if !awsAccountPattern.MatchString(account.ID) {
+			*issues = append(*issues, fmt.Sprintf("%s.id must be a 12-digit account ID", prefix))
+		}
+		if _, exists := accounts[account.ID]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s.id %q is duplicated", prefix, account.ID))
+		}
+		accounts[account.ID] = account
+		checkReference(issues, prefix+".tenant", account.Tenant, tenants)
+		checkReference(issues, prefix+".principal", account.Principal, principals)
+		if principalTenant, ok := principalTenants[account.Principal]; ok && principalTenant != account.Tenant {
+			*issues = append(*issues, fmt.Sprintf("%s.principal %q belongs to tenant %q, not %q", prefix, account.Principal, principalTenant, account.Tenant))
+		}
+		if _, exists := accountPrincipals[account.Principal]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s.principal %q is duplicated", prefix, account.Principal))
+		}
+		accountPrincipals[account.Principal] = account
+	}
+
+	roleKeys := make(map[string]struct{})
+	for i, role := range awsProvider.Roles {
+		prefix := fmt.Sprintf("spec.providers.aws.roles[%d]", i)
+		checkReference(issues, prefix+".node", role.Node, principals)
+		account, accountExists := accounts[role.Account]
+		if !accountExists {
+			*issues = append(*issues, fmt.Sprintf("%s.account references unknown AWS account %q", prefix, role.Account))
+		} else if nodeTenant, ok := principalTenants[role.Node]; ok && nodeTenant != account.Tenant {
+			*issues = append(*issues, fmt.Sprintf("%s.node %q belongs to tenant %q, not AWS account tenant %q", prefix, role.Node, nodeTenant, account.Tenant))
+		}
+		if !awsRoleNamePattern.MatchString(role.Name) {
+			*issues = append(*issues, fmt.Sprintf("%s.name has invalid IAM role name %q", prefix, role.Name))
+		}
+		roleKey := role.Account + ":" + role.Name
+		if _, exists := roleKeys[roleKey]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s duplicates role %q in account %q", prefix, role.Name, role.Account))
+		}
+		roleKeys[roleKey] = struct{}{}
+		if len(role.Trust) == 0 {
+			*issues = append(*issues, prefix+".trust must contain at least one principal")
+		}
+		seenTrust := make(map[string]struct{})
+		for _, trusted := range role.Trust {
+			if _, ok := accountPrincipals[trusted]; !ok {
+				*issues = append(*issues, fmt.Sprintf("%s.trust references unsupported principal %q", prefix, trusted))
+			}
+			if _, exists := seenTrust[trusted]; exists {
+				*issues = append(*issues, fmt.Sprintf("%s.trust contains duplicate %q", prefix, trusted))
+			}
+			seenTrust[trusted] = struct{}{}
+		}
+		validateAWSPolicies(issues, prefix+".policies", role.Policies)
+	}
+
+	bucketNames := make(map[string]struct{})
+	for i, bucket := range awsProvider.Buckets {
+		prefix := fmt.Sprintf("spec.providers.aws.buckets[%d]", i)
+		checkReference(issues, prefix+".node", bucket.Node, resources)
+		account, accountExists := accounts[bucket.Account]
+		if !accountExists {
+			*issues = append(*issues, fmt.Sprintf("%s.account references unknown AWS account %q", prefix, bucket.Account))
+		} else if nodeTenant, ok := resourceTenants[bucket.Node]; ok && nodeTenant != account.Tenant {
+			*issues = append(*issues, fmt.Sprintf("%s.node %q belongs to tenant %q, not AWS account tenant %q", prefix, bucket.Node, nodeTenant, account.Tenant))
+		}
+		if !awsBucketNamePattern.MatchString(bucket.Name) {
+			*issues = append(*issues, fmt.Sprintf("%s.name has invalid S3 bucket name %q", prefix, bucket.Name))
+		}
+		if _, exists := bucketNames[bucket.Name]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s.name %q is duplicated", prefix, bucket.Name))
+		}
+		bucketNames[bucket.Name] = struct{}{}
+		objectKeys := make(map[string]struct{})
+		for j, object := range bucket.Objects {
+			objectPrefix := fmt.Sprintf("%s.objects[%d]", prefix, j)
+			requireText(issues, objectPrefix+".key", object.Key)
+			if _, exists := objectKeys[object.Key]; exists {
+				*issues = append(*issues, fmt.Sprintf("%s.key %q is duplicated", objectPrefix, object.Key))
+			}
+			objectKeys[object.Key] = struct{}{}
+		}
+	}
+}
+
+func validateAWSPolicies(issues *[]string, prefix string, policies []AWSInlinePolicy) {
+	policyNames := make(map[string]struct{})
+	for i, policy := range policies {
+		policyPrefix := fmt.Sprintf("%s[%d]", prefix, i)
+		if !awsRoleNamePattern.MatchString(policy.Name) {
+			*issues = append(*issues, fmt.Sprintf("%s.name has invalid policy name %q", policyPrefix, policy.Name))
+		}
+		if _, exists := policyNames[policy.Name]; exists {
+			*issues = append(*issues, fmt.Sprintf("%s.name %q is duplicated", policyPrefix, policy.Name))
+		}
+		policyNames[policy.Name] = struct{}{}
+		if len(policy.Statements) == 0 {
+			*issues = append(*issues, policyPrefix+".statements must not be empty")
+		}
+		for j, statement := range policy.Statements {
+			statementPrefix := fmt.Sprintf("%s.statements[%d]", policyPrefix, j)
+			if statement.Effect != "Allow" && statement.Effect != "Deny" {
+				*issues = append(*issues, fmt.Sprintf("%s.effect has unsupported value %q", statementPrefix, statement.Effect))
+			}
+			if len(statement.Actions) == 0 {
+				*issues = append(*issues, statementPrefix+".actions must not be empty")
+			}
+			if len(statement.Resources) == 0 {
+				*issues = append(*issues, statementPrefix+".resources must not be empty")
+			}
+			for _, action := range statement.Actions {
+				requireText(issues, statementPrefix+".actions[]", action)
+			}
+			for _, resource := range statement.Resources {
+				requireText(issues, statementPrefix+".resources[]", resource)
+			}
+		}
+	}
 }
 
 func setOf(values ...string) map[string]struct{} {

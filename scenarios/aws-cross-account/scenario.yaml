@@ -1,0 +1,116 @@
+apiVersion: cloudailab.dev/v1alpha1
+kind: Scenario
+metadata:
+  name: aws-cross-account
+  version: 0.1.0
+  title: Cross-Account Acquisition Data Trust
+spec:
+  seed: 101
+  briefing: >-
+    A parent-company account can assume a reader role in an acquired-company
+    account and reach restricted acquisition data. Inspect the path, prove the
+    access with the AWS CLI, then narrow the role trust policy so the acquired
+    account retains access while the parent account no longer has a path.
+  runtimes:
+    aws:
+      engine: floci
+      image: floci/floci:1.5.32@sha256:4f69631e560120d79ad82d2af9f7dda8c6ef7ecbbae0c43ddcffa109c6588a15
+      iamEnforcement: true
+  providers:
+    aws:
+      region: us-east-1
+      accounts:
+        - id: "111111111111"
+          tenant: northstar-parent
+          principal: aws:parent-root
+        - id: "222222222222"
+          tenant: northstar-acquired
+          principal: aws:acquired-root
+      roles:
+        - node: aws:acquisition-reader
+          account: "222222222222"
+          name: AcquisitionDataReader
+          trust:
+            - aws:parent-root
+            - aws:acquired-root
+          policies:
+            - name: ReadAcquisitionData
+              statements:
+                - effect: Allow
+                  actions:
+                    - s3:GetObject
+                  resources:
+                    - arn:aws:s3:::cailab-acquisition-data/*
+      buckets:
+        - node: aws:acquisition-data
+          account: "222222222222"
+          name: cailab-acquisition-data
+          objects:
+            - key: restricted/acquisition-summary.txt
+              data: >-
+                SYNTHETIC TRAINING DATA: Project Juniper acquisition review.
+  objectives:
+    - id: inspect-parent-path
+      description: Explain the parent-account path to the restricted S3 data.
+    - id: prove-access
+      description: Assume the reader role and retrieve the synthetic object with the AWS CLI.
+    - id: narrow-trust
+      description: Remove the parent account from the role trust policy.
+    - id: preserve-legitimate-access
+      description: Keep the acquired account's legitimate reader path intact.
+  tenants:
+    - id: northstar-parent
+      name: Northstar Parent
+      providers: [aws]
+    - id: northstar-acquired
+      name: Northstar Acquisition
+      providers: [aws]
+  principals:
+    - id: aws:parent-root
+      tenant: northstar-parent
+      type: service
+      displayName: Parent Account Root
+    - id: aws:acquired-root
+      tenant: northstar-acquired
+      type: service
+      displayName: Acquired Account Root
+    - id: aws:acquisition-reader
+      tenant: northstar-acquired
+      type: workload
+      displayName: Acquisition Data Reader Role
+  resources:
+    - id: aws:acquisition-data
+      tenant: northstar-acquired
+      type: s3_bucket
+      displayName: Acquisition Data
+      classification: restricted
+  relationships:
+    - id: trust:parent-acquisition-reader
+      from: aws:parent-root
+      to: aws:acquisition-reader
+      type: federates_as
+      actions: [sts:AssumeRole]
+    - id: trust:acquired-acquisition-reader
+      from: aws:acquired-root
+      to: aws:acquisition-reader
+      type: federates_as
+      actions: [sts:AssumeRole]
+    - id: access:reader-acquisition-data
+      from: aws:acquisition-reader
+      to: aws:acquisition-data
+      type: can_access
+      actions: [s3:GetObject]
+  verification:
+    invariants:
+      - id: parent-path-closed
+        type: path_absent
+        from: aws:parent-root
+        to: aws:acquisition-data
+        severity: high
+        description: The parent account must not retain a path to restricted acquisition data.
+      - id: acquired-path-preserved
+        type: path_exists
+        from: aws:acquired-root
+        to: aws:acquisition-data
+        severity: high
+        description: The acquired account must retain its legitimate reader path.

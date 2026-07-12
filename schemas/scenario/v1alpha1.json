@@ -34,6 +34,8 @@
       "properties": {
         "seed": { "type": "integer" },
         "briefing": { "type": "string", "minLength": 1 },
+        "runtimes": { "$ref": "#/$defs/runtimes" },
+        "providers": { "$ref": "#/$defs/providers" },
         "objectives": {
           "type": "array",
           "minItems": 1,
@@ -85,6 +87,136 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "runtimes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aws": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["engine", "image", "iamEnforcement"],
+          "properties": {
+            "engine": { "const": "floci" },
+            "image": {
+              "const": "floci/floci:1.5.32@sha256:4f69631e560120d79ad82d2af9f7dda8c6ef7ecbbae0c43ddcffa109c6588a15"
+            },
+            "iamEnforcement": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aws": { "$ref": "#/$defs/awsProvider" }
+      }
+    },
+    "awsProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["region", "accounts", "roles", "buckets"],
+      "properties": {
+        "region": { "type": "string", "pattern": "^[a-z]{2}(-gov)?-[a-z]+-[0-9]$" },
+        "accounts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/awsAccount" }
+        },
+        "roles": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/awsRole" }
+        },
+        "buckets": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/awsBucket" }
+        }
+      }
+    },
+    "awsAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "tenant", "principal"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[0-9]{12}$" },
+        "tenant": { "$ref": "#/$defs/id" },
+        "principal": { "$ref": "#/$defs/id" }
+      }
+    },
+    "awsRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "account", "name", "trust"],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" },
+        "account": { "type": "string", "pattern": "^[0-9]{12}$" },
+        "name": { "type": "string", "pattern": "^[A-Za-z0-9_+=,.@-]{1,64}$" },
+        "trust": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "policies": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/awsInlinePolicy" }
+        }
+      }
+    },
+    "awsInlinePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "statements"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Za-z0-9_+=,.@-]{1,64}$" },
+        "statements": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/awsPolicyStatement" }
+        }
+      }
+    },
+    "awsPolicyStatement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effect", "actions", "resources"],
+      "properties": {
+        "effect": { "enum": ["Allow", "Deny"] },
+        "actions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "resources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "awsBucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node", "account", "name"],
+      "properties": {
+        "node": { "$ref": "#/$defs/id" },
+        "account": { "type": "string", "pattern": "^[0-9]{12}$" },
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$" },
+        "objects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/awsObject" }
+        }
+      }
+    },
+    "awsObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "data"],
+      "properties": {
+        "key": { "type": "string", "minLength": 1 },
+        "data": { "type": "string" }
       }
     },
     "tenant": {

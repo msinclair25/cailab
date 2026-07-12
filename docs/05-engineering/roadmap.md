@@ -9,6 +9,8 @@ Milestones are capability gates, not date commitments. This document is the conc
 
 ## M0 — Contracts and walking skeleton
 
+**Status:** complete.
+
 - Accept the initial charter, requirements, and ADRs.
 - Define the `v1alpha1` scenario schema.
 - Define canonical graph types and stable identifiers.
@@ -18,6 +20,8 @@ Milestones are capability gates, not date commitments. This document is the conc
 **Exit:** a minimal scenario compiles, starts a local control plane, verifies one invariant, and cleans up.
 
 ## M1 — AWS identity vertical slice
+
+**Status:** in development; the first IAM/STS/S3 trust-remediation workflow is executable.
 
 - Integrate pinned Floci runtime.
 - Support two AWS accounts and selected IAM, STS, and S3 operations.

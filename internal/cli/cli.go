@@ -11,11 +11,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/msinclair25/cailab/internal/app"
+	"github.com/msinclair25/cailab/internal/provider"
 	"github.com/msinclair25/cailab/internal/scenario"
 	"github.com/msinclair25/cailab/internal/state"
 	"github.com/msinclair25/cailab/internal/verify"
@@ -143,7 +145,12 @@ func (c *CLI) runDoctor(ctx context.Context, args []string) error {
 			}
 			checks = append(checks, check{Name: "docker-engine", Status: "fail", Detail: detail})
 		} else {
-			checks = append(checks, check{Name: "docker-engine", Status: "pass", Detail: "server " + strings.TrimSpace(string(output))})
+			version := strings.TrimSpace(string(output))
+			if dockerVersionSupported(version) {
+				checks = append(checks, check{Name: "docker-engine", Status: "pass", Detail: "server " + version})
+			} else {
+				checks = append(checks, check{Name: "docker-engine", Status: "fail", Detail: "server " + version + "; CloudAILab requires Docker 20.10+"})
+			}
 		}
 	}
 
@@ -175,6 +182,19 @@ func (c *CLI) runDoctor(ctx context.Context, args []string) error {
 		return errors.New("one or more prerequisite checks failed")
 	}
 	return nil
+}
+
+func dockerVersionSupported(version string) bool {
+	parts := strings.SplitN(version, ".", 3)
+	if len(parts) < 2 {
+		return false
+	}
+	major, majorErr := strconv.Atoi(parts[0])
+	minor, minorErr := strconv.Atoi(parts[1])
+	if majorErr != nil || minorErr != nil {
+		return false
+	}
+	return major > 20 || major == 20 && minor >= 10
 }
 
 func (c *CLI) runScenario(args []string) error {
@@ -261,7 +281,12 @@ func (c *CLI) runUp(ctx context.Context, args []string) error {
 	fmt.Fprintf(c.stdout, "✓ scenario validated and compiled\n")
 	fmt.Fprintf(c.stdout, "✓ run %s is active\n", run.ID)
 	fmt.Fprintf(c.stdout, "  nodes: %d, relationships: %d, invariants: %d\n", len(run.Compiled.Nodes), len(run.Compiled.Edges), len(run.Compiled.Invariants))
-	fmt.Fprintln(c.stdout, "  M0 mode: provider runtimes are not started yet")
+	if len(run.Runtimes) == 0 {
+		fmt.Fprintln(c.stdout, "  M0 mode: provider runtimes are not started")
+	}
+	for _, runtime := range run.Runtimes {
+		fmt.Fprintf(c.stdout, "  %s endpoint: %s\n", strings.ToUpper(runtime.Provider), runtime.Endpoint)
+	}
 	fmt.Fprintln(c.stdout, "\nRun `cailab mission` to inspect the lab.")
 	return nil
 }
@@ -288,6 +313,9 @@ func (c *CLI) runStatus(ctx context.Context, args []string) error {
 	fmt.Fprintf(c.stdout, "Status:    %s\n", run.Status)
 	fmt.Fprintf(c.stdout, "Seed:      %d\n", run.Seed)
 	fmt.Fprintf(c.stdout, "Digest:    %s\n", run.Compiled.Digest)
+	for _, runtime := range run.Runtimes {
+		fmt.Fprintf(c.stdout, "Runtime:   %s/%s %s (%s)\n", runtime.Provider, runtime.Engine, runtime.Endpoint, runtime.Status)
+	}
 	return nil
 }
 
@@ -409,7 +437,7 @@ func (c *CLI) runReset(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(c.stdout, "✓ run %s restored to its compiled M0 state\n", run.ID)
+	fmt.Fprintf(c.stdout, "✓ run %s restored to its compiled state\n", run.ID)
 	return nil
 }
 
@@ -428,6 +456,10 @@ func (c *CLI) runDown(ctx context.Context, args []string) error {
 	defer closeStore()
 	run, err := service.Down(ctx)
 	if err != nil {
+		if errors.Is(err, state.ErrNoActiveRun) {
+			fmt.Fprintln(c.stdout, "✓ no active run")
+			return nil
+		}
 		return err
 	}
 	fmt.Fprintf(c.stdout, "✓ run %s stopped\n", run.ID)
@@ -455,7 +487,7 @@ func (c *CLI) openService(ctx context.Context, stateDir string) (*app.Service, f
 	if err != nil {
 		return nil, nil, err
 	}
-	return app.New(store), func() { _ = store.Close() }, nil
+	return app.New(store, provider.NewDockerManager()), func() { _ = store.Close() }, nil
 }
 
 func newFlagSet(name string, output io.Writer) *flag.FlagSet {

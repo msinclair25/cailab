@@ -3,6 +3,7 @@ package scenario
 const (
 	APIVersion = "cloudailab.dev/v1alpha1"
 	Kind       = "Scenario"
+	FlociImage = "floci/floci:1.5.32@sha256:4f69631e560120d79ad82d2af9f7dda8c6ef7ecbbae0c43ddcffa109c6588a15"
 )
 
 // Scenario is the author-facing, versioned description of a CloudAILab lab.
@@ -22,12 +23,72 @@ type Metadata struct {
 type Spec struct {
 	Seed          int64          `json:"seed" yaml:"seed"`
 	Briefing      string         `json:"briefing" yaml:"briefing"`
+	Runtimes      Runtimes       `json:"runtimes,omitempty" yaml:"runtimes,omitempty"`
+	Providers     Providers      `json:"providers,omitempty" yaml:"providers,omitempty"`
 	Objectives    []Objective    `json:"objectives" yaml:"objectives"`
 	Tenants       []Tenant       `json:"tenants" yaml:"tenants"`
 	Principals    []Principal    `json:"principals" yaml:"principals"`
 	Resources     []Resource     `json:"resources" yaml:"resources"`
 	Relationships []Relationship `json:"relationships" yaml:"relationships"`
 	Verification  Verification   `json:"verification" yaml:"verification"`
+}
+
+type Runtimes struct {
+	AWS *AWSRuntime `json:"aws,omitempty" yaml:"aws,omitempty"`
+}
+
+type AWSRuntime struct {
+	Engine         string `json:"engine" yaml:"engine"`
+	Image          string `json:"image" yaml:"image"`
+	IAMEnforcement bool   `json:"iamEnforcement" yaml:"iamEnforcement"`
+}
+
+type Providers struct {
+	AWS *AWSProvider `json:"aws,omitempty" yaml:"aws,omitempty"`
+}
+
+type AWSProvider struct {
+	Region   string       `json:"region" yaml:"region"`
+	Accounts []AWSAccount `json:"accounts" yaml:"accounts"`
+	Roles    []AWSRole    `json:"roles" yaml:"roles"`
+	Buckets  []AWSBucket  `json:"buckets" yaml:"buckets"`
+}
+
+type AWSAccount struct {
+	ID        string `json:"id" yaml:"id"`
+	Tenant    string `json:"tenant" yaml:"tenant"`
+	Principal string `json:"principal" yaml:"principal"`
+}
+
+type AWSRole struct {
+	Node     string            `json:"node" yaml:"node"`
+	Account  string            `json:"account" yaml:"account"`
+	Name     string            `json:"name" yaml:"name"`
+	Trust    []string          `json:"trust" yaml:"trust"`
+	Policies []AWSInlinePolicy `json:"policies,omitempty" yaml:"policies,omitempty"`
+}
+
+type AWSInlinePolicy struct {
+	Name       string               `json:"name" yaml:"name"`
+	Statements []AWSPolicyStatement `json:"statements" yaml:"statements"`
+}
+
+type AWSPolicyStatement struct {
+	Effect    string   `json:"effect" yaml:"effect"`
+	Actions   []string `json:"actions" yaml:"actions"`
+	Resources []string `json:"resources" yaml:"resources"`
+}
+
+type AWSBucket struct {
+	Node    string      `json:"node" yaml:"node"`
+	Account string      `json:"account" yaml:"account"`
+	Name    string      `json:"name" yaml:"name"`
+	Objects []AWSObject `json:"objects,omitempty" yaml:"objects,omitempty"`
+}
+
+type AWSObject struct {
+	Key  string `json:"key" yaml:"key"`
+	Data string `json:"data" yaml:"data"`
 }
 
 type Objective struct {
@@ -85,6 +146,8 @@ type Compiled struct {
 	Title           string         `json:"title"`
 	Seed            int64          `json:"seed"`
 	Briefing        string         `json:"briefing"`
+	Runtimes        Runtimes       `json:"runtimes,omitempty"`
+	Providers       Providers      `json:"providers,omitempty"`
 	Objectives      []Objective    `json:"objectives"`
 	Nodes           []Node         `json:"nodes"`
 	Edges           []Relationship `json:"edges"`

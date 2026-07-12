@@ -1,6 +1,6 @@
 ---
 title: System Architecture
-status: proposed
+status: active
 ---
 
 # System architecture
@@ -60,17 +60,19 @@ flowchart TD
 |---|---|---|
 | Control plane | Go | Portable CLI, concurrency, static distribution. |
 | Canonical state | Embedded SQLite | Transactions, snapshots, diffs, and no separate database. |
-| AWS runtime | Floci | Local AWS-shaped services and multi-account support. |
+| AWS runtime | Allowlisted, digest-pinned Floci through Docker | Local AWS-shaped IAM/STS/S3 services, multi-account support, live snapshots, and bounded compatibility claims. |
 | Microsoft surface | Native scoped facade | Avoid mandatory global proxy and certificate setup. |
 | Google surface | Native scoped facade generated from selected Discovery contracts | Focus implementation on scenario-required operations. |
 | Local federation | Embedded OIDC issuer and policy evaluator | Reproducible tokens and cross-provider trust semantics. |
 | Reports | Markdown, JSON, JUnit | Obsidian/GitHub readability and CI integration. |
 
-These are proposed decisions. Accepted choices are recorded in ADRs.
+Accepted choices and their constraints are recorded in ADRs.
 
 ## Runtime deployment
 
 The target default is one `cailab` binary plus Docker or Podman. The binary runs embedded services and manages pinned external containers. Transparent HTTPS interception, host certificate installation, and hosted AI are optional advanced modes.
+
+M1 currently tests Docker only. Floci runs as an unprivileged user with dropped capabilities, resource limits, no Docker socket mount, and a random loopback-only API port. Podman remains a target rather than an implemented compatibility claim.
 
 ## Compatibility policy
 

@@ -1,7 +1,7 @@
 ---
 title: Technical Basis and Source Register
 status: active
-last_reviewed: 2026-07-11
+last_reviewed: 2026-07-12
 ---
 
 # Technical basis and source register
@@ -14,6 +14,8 @@ This register records external evidence that materially affects architecture, sc
 
 | Area | Primary source | Finding | Plan implication | Review trigger |
 |---|---|---|---|---|
+| Floci release | [Floci 1.5.32 release](https://github.com/floci-io/floci/releases/tag/1.5.32), [installation](https://floci.io/floci/getting-started/installation/), [license](https://github.com/floci-io/floci/blob/main/LICENSE) | The current reviewed release is MIT-licensed and published for Linux amd64 and arm64. The reviewed OCI index digest is `sha256:4f69631e560120d79ad82d2af9f7dda8c6ef7ecbbae0c43ddcffa109c6588a15`. | Allowlist the exact tag and digest in code/schema; review license, digest, compatibility, and tests on every upgrade. | On Floci upgrade |
+| Floci IAM | [Floci IAM documentation](https://floci.io/floci/services/iam/) | IAM enforcement is opt-in. It evaluates identity, session, and boundary policies, but unknown keys and unmapped operations are permissive; resource policies and `NotPrincipal` are unsupported. | Enable enforcement, use only declared synthetic identities, and bound every authorization claim in the compatibility matrix. | On Floci upgrade or M1 claim change |
 | Floci STS | [Floci STS documentation](https://floci.io/floci/services/sts/) | IAM enforcement is opt-in; STS trust evaluation omits `Condition` blocks and caller-side `sts:AssumeRole` authorization. | CloudAILab owns authoritative scenario policy semantics and documents gaps. | Before M1 and on Floci upgrade |
 | Floci accounts | [Floci multi-account isolation](https://floci.io/floci/configuration/multi-account/) | Twelve-digit access-key IDs select account namespaces; temporary credentials route to the assumed account; signature validation is off by default. | Use deliberate test credentials and explicitly configure signature behavior. | Before M1 and on Floci upgrade |
 | AWS policy semantics | [AWS IAM policy evaluation logic](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html) | AWS combines multiple policy types, uses implicit deny by default, and gives applicable explicit denies precedence. | Model only declared IAM semantics, preserve deny precedence, and document every omitted policy type. | Before M1 policy claims |
@@ -46,6 +48,7 @@ This register records external evidence that materially affects architecture, sc
 | Go fuzzing | [Go fuzzing](https://go.dev/doc/security/fuzz/) | Fuzz targets should be fast, deterministic, and free of persistent cross-call state. | Apply fuzzing to parsers, policies, identifiers, tokens, and event decoding. | When adding untrusted input surface |
 | YAML parser | [`go.yaml.in/yaml/v3`](https://pkg.go.dev/go.yaml.in/yaml/v3) | The package is maintained by the YAML organization and supports strict known-field decoding. | Pin the parser and reject unknown scenario fields. | On parser upgrade |
 | SQLite driver | [`modernc.org/sqlite`](https://pkg.go.dev/modernc.org/sqlite) | The driver provides a CGO-free `database/sql` implementation across the target desktop platforms. | Use it for local transactional state and verify every target in CI. | On driver or Go upgrade |
+| AWS SDK for Go | [AWS SDK for Go v2 documentation](https://docs.aws.amazon.com/sdk-for-go/v2/developer-guide/welcome.html) | The official v2 SDK supports service-specific clients, static credential providers, and custom service endpoints. | Use pinned IAM, STS, and S3 modules for typed hydration and contract tests; never discover host AWS credentials. | On SDK upgrade |
 | Workflow pinning | [GitHub Actions settings](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository) | Repositories can require actions to be pinned to full-length commit SHAs. | Pin actions and minimize workflow permissions from the first workflow. | On workflow addition/update |
 | Build provenance | [GitHub artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations) | GitHub supports provenance attestations for binaries, images, and SBOMs. | M4 release artifacts include checksums, SBOM, and attestations. | Before M4 release |
 | Provenance model | [SLSA provenance](https://slsa.dev/spec/v1.2/provenance) | Provenance links artifacts to where, when, and how they were produced. | Release documentation explains artifact verification and build origin. | On SLSA spec change |

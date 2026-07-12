@@ -1,7 +1,7 @@
 ---
 title: Quality Strategy
 status: draft
-last_reviewed: 2026-07-11
+last_reviewed: 2026-07-12
 ---
 
 # Quality strategy
@@ -123,7 +123,7 @@ GitHub Actions receive minimum permissions and third-party actions are pinned to
 
 ## Coverage policy
 
-Coverage is diagnostic evidence, not the definition of correctness. M0 will establish baselines before numeric thresholds are chosen. Regardless of percentage:
+Coverage is diagnostic evidence, not the definition of correctness. M0 established the initial baseline; numeric thresholds remain deferred until provider and agent packages make a repository-wide percentage meaningful. Regardless of percentage:
 
 - Every security invariant has positive and negative tests.
 - Every fixed security defect has a regression test.

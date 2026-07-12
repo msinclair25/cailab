@@ -90,6 +90,35 @@ func TestValidateReportsSortedIssues(t *testing.T) {
 	}
 }
 
+func TestRuntimeImageMustBeDigestPinned(t *testing.T) {
+	t.Parallel()
+	withRuntime := strings.Replace(validYAML, "  objectives:\n", `  runtimes:
+    aws:
+      engine: floci
+      image: floci/floci:1.5.32@sha256:4f69631e560120d79ad82d2af9f7dda8c6ef7ecbbae0c43ddcffa109c6588a15
+      iamEnforcement: true
+  objectives:
+`, 1)
+	s, err := Decode([]byte(withRuntime), ".yaml")
+	if err != nil {
+		t.Fatalf("Decode() pinned runtime error = %v", err)
+	}
+	compiled, err := Compile(s, s.Spec.Seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Runtimes.AWS == nil || !compiled.Runtimes.AWS.IAMEnforcement {
+		t.Fatalf("compiled runtime = %+v", compiled.Runtimes.AWS)
+	}
+
+	unpinned := strings.Replace(withRuntime,
+		FlociImage, "floci/floci:latest", 1)
+	_, err = Decode([]byte(unpinned), ".yaml")
+	if err == nil || !strings.Contains(err.Error(), "supported pinned image") {
+		t.Fatalf("Decode() unpinned runtime error = %v", err)
+	}
+}
+
 func TestCompileIsDeterministic(t *testing.T) {
 	t.Parallel()
 	s, err := Decode([]byte(validYAML), ".yaml")

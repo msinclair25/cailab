@@ -47,6 +47,8 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SEC-004 | Downloads shall use pinned versions and integrity verification. |
 | NFR-SEC-005 | Hosted model calls shall be disabled by default and shall not receive secrets or scenario data implicitly. |
 | NFR-SEC-006 | Agent execution shall not be described as isolated unless network and filesystem boundaries are enforced. |
+| NFR-SEC-007 | Declarative scenarios shall not select executable provider images outside a code-owned allowlist. |
+| NFR-SEC-008 | Runtime cleanup shall verify CloudAILab ownership and run identity before removing host resources. |
 
 ### Reliability and reproducibility
 

@@ -52,7 +52,8 @@ func Compile(s Scenario, seed int64) (Compiled, error) {
 		SchemaVersion: APIVersion,
 		ScenarioName:  s.Metadata.Name, ScenarioVersion: s.Metadata.Version,
 		Title: s.Metadata.Title, Seed: seed, Briefing: s.Spec.Briefing,
-		Objectives: objectives, Nodes: nodes, Edges: edges, Invariants: invariants,
+		Runtimes: copyRuntimes(s.Spec.Runtimes), Providers: copyProviders(s.Spec.Providers), Objectives: objectives,
+		Nodes: nodes, Edges: edges, Invariants: invariants,
 	}
 	digest, err := digestCompiled(compiled)
 	if err != nil {
@@ -60,6 +61,64 @@ func Compile(s Scenario, seed int64) (Compiled, error) {
 	}
 	compiled.Digest = digest
 	return compiled, nil
+}
+
+func copyProviders(providers Providers) Providers {
+	result := Providers{}
+	if providers.AWS == nil {
+		return result
+	}
+	awsProvider := *providers.AWS
+	awsProvider.Accounts = append([]AWSAccount(nil), providers.AWS.Accounts...)
+	sort.Slice(awsProvider.Accounts, func(i, j int) bool { return awsProvider.Accounts[i].ID < awsProvider.Accounts[j].ID })
+	awsProvider.Roles = make([]AWSRole, len(providers.AWS.Roles))
+	for i, role := range providers.AWS.Roles {
+		awsProvider.Roles[i] = role
+		awsProvider.Roles[i].Trust = append([]string(nil), role.Trust...)
+		sort.Strings(awsProvider.Roles[i].Trust)
+		awsProvider.Roles[i].Policies = make([]AWSInlinePolicy, len(role.Policies))
+		for j, policy := range role.Policies {
+			awsProvider.Roles[i].Policies[j] = policy
+			awsProvider.Roles[i].Policies[j].Statements = make([]AWSPolicyStatement, len(policy.Statements))
+			for k, statement := range policy.Statements {
+				awsProvider.Roles[i].Policies[j].Statements[k] = statement
+				awsProvider.Roles[i].Policies[j].Statements[k].Actions = append([]string(nil), statement.Actions...)
+				awsProvider.Roles[i].Policies[j].Statements[k].Resources = append([]string(nil), statement.Resources...)
+				sort.Strings(awsProvider.Roles[i].Policies[j].Statements[k].Actions)
+				sort.Strings(awsProvider.Roles[i].Policies[j].Statements[k].Resources)
+			}
+		}
+		sort.Slice(awsProvider.Roles[i].Policies, func(j, k int) bool {
+			return awsProvider.Roles[i].Policies[j].Name < awsProvider.Roles[i].Policies[k].Name
+		})
+	}
+	sort.Slice(awsProvider.Roles, func(i, j int) bool {
+		left, right := awsProvider.Roles[i], awsProvider.Roles[j]
+		return left.Account < right.Account || left.Account == right.Account && left.Name < right.Name
+	})
+	awsProvider.Buckets = make([]AWSBucket, len(providers.AWS.Buckets))
+	for i, bucket := range providers.AWS.Buckets {
+		awsProvider.Buckets[i] = bucket
+		awsProvider.Buckets[i].Objects = append([]AWSObject(nil), bucket.Objects...)
+		sort.Slice(awsProvider.Buckets[i].Objects, func(j, k int) bool {
+			return awsProvider.Buckets[i].Objects[j].Key < awsProvider.Buckets[i].Objects[k].Key
+		})
+	}
+	sort.Slice(awsProvider.Buckets, func(i, j int) bool {
+		left, right := awsProvider.Buckets[i], awsProvider.Buckets[j]
+		return left.Account < right.Account || left.Account == right.Account && left.Name < right.Name
+	})
+	result.AWS = &awsProvider
+	return result
+}
+
+func copyRuntimes(runtimes Runtimes) Runtimes {
+	result := Runtimes{}
+	if runtimes.AWS != nil {
+		awsRuntime := *runtimes.AWS
+		result.AWS = &awsRuntime
+	}
+	return result
 }
 
 func digestCompiled(compiled Compiled) (string, error) {

@@ -15,6 +15,7 @@ ADRs record significant decisions that affect system structure, security, compat
 - [ADR-0004: Scenario-driven compatibility](0004-scenario-driven-compatibility.md)
 - [ADR-0005: CGO-free SQLite state](0005-cgo-free-sqlite-state.md)
 - [ADR-0006: Built-in invariant predicates before a policy DSL](0006-built-in-invariant-predicates.md)
+- [ADR-0007: Allowlisted and digest-pinned provider runtimes](0007-allowlisted-digest-pinned-runtimes.md)
 
 ## Lifecycle
 
