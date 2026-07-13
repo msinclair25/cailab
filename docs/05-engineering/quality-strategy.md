@@ -114,6 +114,7 @@ The Go project recommends govulncheck, fuzzing, and the race detector as complem
 - Targeted integration tests when affected paths change
 - Digest-pinned CI image build, final-image contract inspection, and Docker `none` network walking-skeleton demo
 - Multi-target linked-module inventory comparison and release legal-bundle tests
+- Portfolio-demo orchestration tests for exact candidate identity, expected failure handling, loopback-only remediation, and cleanup; the complete workflow is rehearsed against the audited candidate before publication
 
 ### Default branch and scheduled
 

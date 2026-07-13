@@ -203,6 +203,7 @@ For source builds and future archives, start with [installation](docs/07-guides/
 - [Troubleshooting](docs/07-guides/troubleshooting.md)
 - [Upgrading](docs/07-guides/upgrading.md)
 - [Portfolio demo runbook](docs/07-guides/portfolio-demo.md)
+- [Portfolio demo transcript and publication copy](docs/07-guides/portfolio-demo-transcript.md)
 - [AWS cross-account lab](docs/07-guides/aws-cross-account-lab.md)
 - [AWS/Floci compatibility matrix](docs/07-compatibility/aws-floci-1.5.32.md)
 - [Microsoft consent lab](docs/07-guides/microsoft-consent-lab.md)

@@ -11,10 +11,29 @@ This is the recording-ready script for a concise CloudAILab portfolio demonstrat
 ## Recording prerequisites
 
 - A verified release-candidate binary or reviewed source build
+- A repository checkout at the reviewed demo-runner commit
 - Docker running locally
-- A clean dedicated `CAILAB_HOME`
 - Terminal large enough to display paths and Markdown reports
 - No cloud credentials, model API keys, unrelated environment variables, or sensitive files visible
+
+## Recording runner
+
+The repository-owned runner executes the four segments below against an explicitly selected CloudAILab binary. It uses direct argument-vector process execution without a shell, creates an owner-only temporary state directory by default, accepts the initial verification failure only with exit code `3`, validates every discovered provider endpoint as origin-only IPv4 loopback HTTP, bounds provider responses, and verifies after `down` that the run is inactive and the recorded endpoints no longer accept TCP connections.
+
+For the currently audited candidate:
+
+```bash
+go run ./internal/tools/portfolio-demo \
+  --cailab /absolute/path/to/the/candidate/cailab \
+  --expected-version 0.1.0-rc.1 \
+  --expected-commit 9190af11a6188fd17a614d2b9d9833d08f164188 \
+  --trials 3 \
+  --pause
+```
+
+The version/commit assertion catches an accidental binary mix-up; it is not a signature or provenance check. Verify the candidate checksum and attestation separately before recording. Omit `--pause` for a rehearsal. Use `--state-dir` only with a new or empty owner-only directory; the runner refuses existing contents so it cannot replace another run. Automatically created state is removed after provider cleanup unless `--keep-state` is explicit.
+
+The runner does not launch a model or general-purpose agent. Its paired safe and unsafe campaigns are the implemented deterministic controls described below. The complete narration, captions, video description, chapters, and link checklist are in the [portfolio demo transcript](portfolio-demo-transcript.md).
 
 ## Segment 1 — clean deterministic core
 
@@ -87,5 +106,6 @@ Verify that the owned Floci container and native provider processes are gone. Do
 - Record from a commit that passed the release-candidate and normal CI workflows.
 - Show the version/commit near the beginning.
 - Add captions or a transcript for accessibility.
+- Use the reviewed [portfolio demo transcript](portfolio-demo-transcript.md) or publish an equivalent accurate transcript.
 - Link the exact release, architecture walkthrough, compatibility records, and threat model.
 - Do not call a release stable until a public version is actually tagged and supported.
