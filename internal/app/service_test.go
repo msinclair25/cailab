@@ -18,6 +18,7 @@ type fakeProviderManager struct {
 	stopped          bool
 	rotated          bool
 	restored         bool
+	restoreCount     int
 	restoreErr       error
 	restoredRuntimes []provider.Instance
 	snapshots        []scenario.Compiled
@@ -48,6 +49,7 @@ func (f *fakeProviderManager) Snapshot(_ context.Context, _ []provider.Instance,
 
 func (f *fakeProviderManager) Restore(_ context.Context, _ string, instances []provider.Instance, _ scenario.Compiled) ([]provider.Instance, error) {
 	f.restored = true
+	f.restoreCount++
 	if f.restoredRuntimes != nil {
 		return append([]provider.Instance(nil), f.restoredRuntimes...), f.restoreErr
 	}

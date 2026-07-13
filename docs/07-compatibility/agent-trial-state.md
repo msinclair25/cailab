@@ -39,7 +39,7 @@ Agent process completion remains separate. A failed process can still have a suc
 - A stable endpoint does not authenticate a registered host tool or isolate it.
 - A host-mode agent or detached descendant can race provider state because host execution remains unisolated.
 - The OIDC endpoint is stable, but signing keys and synthetic credentials intentionally change on restore.
-- The CLI still launches repeated trials individually; automatic campaign execution remains planned.
+- Automatic campaign execution is limited to the code-owned reference and unsafe fixtures; custom subprocess trials remain individually launched.
 
 ## Tests
 
@@ -48,3 +48,4 @@ Agent process completion remains separate. A failed process can still have a suc
 - Evidence persistence: `internal/state/trial_state_evidence_test.go`
 - Capture and outcome scoring: `internal/app/agent_run_test.go`, `internal/agent/replay_test.go`
 - Public workflow: `internal/cli/cli_test.go`
+- Automatic campaign orchestration: `internal/app/agent_campaign_test.go`

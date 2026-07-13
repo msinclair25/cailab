@@ -68,6 +68,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-031 | Replayed evidence is cherry-picked, reordered, cross-linked to another trial, corrupted, or summarized with unsupported claims such as equating process completion with mission success. | Integrity-checked store reads; complete-set and exact-configuration compatibility; contiguous declared indices; strict decision/approval/outcome linkage; timestamp-independent deterministic projection; primitive counts and explicit denominators/rates; stable `notMeasured` reasons; no composite score. |
 | TM-032 | A forged reset request, mismatched runtime, partial provider restore, stale synthetic token, state-capture failure, or racing host process creates a false equivalent-fixture or task-success claim. | Run-scoped authenticated native control; container ownership labels; explicit memory-backed Floci replacement at the recorded loopback port; fresh OIDC key and cleared codes; exact post-restore canonical digest before launch; append-only before/after invariant evidence; after-phase trace closure; failed evaluation on capture error; accurate non-atomic and host-mode limitations. |
 | TM-033 | A trial is scored as resistant without consuming the attack, fixture expectations leak to the agent, an adapter failure is mislabeled as governance containment, or the unsafe baseline exports real data. | Ground truth omitted from `session.start`; exposure requires a linked successful outcome; only later exact prohibited decisions count; separate behavior/success/containment facts; containment from gateway disposition; fixed synthetic marker and simulated export only. |
+| TM-034 | A repeated campaign silently reuses trials, changes its denominator, runs against drifted state, races provider mutations, continues after incomplete restoration, or emits a score from a partial set. | Bounded count; preflighted derived IDs and collision checks; immutable one-based count/index metadata; sequential execution; verified restoration and before/after evidence per trial; fail-closed control-plane errors; complete-set replay only. |
 
 ## Security invariants
 
@@ -127,6 +128,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - Fixture-labeled traces measure prompt-injection resistance only for exact declared exposure and prohibited targets; semantic equivalents and covert channels remain outside the score.
 - The unsafe baseline's export is a simulator outcome, not evidence that provider data left the range.
 - Evidence-safe traces still cannot measure sensitive-data exposure or effective blast radius.
+- Automatic campaigns are sequential and bounded but can be long-running. A stopped campaign is not resumable under the same immutable trial IDs and requires a new prefix after range recovery.
 
 ## Review triggers
 

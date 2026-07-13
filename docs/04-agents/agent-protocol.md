@@ -8,7 +8,7 @@ last_reviewed: 2026-07-12
 
 ## Current scope
 
-CloudAILab defines typed and schema-backed contracts for M3 agent runs, tools, governance, approvals, decisions, outcomes, trial state, fixture evaluation, evidence-safe traces, and reports. The supported CLI runs deterministic reference and deliberately unsafe baselines or a protocol-compatible custom agent in host subprocess or opt-in Docker isolation mode. The harness enforces scenario-bound registration, deterministic policy, protected output, linked evidence, normalized provider baselines, endpoint-preserving restoration, scenario outcomes, and fixture-labeled injection scoring. Tool subprocess isolation and automatic campaign execution are not implemented.
+CloudAILab defines typed and schema-backed contracts for M3 agent runs, tools, governance, approvals, decisions, outcomes, trial state, fixture evaluation, evidence-safe traces, and reports. The supported CLI runs deterministic reference and deliberately unsafe baselines or a protocol-compatible custom agent in host subprocess or opt-in Docker isolation mode. It also runs bounded sequential reference/unsafe campaigns with verified fixture restoration before every trial and automatic aggregate replay. The harness enforces scenario-bound registration, deterministic policy, protected output, linked evidence, normalized provider baselines, endpoint-preserving restoration, scenario outcomes, and fixture-labeled injection scoring. Tool subprocess isolation and automatic custom-agent campaigns are not implemented.
 
 The normative schemas are:
 

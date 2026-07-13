@@ -124,7 +124,7 @@ Commands:
   up                 Start and persist a scenario run
   status             Show the active run
   mission            Show the active mission
-  agent              Validate registrations or run an agent trial
+  agent              Validate registrations, run trials, or execute campaigns
   identity           Validate tokens or rotate the active local issuer key
   federation         Exchange an authorized local token for temporary credentials
   graph path         Explain a directed trust path
@@ -400,7 +400,7 @@ func (c *CLI) runMission(ctx context.Context, args []string) error {
 
 func (c *CLI) runAgent(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: cailab agent <validate|run|replay> [options]")
+		return errors.New("usage: cailab agent <validate|run|campaign|replay> [options]")
 	}
 	switch args[0] {
 	case "validate":
@@ -418,9 +418,141 @@ func (c *CLI) runAgent(ctx context.Context, args []string) error {
 			return c.runUnsafeAgent(ctx, args[2:])
 		}
 		return c.runSubprocessAgent(ctx, args[2:])
+	case "campaign":
+		return c.runAgentCampaign(ctx, args[1:])
 	default:
-		return errors.New("usage: cailab agent <validate|run|replay> [options]")
+		return errors.New("usage: cailab agent <validate|run|campaign|replay> [options]")
 	}
+}
+
+func (c *CLI) runAgentCampaign(ctx context.Context, args []string) error {
+	if len(args) == 0 || (args[0] != "reference" && args[0] != "unsafe") {
+		return errors.New("usage: cailab agent campaign <reference|unsafe> [options]")
+	}
+	if args[0] == "reference" {
+		return c.runReferenceAgentCampaign(ctx, args[1:])
+	}
+	return c.runUnsafeAgentCampaign(ctx, args[1:])
+}
+
+func (c *CLI) runReferenceAgentCampaign(ctx context.Context, args []string) error {
+	fs := newFlagSet("agent campaign reference", c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	trialPrefix := fs.String("trial-prefix", "campaign:reference", "prefix used to derive immutable trial identifiers")
+	trials := fs.Int("trials", 3, "number of restored trials")
+	format := fs.String("format", "text", "report format: text, json, or markdown")
+	output := fs.String("output", "", "write the deterministic report to a file")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: cailab agent campaign reference [--trials COUNT] [--trial-prefix PREFIX] [--format text|json|markdown] [--output FILE] [--state-dir DIR]")
+	}
+	service, closeStore, err := c.openService(ctx, *stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	rangeRun, err := service.Status(ctx)
+	if err != nil {
+		return err
+	}
+	executable, directory, err := campaignRuntimePaths()
+	if err != nil {
+		return err
+	}
+	options, err := app.ReferenceAgentRunOptions(rangeRun.Compiled, executable, directory, "campaign:preflight")
+	if err != nil {
+		return err
+	}
+	options.CaptureState = true
+	options.RestoreFixture = true
+	return c.executeAgentCampaign(ctx, service, app.AgentCampaignOptions{
+		Run: options, TrialPrefix: *trialPrefix, Trials: *trials,
+	}, *format, *output)
+}
+
+func (c *CLI) runUnsafeAgentCampaign(ctx context.Context, args []string) error {
+	fs := newFlagSet("agent campaign unsafe", c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	trialPrefix := fs.String("trial-prefix", "campaign:unsafe", "prefix used to derive immutable trial identifiers")
+	trials := fs.Int("trials", 3, "number of restored trials")
+	fixtureID := fs.String("fixture", "", "prompt-injection fixture identifier; optional when the scenario declares exactly one")
+	format := fs.String("format", "text", "report format: text, json, or markdown")
+	output := fs.String("output", "", "write the deterministic report to a file")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: cailab agent campaign unsafe [--trials COUNT] [--trial-prefix PREFIX] [--fixture ID] [--format text|json|markdown] [--output FILE] [--state-dir DIR]")
+	}
+	service, closeStore, err := c.openService(ctx, *stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	rangeRun, err := service.Status(ctx)
+	if err != nil {
+		return err
+	}
+	googleEndpoint := ""
+	for _, runtime := range rangeRun.Runtimes {
+		if runtime.Provider == "google" && runtime.Engine == "native" {
+			googleEndpoint = runtime.Endpoint
+			break
+		}
+	}
+	executable, directory, err := campaignRuntimePaths()
+	if err != nil {
+		return err
+	}
+	options, err := app.UnsafeFixtureAgentRunOptions(rangeRun.Compiled, googleEndpoint, executable, directory, "campaign:preflight", *fixtureID)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(c.stderr, "warning: running CloudAILab's deliberately unsafe deterministic agent repeatedly against restored synthetic fixture data")
+	return c.executeAgentCampaign(ctx, service, app.AgentCampaignOptions{
+		Run: options, TrialPrefix: *trialPrefix, Trials: *trials,
+	}, *format, *output)
+}
+
+func campaignRuntimePaths() (string, string, error) {
+	executable, err := os.Executable()
+	if err != nil {
+		return "", "", fmt.Errorf("resolve cailab executable: %w", err)
+	}
+	executable, err = filepath.Abs(executable)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve absolute cailab executable: %w", err)
+	}
+	directory, err := filepath.Abs(".")
+	if err != nil {
+		return "", "", fmt.Errorf("resolve campaign working directory: %w", err)
+	}
+	return executable, directory, nil
+}
+
+func (c *CLI) executeAgentCampaign(ctx context.Context, service *app.Service, options app.AgentCampaignOptions, format, output string) error {
+	if format != "text" && format != "json" && format != "markdown" {
+		return fmt.Errorf("unsupported agent evaluation format %q", format)
+	}
+	result, err := service.RunAgentCampaign(ctx, options)
+	if err != nil {
+		return err
+	}
+	data, err := renderAgentEvaluationReport(result.Report, format)
+	if err != nil {
+		return err
+	}
+	if output != "" {
+		if err := os.WriteFile(output, data, 0o600); err != nil {
+			return fmt.Errorf("write agent campaign report %q: %w", output, err)
+		}
+		fmt.Fprintf(c.stdout, "agent campaign report written to %s\n", output)
+		return nil
+	}
+	_, _ = c.stdout.Write(data)
+	return nil
 }
 
 func (c *CLI) runUnsafeAgent(ctx context.Context, args []string) error {

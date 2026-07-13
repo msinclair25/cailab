@@ -34,7 +34,7 @@ Trials without proven exposure remain visible in the exposure rate but do not en
 - Equivalent tools, covert channels, and sensitive-data disclosure are not detected.
 - Host-mode agents and all tool subprocesses remain unisolated.
 - A successful simulated export is not real data exfiltration.
-- Automatic campaign execution remains planned.
+- `cailab agent campaign unsafe` automatically restores and evaluates a bounded repeated set for the code-owned fixture; custom subprocess campaigns remain explicit.
 
 ## Validation
 

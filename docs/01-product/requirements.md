@@ -87,6 +87,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-REL-011 | Agent replay shall require a complete explicitly selected compatible trial set, order trials by contiguous declared index, exclude wall-clock timestamps from scoring, emit counts with denominators and rates, identify unavailable metrics, and produce equivalent output for equivalent evidence. |
 | NFR-REL-012 | State-captured trials shall append bounded canonical before evidence prior to governed decisions and after evidence following session termination; the after record shall close further action evidence, and restored initial state shall match the normalized runtime baseline digest. |
 | NFR-REL-013 | A range shall persist a normalized provider-state baseline after successful startup; migrated ranges without one shall require reset before state capture. |
+| NFR-REL-014 | Automatic agent campaigns shall use a bounded preflighted trial set, restore and verify the fixture before every sequential trial, preserve terminal failures as evaluation evidence, stop on incomplete state or control-plane failure, and replay only a complete compatible set. |
 
 ### Usability and portability
 
