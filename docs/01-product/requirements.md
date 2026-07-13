@@ -100,6 +100,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-USE-003 | Linux CI shall run without cloud accounts, hosted models, or interactive prompts. |
 | NFR-USE-004 | Provider compatibility and limitations shall be documented and test-backed. |
 | NFR-USE-005 | The release executable shall list, show, validate, and start its built-in scenarios without a repository checkout or working-directory catalog; custom files and catalogs shall require explicit selection. |
+| NFR-USE-006 | CI shall build and execute the documented walking-skeleton demo in an ephemeral non-root container without cloud accounts, hosted models, host mounts, external networking, or a writable root filesystem. |
 
 ### Maintainability and supply chain
 
@@ -110,6 +111,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SUP-001 | Release artifacts shall include checksums, an SBOM, and build provenance by the M4 release. |
 | NFR-SUP-002 | CI workflows shall use minimum permissions and pin third-party actions to immutable revisions. |
 | NFR-SUP-003 | A tag release shall publish semantic-versioned CGO-free archives for the declared target matrix only after checksum verification and a native smoke test on each declared operating system, and shall attach an SPDX JSON SBOM plus signed build and SBOM attestations. |
+| NFR-SUP-004 | Any CI-container base image shall use an immutable digest; the final image shall exclude the source tree and build toolchain, declare no ports or volumes, and shall not be published or represented as a release artifact. |
 
 ## Deferred requirements
 

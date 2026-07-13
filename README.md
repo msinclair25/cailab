@@ -37,6 +37,21 @@ The default state database is `.cloudailab/cailab.db`. Override it with `--state
 
 Named built-in scenarios are compiled into the executable, so these commands work from any directory and release users do not need a repository checkout or separate scenario folder. Custom scenario files still work when supplied directly; custom catalogs require an explicit `--root` or `--scenario-root` path.
 
+## Prove the clean container demo
+
+The repository also includes a digest-pinned CI-only image that builds and runs the walking skeleton as a non-root user with Docker's `none` network, no host mounts, and a read-only root filesystem. It is a clean-environment test, not a published distribution or agent sandbox.
+
+```bash
+docker build --file build/ci/Dockerfile --tag cailab-ci:local .
+docker run --rm --network none --ipc none --read-only \
+  --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777,uid=65532,gid=65532 \
+  --cap-drop ALL --security-opt no-new-privileges=true --security-opt seccomp=builtin \
+  --memory 256m --cpus 1 --pids-limit 128 --ulimit nofile=1024:1024 \
+  cailab-ci:local
+```
+
+See the [clean container demo guide](docs/07-guides/clean-container-demo.md) for the evidence boundary and limitations.
+
 ## Try the AWS vertical slice
 
 The initial `verify` is expected to fail because the scenario starts vulnerable. Follow the [AWS cross-account lab guide](docs/07-guides/aws-cross-account-lab.md) to prove the access with the AWS CLI, narrow the role trust, and make both invariants pass.
@@ -198,6 +213,7 @@ See the [release verification guide](docs/07-guides/release-verification.md) for
 - [Agent prompt-injection evaluation compatibility](docs/07-compatibility/agent-prompt-injection.md)
 - [Agent campaign execution compatibility](docs/07-compatibility/agent-campaign-execution.md)
 - [Release verification](docs/07-guides/release-verification.md)
+- [Clean container demo](docs/07-guides/clean-container-demo.md)
 
 ## Working vocabulary
 
