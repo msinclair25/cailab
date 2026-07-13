@@ -96,6 +96,20 @@ func DecodeApprovalResolutionEvent(data []byte) (ApprovalResolutionEvent, error)
 	return event, nil
 }
 
+func DecodeTrialStateEvidence(data []byte) (TrialStateEvidence, error) {
+	if len(data) > MaxFrameBytes {
+		return TrialStateEvidence{}, fmt.Errorf("trial state evidence exceeds %d bytes", MaxFrameBytes)
+	}
+	var evidence TrialStateEvidence
+	if err := decodeStrict(data, &evidence); err != nil {
+		return TrialStateEvidence{}, fmt.Errorf("decode trial state evidence: %w", err)
+	}
+	if err := ValidateTrialStateEvidence(evidence); err != nil {
+		return TrialStateEvidence{}, err
+	}
+	return evidence, nil
+}
+
 func DigestToolManifest(manifest ToolManifest) (string, error) {
 	if err := ValidateToolManifest(manifest); err != nil {
 		return "", err

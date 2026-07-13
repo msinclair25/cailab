@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"time"
+
+	"github.com/msinclair25/cailab/internal/verify"
 )
 
 const (
-	APIVersion      = "cloudailab.dev/agent/v1alpha1"
-	ProtocolVersion = "1.1"
-	MaxFrameBytes   = 1 << 20
+	APIVersion        = "cloudailab.dev/agent/v1alpha1"
+	ProtocolVersion   = "1.1"
+	MaxFrameBytes     = 1 << 20
+	TrialStateProfile = "scenario-state-v1"
 
 	ToolManifestKind            = "ToolManifest"
 	AgentRunKind                = "AgentRun"
@@ -17,6 +20,7 @@ const (
 	GovernancePolicyKind        = "GovernancePolicy"
 	ToolOutcomeEventKind        = "ToolOutcomeEvent"
 	ApprovalResolutionEventKind = "ApprovalResolutionEvent"
+	TrialStateEvidenceKind      = "TrialStateEvidence"
 )
 
 const (
@@ -100,6 +104,7 @@ type AgentRun struct {
 	PromptHash string             `json:"promptHash"`
 	Tools      []ToolRef          `json:"tools"`
 	Execution  *AgentExecutionRef `json:"execution,omitempty"`
+	State      *TrialStateRef     `json:"state,omitempty"`
 	Trial      TrialRef           `json:"trial"`
 	Status     string             `json:"status"`
 	StartedAt  time.Time          `json:"startedAt"`
@@ -146,6 +151,27 @@ type AgentExecutionRef struct {
 	Image      string `json:"image"`
 	Network    string `json:"network"`
 	Filesystem string `json:"filesystem"`
+}
+
+// TrialStateRef records the deterministic state-capture contract selected for
+// a trial. Restore is explicit because capture alone does not establish an
+// equivalent initial fixture.
+type TrialStateRef struct {
+	Profile        string `json:"profile"`
+	BaselineDigest string `json:"baselineDigest"`
+	Restore        bool   `json:"restore"`
+}
+
+type TrialStateEvidence struct {
+	APIVersion      string        `json:"apiVersion"`
+	Kind            string        `json:"kind"`
+	RunID           string        `json:"runId"`
+	TrialID         string        `json:"trialId"`
+	Phase           string        `json:"phase"`
+	CapturedAt      time.Time     `json:"capturedAt"`
+	SnapshotDigest  string        `json:"snapshotDigest"`
+	FixtureRestored bool          `json:"fixtureRestored"`
+	Verification    verify.Report `json:"verification"`
 }
 
 type Decision struct {

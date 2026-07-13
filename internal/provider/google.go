@@ -29,6 +29,7 @@ type GoogleRuntimeConfig struct {
 type googleFacade struct {
 	mu           sync.RWMutex
 	provider     scenario.GoogleProvider
+	baseline     scenario.GoogleProvider
 	statePath    string
 	runID        string
 	controlToken string
@@ -67,8 +68,16 @@ func ServeGoogleRuntime(ctx context.Context, configPath string) error {
 
 	runtimeCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	baseline, err := cloneProviderState(config.Provider)
+	if err != nil {
+		return fmt.Errorf("prepare Google baseline: %w", err)
+	}
+	providerState, err := cloneProviderState(config.Provider)
+	if err != nil {
+		return fmt.Errorf("prepare Google state: %w", err)
+	}
 	facade := &googleFacade{
-		provider: config.Provider, statePath: config.StatePath,
+		provider: providerState, baseline: baseline, statePath: config.StatePath,
 		runID: config.RunID, controlToken: config.ControlToken, shutdown: cancel,
 	}
 	if err := facade.persist(); err != nil {
@@ -148,6 +157,21 @@ func (f *googleFacade) handleControl(w http.ResponseWriter, r *http.Request) boo
 		}
 		writeJSON(w, http.StatusAccepted, map[string]any{"status": "stopping"})
 		go f.shutdown()
+		return true
+	case "/_cailab/reset":
+		if r.Method != http.MethodPost {
+			writeGoogleError(w, http.StatusMethodNotAllowed, "badRequest", "Method not allowed.")
+			return true
+		}
+		if r.Header.Get("Authorization") != "Bearer "+f.controlToken || r.Header.Get("X-CloudAILab-Run") != f.runID {
+			writeGoogleError(w, http.StatusForbidden, "forbidden", "Invalid runtime control credentials.")
+			return true
+		}
+		if err := f.restoreBaseline(); err != nil {
+			writeGoogleError(w, http.StatusInternalServerError, "internalError", "The local facade could not restore its baseline.")
+			return true
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "restored"})
 		return true
 	default:
 		return false
@@ -454,6 +478,22 @@ func (f *googleFacade) persistLocked() error {
 	}
 	if err := os.WriteFile(f.statePath, append(data, '\n'), 0o600); err != nil {
 		return fmt.Errorf("persist Google facade state: %w", err)
+	}
+	return nil
+}
+
+func (f *googleFacade) restoreBaseline() error {
+	restored, err := cloneProviderState(f.baseline)
+	if err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	previous := f.provider
+	f.provider = restored
+	if err := f.persistLocked(); err != nil {
+		f.provider = previous
+		return err
 	}
 	return nil
 }

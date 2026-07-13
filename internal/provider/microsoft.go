@@ -29,6 +29,7 @@ type MicrosoftRuntimeConfig struct {
 type microsoftFacade struct {
 	mu           sync.RWMutex
 	provider     scenario.MicrosoftProvider
+	baseline     scenario.MicrosoftProvider
 	statePath    string
 	runID        string
 	controlToken string
@@ -68,8 +69,16 @@ func ServeMicrosoftRuntime(ctx context.Context, configPath string) error {
 
 	runtimeCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	baseline, err := cloneProviderState(config.Provider)
+	if err != nil {
+		return fmt.Errorf("prepare Microsoft baseline: %w", err)
+	}
+	providerState, err := cloneProviderState(config.Provider)
+	if err != nil {
+		return fmt.Errorf("prepare Microsoft state: %w", err)
+	}
 	facade := &microsoftFacade{
-		provider: config.Provider, statePath: config.StatePath,
+		provider: providerState, baseline: baseline, statePath: config.StatePath,
 		runID: config.RunID, controlToken: config.ControlToken, baseURL: endpoint, shutdown: cancel,
 	}
 	if err := facade.persist(); err != nil {
@@ -133,6 +142,21 @@ func (f *microsoftFacade) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusAccepted, map[string]any{"status": "stopping"})
 		go f.shutdown()
+		return
+	case "/_cailab/reset":
+		if r.Method != http.MethodPost {
+			writeGraphError(w, http.StatusMethodNotAllowed, "Request_BadRequest", "Method not allowed.")
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer "+f.controlToken || r.Header.Get("X-CloudAILab-Run") != f.runID {
+			writeGraphError(w, http.StatusForbidden, "Authorization_RequestDenied", "Invalid runtime control credentials.")
+			return
+		}
+		if err := f.restoreBaseline(); err != nil {
+			writeGraphError(w, http.StatusInternalServerError, "InternalServerError", "The local facade could not restore its baseline.")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"status": "restored"})
 		return
 	}
 
@@ -366,6 +390,22 @@ func (f *microsoftFacade) persistLocked() error {
 	}
 	if err := os.WriteFile(f.statePath, append(data, '\n'), 0o600); err != nil {
 		return fmt.Errorf("persist Microsoft facade state: %w", err)
+	}
+	return nil
+}
+
+func (f *microsoftFacade) restoreBaseline() error {
+	restored, err := cloneProviderState(f.baseline)
+	if err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	previous := f.provider
+	f.provider = restored
+	if err := f.persistLocked(); err != nil {
+		f.provider = previous
+		return err
 	}
 	return nil
 }

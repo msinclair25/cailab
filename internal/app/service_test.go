@@ -13,10 +13,15 @@ import (
 )
 
 type fakeProviderManager struct {
-	startErr error
-	started  bool
-	stopped  bool
-	rotated  bool
+	startErr         error
+	started          bool
+	stopped          bool
+	rotated          bool
+	restored         bool
+	restoreErr       error
+	restoredRuntimes []provider.Instance
+	snapshots        []scenario.Compiled
+	snapshotIndex    int
 }
 
 func (f *fakeProviderManager) Start(_ context.Context, _ string, _ scenario.Compiled) ([]provider.Instance, error) {
@@ -33,7 +38,20 @@ func (f *fakeProviderManager) Stop(_ context.Context, _ string, _ []provider.Ins
 }
 
 func (f *fakeProviderManager) Snapshot(_ context.Context, _ []provider.Instance, compiled scenario.Compiled) (scenario.Compiled, error) {
+	if f.snapshotIndex < len(f.snapshots) {
+		result := f.snapshots[f.snapshotIndex]
+		f.snapshotIndex++
+		return result, nil
+	}
 	return compiled, nil
+}
+
+func (f *fakeProviderManager) Restore(_ context.Context, _ string, instances []provider.Instance, _ scenario.Compiled) ([]provider.Instance, error) {
+	f.restored = true
+	if f.restoredRuntimes != nil {
+		return append([]provider.Instance(nil), f.restoredRuntimes...), f.restoreErr
+	}
+	return append([]provider.Instance(nil), instances...), f.restoreErr
 }
 
 func (f *fakeProviderManager) RotateIdentity(_ context.Context, _ string, _ []provider.Instance) (provider.OIDCJWKSet, error) {

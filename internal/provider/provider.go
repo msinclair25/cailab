@@ -25,6 +25,7 @@ type Manager interface {
 	Start(context.Context, string, scenario.Compiled) ([]Instance, error)
 	Stop(context.Context, string, []Instance, scenario.Compiled) error
 	Snapshot(context.Context, []Instance, scenario.Compiled) (scenario.Compiled, error)
+	Restore(context.Context, string, []Instance, scenario.Compiled) ([]Instance, error)
 	RotateIdentity(context.Context, string, []Instance) (OIDCJWKSet, error)
 }
 
@@ -80,4 +81,25 @@ func (m *CompositeManager) Snapshot(ctx context.Context, instances []Instance, c
 		return scenario.Compiled{}, err
 	}
 	return m.native.Snapshot(ctx, instances, snapshot)
+}
+
+func (m *CompositeManager) Restore(ctx context.Context, runID string, instances []Instance, compiled scenario.Compiled) ([]Instance, error) {
+	var nativeInstances, dockerInstances []Instance
+	for _, instance := range instances {
+		switch instance.Provider {
+		case "microsoft", "google", "oidc":
+			nativeInstances = append(nativeInstances, instance)
+		case "aws":
+			dockerInstances = append(dockerInstances, instance)
+		}
+	}
+	restoredDocker, err := m.docker.Restore(ctx, runID, dockerInstances, compiled)
+	if err != nil {
+		return nil, err
+	}
+	restoredNative, err := m.native.Restore(ctx, runID, nativeInstances, compiled)
+	if err != nil {
+		return append(restoredDocker, nativeInstances...), err
+	}
+	return append(restoredDocker, restoredNative...), nil
 }

@@ -210,7 +210,7 @@ func TestCommittedAgentSchemasAreValidJSON(t *testing.T) {
 	compiler := jsonschema.NewCompiler()
 	compiler.DefaultDraft(jsonschema.Draft2020)
 	var locations []string
-	for _, name := range []string{"tool-manifest.json", "agent-run.json", "protocol-message.json", "decision-event.json", "governance-policy.json", "tool-execution-message.json", "tool-outcome-event.json", "approval-resolution-event.json", "agent-trace.json", "agent-evaluation-report.json"} {
+	for _, name := range []string{"tool-manifest.json", "agent-run.json", "protocol-message.json", "decision-event.json", "governance-policy.json", "tool-execution-message.json", "tool-outcome-event.json", "approval-resolution-event.json", "trial-state-evidence.json", "agent-trace.json", "agent-evaluation-report.json"} {
 		data, err := os.ReadFile(filepath.Join("..", "..", "schemas", "agent", "v1alpha1", name))
 		if err != nil {
 			t.Fatal(err)

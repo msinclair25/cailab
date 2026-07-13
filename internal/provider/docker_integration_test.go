@@ -111,6 +111,28 @@ func TestFlociIntegration(t *testing.T) {
 	if !hasTrustEdge(remediated, "aws:acquired-root", "aws:acquisition-reader") {
 		t.Fatal("remediated snapshot removed the legitimate acquired trust edge")
 	}
+	instances, err = manager.Restore(ctx, runID, instances, compiled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if instances[0].Endpoint != endpoint {
+		t.Fatalf("restore changed endpoint from %s to %s", endpoint, instances[0].Endpoint)
+	}
+	restored, err := manager.Snapshot(ctx, instances, compiled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasTrustEdge(restored, "aws:parent-root", "aws:acquisition-reader") ||
+		!hasTrustEdge(restored, "aws:acquired-root", "aws:acquisition-reader") {
+		t.Fatalf("restored snapshot did not recover baseline trust: %+v", restored.Edges)
+	}
+	restoredDigest, err := scenario.StateDigest(restored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restoredDigest != compiled.Digest {
+		t.Fatalf("restored digest = %s, want baseline %s", restoredDigest, compiled.Digest)
+	}
 }
 
 func hasTrustEdge(compiled scenario.Compiled, from, to string) bool {

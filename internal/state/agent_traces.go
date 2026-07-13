@@ -26,8 +26,12 @@ func (s *Store) AgentTrace(ctx context.Context, runID, trialID string) (agent.Ag
 	if err != nil {
 		return agent.AgentTrace{}, fmt.Errorf("read trace outcomes: %w", err)
 	}
+	states, err := s.TrialStateEvidence(ctx, runID, trialID)
+	if err != nil {
+		return agent.AgentTrace{}, fmt.Errorf("read trace states: %w", err)
+	}
 	return agent.AgentTrace{
 		APIVersion: agent.APIVersion, Kind: agent.AgentTraceKind, Run: run,
-		Decisions: decisions, Approvals: approvals, Outcomes: outcomes,
+		Decisions: decisions, Approvals: approvals, Outcomes: outcomes, States: states,
 	}, nil
 }

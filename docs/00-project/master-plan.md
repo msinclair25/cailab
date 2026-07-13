@@ -293,7 +293,7 @@ Exit gate:
 
 ### M3 — Agent governance harness
 
-**Status:** in development. Versioned agent/policy/tool/approval/outcome/trace/report contracts, supported reference and custom subprocess runs, scenario-bound registration, exact-match policy, fail-closed or interactive approval resolution, an opt-in Docker-isolated agent mode, Draft 2020-12 validation, protected tool execution, immutable run metadata, append-only linked evidence, and deterministic evidence replay with compatible repeated-trial aggregate metrics are implemented. Per-trial scenario-outcome capture, automatic fixture reset, injection scoring, and the deliberately unsafe fixture remain; tool subprocess isolation is deferred.
+**Status:** in development. Versioned agent/policy/tool/approval/outcome/trace/state/report contracts, supported reference and custom subprocess runs, scenario-bound registration, deterministic governance, an opt-in Docker-isolated agent mode, endpoint-preserving fixture restoration, before/after invariant evidence, and deterministic repeated-trial action/task/remediation metrics are implemented. Automatic campaign execution, injection scoring, and the deliberately unsafe fixture remain; tool subprocess isolation is deferred.
 
 **Goal:** make an external agent a measurable principal in the range.
 
@@ -304,7 +304,7 @@ Deliverables:
 - User-provided subprocess tool registration and manifest validation
 - Governed tool gateway with allow, deny, redact, and approval decisions
 - Indirect prompt-injection fixture in Google-shaped content
-- Repeated-trial aggregate metrics (implemented); automatic runner and fixture reset remain
+- Repeated-trial aggregate action/task/remediation metrics and endpoint-preserving fixture restoration (implemented); automatic campaign execution remains
 - Evidence-safe trace replay and evidence-linked report (implemented)
 - Optional local-model example; hosted providers remain user-configured
 
@@ -434,7 +434,8 @@ The following questions must be resolved through spikes and ADRs before dependen
 5. Microsoft and Google pagination/error subset — before M2 facade implementation.
 6. Agent subprocess trace protocol and approval handshake — resolved by ADR-0011, ADR-0012, and ADR-0016.
 7. Isolation implementation and supported host platforms — resolved for the opt-in Linux CI-tested Docker agent boundary by ADR-0017; host mode and tool subprocesses remain unisolated.
-8. Initial evidence-replay constructs and unavailable-metric handling — resolved by ADR-0018; scenario-outcome scoring requires a later profile.
+8. Initial evidence-replay constructs and unavailable-metric handling — resolved by ADR-0018; scenario-outcome scoring is extended by ADR-0019.
+9. Endpoint-preserving provider restoration and scenario-outcome scoring — resolved for supported provider surfaces by ADR-0019.
 
 ## Change control
 
@@ -446,6 +447,6 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Capture and restore per-trial scenario outcomes without invalidating registered tool endpoints.
-2. Add the unsafe prompt-injection evaluation fixture and outcome-linked scoring profile.
+1. Add the unsafe prompt-injection evaluation fixture and fixture-labeled scoring.
+2. Add automatic repeated-campaign execution after the unsafe/reference fixtures establish reset semantics.
 3. Evaluate isolated tool execution only when a scenario requires an untrusted tool adapter.

@@ -22,7 +22,7 @@ var (
 	ErrActiveRun   = errors.New("an active run already exists")
 )
 
-const currentSchemaVersion = 6
+const currentSchemaVersion = 7
 
 type Store struct {
 	db *sql.DB
@@ -220,6 +220,24 @@ ALTER TABLE agent_tool_outcomes ADD COLUMN approval_record_hash TEXT NOT NULL DE
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO schema_migrations(version, applied_at) VALUES(6, ?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record state migration 6: %w", err)
+		}
+	}
+	if version < 7 {
+		if _, err := tx.ExecContext(ctx, `
+CREATE TABLE agent_trial_state_evidence (
+    run_id TEXT NOT NULL,
+    trial_id TEXT NOT NULL,
+    phase TEXT NOT NULL CHECK (phase IN ('before', 'after')),
+    evidence_json BLOB NOT NULL,
+    record_hash TEXT NOT NULL,
+    PRIMARY KEY (run_id, trial_id, phase),
+    FOREIGN KEY (run_id) REFERENCES runs(id)
+);`); err != nil {
+			return fmt.Errorf("apply state migration 7: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO schema_migrations(version, applied_at) VALUES(7, ?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record state migration 7: %w", err)
 		}
 	}
 	if err := tx.Commit(); err != nil {

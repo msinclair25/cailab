@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/msinclair25/cailab/internal/verify"
 )
 
 func TestReplayAgentTracesProducesDeterministicRepeatedTrialMetrics(t *testing.T) {
@@ -99,6 +101,51 @@ func TestReplayAgentTracesUsesNullRatesForZeroDenominators(t *testing.T) {
 	}
 }
 
+func TestReplayAgentTracesMeasuresScenarioTaskAndRemediationOutcomes(t *testing.T) {
+	trace := replayTestTrace(t, "trial:state", 1, 1)
+	trace.Run.State = &TrialStateRef{Profile: "scenario-state-v1", BaselineDigest: trace.Run.Scenario.Digest, Restore: true}
+	before := replayStateEvidence(trace.Run, "before", true, false, trace.Run.StartedAt.Add(time.Second))
+	after := replayStateEvidence(trace.Run, "after", false, true, trace.Run.StartedAt.Add(3*time.Second))
+	after.SnapshotDigest = strings.Repeat("1", 64)
+	trace.States = []TrialStateEvidence{before, after}
+	report, err := ReplayAgentTraces([]AgentTrace{trace})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Profile != ScenarioOutcomeProfile || report.Aggregate.InitialStateMatchRate == nil ||
+		report.Aggregate.InitialStateMatchRate.Numerator != 1 || report.Aggregate.TaskSuccessRate == nil ||
+		report.Aggregate.TaskSuccessRate.Numerator != 1 || report.Aggregate.RemediationSuccessRate == nil ||
+		report.Aggregate.RemediationSuccessRate.Numerator != 1 || len(report.NotMeasured) != 3 {
+		t.Fatalf("report = %+v", report)
+	}
+	metrics := report.Trials[0].Metrics
+	if metrics.InitialStateMatched == nil || !*metrics.InitialStateMatched || metrics.TaskSucceeded == nil ||
+		!*metrics.TaskSucceeded || metrics.RemediationSucceeded == nil || !*metrics.RemediationSucceeded {
+		t.Fatalf("metrics = %+v", metrics)
+	}
+}
+
+func TestReplayAgentTracesRejectsIncompleteOrChangedScenarioEvidence(t *testing.T) {
+	trace := replayTestTrace(t, "trial:state-invalid", 1, 1)
+	trace.Run.State = &TrialStateRef{Profile: "scenario-state-v1", BaselineDigest: trace.Run.Scenario.Digest, Restore: true}
+	before := replayStateEvidence(trace.Run, "before", true, false, trace.Run.StartedAt.Add(time.Second))
+	if _, err := ReplayAgentTraces([]AgentTrace{trace}); !errors.Is(err, ErrAgentTraceIntegrity) {
+		t.Fatalf("missing state evidence error = %v", err)
+	}
+	after := replayStateEvidence(trace.Run, "after", false, true, trace.Run.StartedAt.Add(2*time.Second))
+	after.Verification.Results[0].InvariantID = "path:changed"
+	trace.States = []TrialStateEvidence{before, after}
+	if _, err := ReplayAgentTraces([]AgentTrace{trace}); !errors.Is(err, ErrAgentTraceIntegrity) {
+		t.Fatalf("changed invariant error = %v", err)
+	}
+	after = replayStateEvidence(trace.Run, "after", false, true, trace.Run.StartedAt.Add(2*time.Second))
+	after.Verification.Results[0].Passed = false
+	trace.States = []TrialStateEvidence{before, after}
+	if _, err := ReplayAgentTraces([]AgentTrace{trace}); !errors.Is(err, ErrAgentTraceIntegrity) {
+		t.Fatalf("inconsistent result count error = %v", err)
+	}
+}
+
 func TestReplayAgentTracesRejectsIncompleteIncompatibleAndBrokenEvidence(t *testing.T) {
 	first := replayTestTrace(t, "trial:1", 1, 2)
 	second := replayTestTrace(t, "trial:2", 2, 2)
@@ -158,7 +205,28 @@ func replayTestTrace(t *testing.T, trialID string, index, count int) AgentTrace 
 	}
 	return AgentTrace{
 		APIVersion: APIVersion, Kind: AgentTraceKind, Run: run,
-		Decisions: []DecisionEvent{decision}, Outcomes: []ToolOutcomeEvent{outcome},
+		Decisions: []DecisionEvent{decision}, Outcomes: []ToolOutcomeEvent{outcome}, States: []TrialStateEvidence{},
+	}
+}
+
+func replayStateEvidence(run AgentRun, phase string, restored, passed bool, capturedAt time.Time) TrialStateEvidence {
+	passedCount, failedCount := 0, 1
+	message := "prohibited path exists"
+	if passed {
+		passedCount, failedCount = 1, 0
+		message = "prohibited path is absent"
+	}
+	return TrialStateEvidence{
+		APIVersion: APIVersion, Kind: TrialStateEvidenceKind, RunID: run.RunID, TrialID: run.TrialID,
+		Phase: phase, CapturedAt: capturedAt, SnapshotDigest: run.Scenario.Digest, FixtureRestored: restored,
+		Verification: verify.Report{
+			RunID: run.RunID, Scenario: run.Scenario.Name, ScenarioVersion: run.Scenario.Version, Digest: run.Scenario.Digest,
+			Passed: passed, PassedCount: passedCount, FailedCount: failedCount,
+			Results: []verify.Result{{
+				InvariantID: "path-closed", Severity: "high", Description: "The prohibited path is absent.",
+				Passed: passed, Message: message,
+			}},
+		},
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"strings"
 	"time"
@@ -53,6 +54,10 @@ func NewDockerManager() *DockerManager {
 }
 
 func (m *DockerManager) Start(ctx context.Context, runID string, compiled scenario.Compiled) ([]Instance, error) {
+	return m.start(ctx, runID, compiled, "")
+}
+
+func (m *DockerManager) start(ctx context.Context, runID string, compiled scenario.Compiled, requestedEndpoint string) ([]Instance, error) {
 	if compiled.Runtimes.AWS == nil {
 		return nil, nil
 	}
@@ -61,14 +66,23 @@ func (m *DockerManager) Start(ctx context.Context, runID string, compiled scenar
 		return nil, errors.New("AWS runtime is not allowlisted by this CloudAILab build")
 	}
 	name := containerName(runID, "floci")
+	publish := "127.0.0.1::4566"
+	if requestedEndpoint != "" {
+		parsed, err := url.Parse(requestedEndpoint)
+		if err != nil || !isIPv4LoopbackEndpoint(requestedEndpoint) || parsed.Port() == "" {
+			return nil, fmt.Errorf("restore AWS runtime: invalid recorded endpoint %q", requestedEndpoint)
+		}
+		publish = "127.0.0.1:" + parsed.Port() + ":4566"
+	}
 	args := []string{
 		"run", "--detach",
 		"--name", name,
 		"--pull=missing",
-		"--publish", "127.0.0.1::4566",
+		"--publish", publish,
 		"--label", managedLabel + "=true",
 		"--label", runLabel + "=" + runID,
 		"--env", fmt.Sprintf("FLOCI_SERVICES_IAM_ENFORCEMENT_ENABLED=%t", config.IAMEnforcement),
+		"--env", "FLOCI_STORAGE_MODE=memory",
 		"--user", "1001:0",
 		"--cap-drop", "ALL",
 		"--security-opt", "no-new-privileges",
@@ -116,6 +130,50 @@ func (m *DockerManager) Start(ctx context.Context, runID string, compiled scenar
 		Provider: "aws", Engine: config.Engine, ContainerID: containerID,
 		Name: name, Endpoint: endpoint, Image: config.Image, Status: "ready",
 	}}, nil
+}
+
+// Restore replaces the owned in-memory Floci container at the exact recorded
+// loopback port, then rehydrates the compiled AWS fixture.
+func (m *DockerManager) Restore(ctx context.Context, runID string, instances []Instance, compiled scenario.Compiled) ([]Instance, error) {
+	if compiled.Runtimes.AWS == nil {
+		return nil, nil
+	}
+	var instance *Instance
+	for i := range instances {
+		if instances[i].Provider == "aws" && instances[i].Engine == "floci" {
+			instance = &instances[i]
+			break
+		}
+	}
+	if instance == nil || instance.Name != containerName(runID, "floci") || instance.Endpoint == "" {
+		return nil, errors.New("restore AWS runtime: owned Floci instance is not recorded")
+	}
+	managed, err := m.runner.Run(ctx, "docker", "inspect", "--format", "{{index .Config.Labels \""+managedLabel+"\"}}", instance.Name)
+	if err != nil {
+		return nil, fmt.Errorf("restore AWS runtime managed label: %w", err)
+	}
+	if strings.TrimSpace(managed) != "true" {
+		return nil, errors.New("restore AWS runtime: managed label does not match")
+	}
+	owner, err := m.runner.Run(ctx, "docker", "inspect", "--format", "{{index .Config.Labels \""+runLabel+"\"}}", instance.Name)
+	if err != nil {
+		return nil, fmt.Errorf("restore AWS runtime run label: %w", err)
+	}
+	if strings.TrimSpace(owner) != runID {
+		return nil, errors.New("restore AWS runtime: run label does not match")
+	}
+	if output, err := m.runner.Run(ctx, "docker", "rm", "--force", instance.Name); err != nil {
+		return nil, fmt.Errorf("replace AWS runtime: remove owned container: %w: %s", err, strings.TrimSpace(output))
+	}
+	m.httpClient.CloseIdleConnections()
+	restored, err := m.start(ctx, runID, compiled, instance.Endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("replace AWS runtime at %s: %w", instance.Endpoint, err)
+	}
+	if len(restored) != 1 || restored[0].Endpoint != instance.Endpoint {
+		return nil, fmt.Errorf("restore AWS runtime changed endpoint from %s", instance.Endpoint)
+	}
+	return restored, nil
 }
 
 func (m *DockerManager) Snapshot(ctx context.Context, instances []Instance, compiled scenario.Compiled) (scenario.Compiled, error) {

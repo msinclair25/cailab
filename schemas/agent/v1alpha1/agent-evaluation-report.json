@@ -8,7 +8,7 @@
   "properties": {
     "apiVersion": { "const": "cloudailab.dev/agent/v1alpha1" },
     "kind": { "const": "AgentEvaluationReport" },
-    "profile": { "const": "governed-evidence-v1" },
+    "profile": { "enum": ["governed-evidence-v1", "scenario-outcome-v1"] },
     "runId": { "$ref": "#/$defs/id" },
     "configDigest": { "$ref": "#/$defs/digest" },
     "trials": {
@@ -22,6 +22,23 @@
       "items": { "$ref": "#/$defs/limitation" }
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "profile": { "const": "scenario-outcome-v1" } }, "required": ["profile"] },
+      "then": {
+        "properties": {
+          "trials": {
+            "items": {
+              "properties": {
+                "metrics": { "required": ["initialStateMatched", "taskSucceeded"] }
+              }
+            }
+          },
+          "aggregate": { "required": ["initialStateMatchRate", "taskSuccessRate", "remediationSuccessRate"] }
+        }
+      }
+    }
+  ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9._:-]{0,127}$" },
     "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
@@ -59,7 +76,10 @@
         "toolSucceeded": { "$ref": "#/$defs/nonNegative" },
         "toolFailed": { "$ref": "#/$defs/nonNegative" },
         "missingOutcomeEvidence": { "$ref": "#/$defs/nonNegative" },
-        "observedProtectedTargets": { "$ref": "#/$defs/nonNegative" }
+        "observedProtectedTargets": { "$ref": "#/$defs/nonNegative" },
+        "initialStateMatched": { "type": "boolean" },
+        "taskSucceeded": { "type": "boolean" },
+        "remediationSucceeded": { "type": "boolean" }
       }
     },
     "trial": {
@@ -92,7 +112,10 @@
         "approvalRejectedActions": { "$ref": "#/$defs/nonNegative" },
         "unresolvedActions": { "$ref": "#/$defs/nonNegative" },
         "missingOutcomeEvidence": { "$ref": "#/$defs/nonNegative" },
-        "observedProtectedTargets": { "$ref": "#/$defs/nonNegative" }
+        "observedProtectedTargets": { "$ref": "#/$defs/nonNegative" },
+        "initialStateMatchRate": { "$ref": "#/$defs/rate" },
+        "taskSuccessRate": { "$ref": "#/$defs/rate" },
+        "remediationSuccessRate": { "$ref": "#/$defs/rate" }
       }
     },
     "limitation": {

@@ -118,6 +118,17 @@ FROM agent_runs WHERE run_id = ? AND trial_id = ?`, terminal.RunID, terminal.Tri
 	if !reflect.DeepEqual(expected, terminal) {
 		return fmt.Errorf("%w: terminal record changes immutable run metadata", ErrAgentRunIntegrity)
 	}
+	if start.State != nil && terminal.Status != "failed" {
+		var stateCount int
+		if err := tx.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM agent_trial_state_evidence
+WHERE run_id = ? AND trial_id = ?`, terminal.RunID, terminal.TrialID).Scan(&stateCount); err != nil {
+			return fmt.Errorf("inspect terminal trial state evidence: %w", err)
+		}
+		if stateCount != 2 {
+			return fmt.Errorf("%w: terminal state-captured trial requires before and after evidence", ErrAgentRunIntegrity)
+		}
+	}
 	canonical, hash, err := canonicalAgentRun(terminal)
 	if err != nil {
 		return err

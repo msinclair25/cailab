@@ -66,6 +66,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-029 | A stale, forged, replayed, implicit, or unrecorded approval authorizes a sensitive tool call, or a reviewer prompt discloses model-controlled arguments. | Default rejection; exact correlated confirmation; canonical metadata without raw arguments; current-policy re-evaluation; immutable resolution evidence before response; decision/approval/outcome hash linkage; one-use continuation and duplicate rejection. |
 | TM-030 | An adversarial agent reads host files, reaches local or public services, gains container privilege, exhausts resources, gains image-declared writable volumes or shared memory, leaves protocol data in Docker logs, substitutes mutable image content, redirects execution to a remote Docker daemon, relies on ignored rootless cgroup limits, or survives cancellation. | Opt-in digest/image-ID pinning; volume-free image inspection; explicit local Unix-socket non-rootless Linux engine with active cgroups; remote-context rejection; no host environment or mounts; network and IPC none; log driver none; read-only root and bounded noexec tmpfs; non-root UID; all capabilities dropped; no-new-privileges; built-in seccomp; CPU/memory/PID limits; init process; deterministic ownership labels and verified forced cleanup. |
 | TM-031 | Replayed evidence is cherry-picked, reordered, cross-linked to another trial, corrupted, or summarized with unsupported claims such as equating process completion with mission success. | Integrity-checked store reads; complete-set and exact-configuration compatibility; contiguous declared indices; strict decision/approval/outcome linkage; timestamp-independent deterministic projection; primitive counts and explicit denominators/rates; stable `notMeasured` reasons; no composite score. |
+| TM-032 | A forged reset request, mismatched runtime, partial provider restore, stale synthetic token, state-capture failure, or racing host process creates a false equivalent-fixture or task-success claim. | Run-scoped authenticated native control; container ownership labels; explicit memory-backed Floci replacement at the recorded loopback port; fresh OIDC key and cleared codes; exact post-restore canonical digest before launch; append-only before/after invariant evidence; after-phase trace closure; failed evaluation on capture error; accurate non-atomic and host-mode limitations. |
 
 ## Security invariants
 
@@ -119,7 +120,10 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - Docker isolation trusts the daemon, container runtime, host kernel or Docker Desktop VM, and the exact selected image. It is not a virtual-machine or remote-account security boundary.
 - Digest pinning identifies image content but does not establish provenance, signature validity, or absence of vulnerabilities.
 - Replay compatibility does not prove equivalent mutable provider state across trials, and trace/configuration hashes are reproducibility identifiers rather than signatures.
-- The evidence-safe trace cannot currently measure task success, prompt-injection resistance, remediation quality, sensitive-data exposure, or effective blast radius.
+- State-captured traces measure task and remediation outcomes only for documented provider snapshots and declared graph invariants; unsupported provider state is outside the score.
+- Provider restoration is not atomic across runtimes. A failed restore prevents agent launch but may require the full lifecycle reset to recover a partially restored range.
+- Host-mode agents and detached descendants can race terminal state capture with the launching user's ambient authority.
+- Evidence-safe traces still cannot measure prompt-injection resistance, sensitive-data exposure, or effective blast radius.
 
 ## Review triggers
 
