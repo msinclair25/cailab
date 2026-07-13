@@ -323,7 +323,7 @@ Exit gate:
 
 Deliverables:
 
-- Linux, macOS, and Windows release artifacts for supported architectures (release pipeline implemented; first tag pending)
+- Linux, macOS, and Windows release artifacts with a working-directory-independent built-in scenario catalog for supported architectures (release pipeline implemented; first tag pending)
 - Container image for CI
 - Checksums, SBOM, and provenance/SBOM attestations (implemented); changelog and upgrade notes
 - Installation, quick start, architecture walkthrough, demo recording, and troubleshooting

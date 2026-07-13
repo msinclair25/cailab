@@ -4,10 +4,12 @@ on:
   pull_request:
     paths:
       - .github/workflows/release.yml
+      - README.md
       - cmd/cailab/**
-      - internal/tools/release/**
+      - internal/**
       - go.mod
       - go.sum
+      - scenarios/**
   push:
     tags:
       - "v*"

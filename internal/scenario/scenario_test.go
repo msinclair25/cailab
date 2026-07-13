@@ -214,6 +214,91 @@ func TestRepositorySchemaAndReferenceScenario(t *testing.T) {
 	}
 }
 
+func TestBuiltInCatalogLoadsWithoutFilesystemRoot(t *testing.T) {
+	t.Parallel()
+
+	summaries, err := List("")
+	if err != nil {
+		t.Fatalf("List() built-in catalog error = %v", err)
+	}
+	if len(summaries) != 6 {
+		t.Fatalf("List() built-in catalog count = %d, want 6", len(summaries))
+	}
+	if summaries[0].Name != "acquisition-agent" || summaries[0].Path != "embedded:scenarios/acquisition-agent/scenario.yaml" {
+		t.Fatalf("List() first built-in summary = %+v", summaries[0])
+	}
+
+	definition, err := LoadReference("", "walking-skeleton")
+	if err != nil {
+		t.Fatalf("LoadReference() built-in scenario error = %v", err)
+	}
+	if definition.Metadata.Name != "walking-skeleton" {
+		t.Fatalf("LoadReference() built-in name = %q, want walking-skeleton", definition.Metadata.Name)
+	}
+}
+
+func TestExplicitScenarioSourcesRemainSupported(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	catalogPath := filepath.Join(root, "custom", "scenario.yaml")
+	if err := os.MkdirAll(filepath.Dir(catalogPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(catalogPath, []byte(validYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	fromCatalog, err := LoadReference(root, "custom")
+	if err != nil {
+		t.Fatalf("LoadReference() explicit catalog error = %v", err)
+	}
+	if fromCatalog.Metadata.Name != "test-scenario" {
+		t.Fatalf("LoadReference() explicit catalog name = %q, want test-scenario", fromCatalog.Metadata.Name)
+	}
+
+	fromPath, err := LoadReference("", catalogPath)
+	if err != nil {
+		t.Fatalf("LoadReference() explicit path error = %v", err)
+	}
+	if fromPath.Metadata.Name != "test-scenario" {
+		t.Fatalf("LoadReference() explicit path name = %q, want test-scenario", fromPath.Metadata.Name)
+	}
+}
+
+func TestScenarioReferenceRequiresExplicitPathSyntax(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]bool{
+		"walking-skeleton": false,
+		"custom.yaml":      true,
+		"custom.json":      true,
+		"./custom":         true,
+		"nested/custom":    true,
+	}
+	for reference, want := range tests {
+		if got := isExplicitScenarioPath(reference); got != want {
+			t.Errorf("isExplicitScenarioPath(%q) = %v, want %v", reference, got, want)
+		}
+	}
+}
+
+func TestAmbientFileDoesNotShadowBuiltInScenario(t *testing.T) {
+	workingDirectory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workingDirectory, "walking-skeleton"), []byte(validYAML), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(workingDirectory)
+
+	definition, err := LoadReference("", "walking-skeleton")
+	if err != nil {
+		t.Fatalf("LoadReference() built-in scenario error = %v", err)
+	}
+	if definition.Metadata.Name != "walking-skeleton" {
+		t.Fatalf("LoadReference() name = %q, want embedded walking-skeleton", definition.Metadata.Name)
+	}
+}
+
 func TestPromptInjectionFixtureReferencesCanonicalResources(t *testing.T) {
 	t.Parallel()
 	definition, err := Load(filepath.Join("..", "..", "scenarios", "acquisition-agent", "scenario.yaml"))

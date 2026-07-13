@@ -24,7 +24,7 @@ None of these facts proves the software is vulnerability-free. Review the source
 | macOS Apple silicon | `darwin_arm64.tar.gz` | Yes when the hosted macOS runner is ARM64 |
 | Windows x86-64 | `windows_amd64.zip` | Yes |
 
-The archives contain one versioned directory with the `cailab` executable and the repository README. Docker remains required for AWS/Floci scenarios and optional Docker-isolated agent runs; the Microsoft, Google, local OIDC, and walking-skeleton paths do not require it.
+The archives contain one versioned directory with the `cailab` executable and the repository README. Built-in scenario manifests are compiled into the executable, so no checkout or adjacent scenario directory is required. Docker remains required for AWS/Floci scenarios and optional Docker-isolated agent runs; the Microsoft, Google, local OIDC, and walking-skeleton paths do not require it.
 
 ## Verify SHA-256
 
@@ -72,3 +72,5 @@ After extraction:
 ```
 
 On Windows, use `cailab.exe`. The version output should identify the release version, source commit, and source-commit build timestamp recorded by the release workflow.
+
+`scenario list` reads the immutable catalog compiled into that executable, independent of the current working directory. To use custom content, supply an existing scenario file or explicitly select a catalog with `--root` or `--scenario-root`; no ambient `./scenarios` directory overrides the built-ins. Embedded manifests are public data, not a confidentiality boundary.

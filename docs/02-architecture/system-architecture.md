@@ -50,7 +50,7 @@ flowchart TD
 
 ## Sources of truth
 
-- The **scenario manifest** is the source of initial topology and mission intent.
+- The selected **scenario manifest** is the source of initial topology and mission intent. Named built-ins come from the immutable catalog compiled into the executable; custom filesystem sources require explicit selection.
 - **Provider backends** are the source of mutable current state after startup.
 - The **normalized graph** is the source used for cross-provider reasoning.
 - **Deterministic invariants** are the source of pass/fail decisions.
@@ -73,6 +73,8 @@ Accepted choices and their constraints are recorded in ADRs.
 ## Runtime deployment
 
 The target default is one `cailab` binary, with Docker or Podman required only for container-backed scenarios. The binary starts run-scoped native facade subprocesses and manages pinned external containers. Transparent HTTPS interception, host certificate installation, and hosted AI are optional advanced modes.
+
+The repository-owned scenario catalog is compiled into that binary. Default commands do not discover an ambient `./scenarios` directory; explicit paths and catalog flags preserve custom scenario workflows. Both sources enter the same strict validation and deterministic compilation boundary. Embedding establishes distribution and explicit source selection, not confidentiality from the launching OS account. See [ADR-0024](decisions/0024-embedded-built-in-scenario-catalog.md).
 
 M1 tests Docker only. Floci runs as an unprivileged user with dropped capabilities, resource limits, no Docker socket mount, and a random loopback-only API port. Podman remains a target rather than an implemented compatibility claim.
 

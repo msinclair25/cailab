@@ -32,6 +32,7 @@ ADRs record significant decisions that affect system structure, security, compat
 - [ADR-0021: Sequential restored agent campaigns](0021-sequential-restored-agent-campaigns.md)
 - [ADR-0022: Paired fixture-specific agent controls](0022-paired-fixture-specific-agent-controls.md)
 - [ADR-0023: Release artifact and provenance pipeline](0023-release-artifact-provenance-pipeline.md)
+- [ADR-0024: Embedded built-in scenario catalog](0024-embedded-built-in-scenario-catalog.md)
 
 ## Lifecycle
 

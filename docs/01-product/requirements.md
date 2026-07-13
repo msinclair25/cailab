@@ -99,6 +99,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-USE-002 | `cailab doctor` shall detect missing prerequisites and provide actionable remediation. |
 | NFR-USE-003 | Linux CI shall run without cloud accounts, hosted models, or interactive prompts. |
 | NFR-USE-004 | Provider compatibility and limitations shall be documented and test-backed. |
+| NFR-USE-005 | The release executable shall list, show, validate, and start its built-in scenarios without a repository checkout or working-directory catalog; custom files and catalogs shall require explicit selection. |
 
 ### Maintainability and supply chain
 

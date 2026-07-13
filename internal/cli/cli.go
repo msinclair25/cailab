@@ -139,7 +139,7 @@ Run cailab <command> -h for command options.`)
 func (c *CLI) runDoctor(ctx context.Context, args []string) error {
 	fs := newFlagSet("doctor", c.stderr)
 	jsonOutput := fs.Bool("json", false, "emit JSON")
-	scenarioRoot := fs.String("scenario-root", "scenarios", "scenario catalog directory")
+	scenarioRoot := fs.String("scenario-root", "", "scenario catalog directory; default: built-in catalog")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -149,11 +149,7 @@ func (c *CLI) runDoctor(ctx context.Context, args []string) error {
 	requireDocker := false
 	var scenarioName string
 	if fs.NArg() == 1 {
-		path, err := scenario.Resolve(*scenarioRoot, fs.Arg(0))
-		if err != nil {
-			return err
-		}
-		definition, err := scenario.Load(path)
+		definition, err := scenario.LoadReference(*scenarioRoot, fs.Arg(0))
 		if err != nil {
 			return err
 		}
@@ -254,7 +250,7 @@ func (c *CLI) runScenario(args []string) error {
 	switch args[0] {
 	case "list":
 		fs := newFlagSet("scenario list", c.stderr)
-		root := fs.String("root", "scenarios", "scenario catalog directory")
+		root := fs.String("root", "", "scenario catalog directory; default: built-in catalog")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -273,18 +269,14 @@ func (c *CLI) runScenario(args []string) error {
 		return w.Flush()
 	case "show":
 		fs := newFlagSet("scenario show", c.stderr)
-		root := fs.String("root", "scenarios", "scenario catalog directory")
+		root := fs.String("root", "", "scenario catalog directory; default: built-in catalog")
 		if err := fs.Parse(args[1:]); err != nil {
 			return err
 		}
 		if fs.NArg() != 1 {
 			return errors.New("usage: cailab scenario show [--root DIR] <scenario>")
 		}
-		path, err := scenario.Resolve(*root, fs.Arg(0))
-		if err != nil {
-			return err
-		}
-		definition, err := scenario.Load(path)
+		definition, err := scenario.LoadReference(*root, fs.Arg(0))
 		if err != nil {
 			return err
 		}
@@ -297,7 +289,7 @@ func (c *CLI) runScenario(args []string) error {
 
 func (c *CLI) runUp(ctx context.Context, args []string) error {
 	fs := newFlagSet("up", c.stderr)
-	root := fs.String("scenario-root", "scenarios", "scenario catalog directory")
+	root := fs.String("scenario-root", "", "scenario catalog directory; default: built-in catalog")
 	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
 	seed := fs.Int64("seed", 0, "override scenario seed")
 	if err := fs.Parse(args); err != nil {
@@ -305,10 +297,6 @@ func (c *CLI) runUp(ctx context.Context, args []string) error {
 	}
 	if fs.NArg() != 1 {
 		return errors.New("usage: cailab up [options] <scenario>")
-	}
-	path, err := scenario.Resolve(*root, fs.Arg(0))
-	if err != nil {
-		return err
 	}
 	var seedOverride *int64
 	fs.Visit(func(f *flag.Flag) {
@@ -321,7 +309,7 @@ func (c *CLI) runUp(ctx context.Context, args []string) error {
 		return err
 	}
 	defer closeStore()
-	run, err := service.Up(ctx, app.UpOptions{ScenarioPath: path, Seed: seedOverride})
+	run, err := service.Up(ctx, app.UpOptions{ScenarioReference: fs.Arg(0), ScenarioRoot: *root, Seed: seedOverride})
 	if err != nil {
 		if errors.Is(err, state.ErrActiveRun) {
 			return errors.New("an active run already exists; use `cailab down` before starting another")

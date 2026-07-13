@@ -37,7 +37,7 @@ The release workflow is also a privileged trust boundary. Mutable action tags, b
 
 - Unit tests cover metadata validation, unsafe output rejection, deterministic tar/zip bytes, archive paths, modes, timestamps, checksum ordering, and asset selection.
 - The release workflow builds all declared targets and verifies every checksum on each native smoke runner.
-- Linux, macOS, and Windows smoke jobs extract the matching archive, execute `cailab version`, and enumerate the embedded scenario catalog.
+- Linux, macOS, and Windows smoke jobs extract the matching archive, execute `cailab version`, and enumerate the embedded scenario catalog without a repository checkout or external catalog directory.
 - Tag-only jobs attest the verified asset set before a GitHub release can be created.
 
 ## Sources
