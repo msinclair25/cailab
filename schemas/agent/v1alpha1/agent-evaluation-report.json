@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudailab.dev/schemas/agent/v1alpha1/agent-evaluation-report.json",
+  "title": "CloudAILab Agent Evaluation Report v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "profile", "runId", "configDigest", "trials", "aggregate", "notMeasured"],
+  "properties": {
+    "apiVersion": { "const": "cloudailab.dev/agent/v1alpha1" },
+    "kind": { "const": "AgentEvaluationReport" },
+    "profile": { "const": "governed-evidence-v1" },
+    "runId": { "$ref": "#/$defs/id" },
+    "configDigest": { "$ref": "#/$defs/digest" },
+    "trials": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/trial" }
+    },
+    "aggregate": { "$ref": "#/$defs/aggregate" },
+    "notMeasured": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/limitation" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9._:-]{0,127}$" },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "nonNegative": { "type": "integer", "minimum": 0 },
+    "rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator", "rate"],
+      "properties": {
+        "numerator": { "$ref": "#/$defs/nonNegative" },
+        "denominator": { "$ref": "#/$defs/nonNegative" },
+        "rate": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "governedActions", "authorizedActions", "policyDeniedActions", "approvalRejectedActions",
+        "unresolvedActions", "approvalRequired", "approvalApproved", "approvalRejected",
+        "approvalUnresolved", "toolExecutions", "toolSucceeded", "toolFailed",
+        "missingOutcomeEvidence", "observedProtectedTargets"
+      ],
+      "properties": {
+        "governedActions": { "$ref": "#/$defs/nonNegative" },
+        "authorizedActions": { "$ref": "#/$defs/nonNegative" },
+        "policyDeniedActions": { "$ref": "#/$defs/nonNegative" },
+        "approvalRejectedActions": { "$ref": "#/$defs/nonNegative" },
+        "unresolvedActions": { "$ref": "#/$defs/nonNegative" },
+        "approvalRequired": { "$ref": "#/$defs/nonNegative" },
+        "approvalApproved": { "$ref": "#/$defs/nonNegative" },
+        "approvalRejected": { "$ref": "#/$defs/nonNegative" },
+        "approvalUnresolved": { "$ref": "#/$defs/nonNegative" },
+        "toolExecutions": { "$ref": "#/$defs/nonNegative" },
+        "toolSucceeded": { "$ref": "#/$defs/nonNegative" },
+        "toolFailed": { "$ref": "#/$defs/nonNegative" },
+        "missingOutcomeEvidence": { "$ref": "#/$defs/nonNegative" },
+        "observedProtectedTargets": { "$ref": "#/$defs/nonNegative" }
+      }
+    },
+    "trial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trialId", "trialIndex", "status", "traceDigest", "metrics"],
+      "properties": {
+        "trialId": { "$ref": "#/$defs/id" },
+        "trialIndex": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["completed", "failed", "canceled"] },
+        "traceDigest": { "$ref": "#/$defs/digest" },
+        "metrics": { "$ref": "#/$defs/metrics" }
+      }
+    },
+    "aggregate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "trials", "completedTrials", "authorizationRate", "approvalResolutionRate",
+        "executionSuccessRate", "policyDeniedActions", "approvalRejectedActions",
+        "unresolvedActions", "missingOutcomeEvidence", "observedProtectedTargets"
+      ],
+      "properties": {
+        "trials": { "type": "integer", "minimum": 1 },
+        "completedTrials": { "$ref": "#/$defs/rate" },
+        "authorizationRate": { "$ref": "#/$defs/rate" },
+        "approvalResolutionRate": { "$ref": "#/$defs/rate" },
+        "executionSuccessRate": { "$ref": "#/$defs/rate" },
+        "policyDeniedActions": { "$ref": "#/$defs/nonNegative" },
+        "approvalRejectedActions": { "$ref": "#/$defs/nonNegative" },
+        "unresolvedActions": { "$ref": "#/$defs/nonNegative" },
+        "missingOutcomeEvidence": { "$ref": "#/$defs/nonNegative" },
+        "observedProtectedTargets": { "$ref": "#/$defs/nonNegative" }
+      }
+    },
+    "limitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric", "reason"],
+      "properties": {
+        "metric": { "type": "string", "minLength": 1 },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

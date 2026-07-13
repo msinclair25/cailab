@@ -24,6 +24,12 @@ go build -o ./bin/cailab ./cmd/cailab
 
 The reference agent completes without tool calls. CloudAILab persists its scenario digest/seed, agent and policy identity, prompt hash, tool digest, lifecycle timestamps, and terminal status. Reusing the default `trial:1` in the same active range is rejected; select a new value with `--trial-id` when intentionally recording another trial.
 
+Replay the terminal reference evidence without launching it again:
+
+```bash
+./bin/cailab agent replay --trial-id trial:1
+```
+
 ## Register a custom tool and policy
 
 Tool and policy documents use the normative [v1alpha1 schemas](../../schemas/agent/v1alpha1). A tool command must identify an absolute executable. Its working directory is the directory containing the manifest file.
@@ -128,3 +134,37 @@ To make a local reviewer part of the run, add:
 ```
 
 CloudAILab displays canonical target metadata and the approval ID on standard error. It does not display raw tool arguments. Type the exact prompted `approve <approval-id>` value to approve; blank, malformed, or different input rejects. The gateway then re-evaluates current policy, records the resolution, and only continues if the resulting decision is allow or redact. The whole interaction remains subject to the agent session timeout.
+
+## Replay and aggregate repeated trials
+
+Declare a repeated set when launching each trial. Use unique IDs, one-based contiguous indices, the same count, and identical agent/policy/prompt/tool/execution configuration:
+
+```bash
+./bin/cailab agent run subprocess \
+  ...same registration and agent options... \
+  --trial-id evaluation:local-agent:1 \
+  --trial-index 1 \
+  --trial-count 2
+
+./bin/cailab agent run subprocess \
+  ...same registration and agent options... \
+  --trial-id evaluation:local-agent:2 \
+  --trial-index 2 \
+  --trial-count 2
+```
+
+Then select the complete set explicitly:
+
+```bash
+./bin/cailab agent replay \
+  --trial-id evaluation:local-agent:1 \
+  --trial-id evaluation:local-agent:2 \
+  --format markdown \
+  --output evaluation.md
+```
+
+Use `--format text`, `json`, or `markdown`. After `cailab down`, add `--run-id <recorded-range-run-id>` because no active run exists to select by default.
+
+Replay does not start an agent or tool and does not mutate provider state. It rejects incomplete, duplicated, incompatible, non-terminal, or inconsistently linked evidence. The report includes counts, explicit denominators/rates, configuration and trace digests, failures, and unavailable metrics. It does not claim task success from process completion.
+
+The current CLI does not automatically execute or reset a repeated set. If a trial can mutate the scenario, restore the intended fixture state before the next trial and record that procedure externally. Matching run metadata alone does not prove that mutable provider state was identical. Per-trial state snapshots and automated reset are later M3 work. See the [evidence replay compatibility record](../07-compatibility/agent-evidence-replay.md).

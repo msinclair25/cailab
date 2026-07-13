@@ -271,6 +271,21 @@ func TestPublicAgentValidateAndSubprocessRun(t *testing.T) {
 	if strings.Contains(stdout.String(), "raw-cli-secret") {
 		t.Fatalf("evidence-safe output leaked raw arguments: %s", stdout.String())
 	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := c.Run(ctx, []string{
+		"agent", "replay", "--state-dir", stateDir, "--trial-id", "trial:1", "--format", "json",
+	}); code != ExitOK {
+		t.Fatalf("replay code = %d; stderr=%s; stdout=%s", code, stderr.String(), stdout.String())
+	}
+	var evaluation agent.AgentEvaluationReport
+	if err := json.Unmarshal(stdout.Bytes(), &evaluation); err != nil {
+		t.Fatal(err)
+	}
+	if evaluation.Profile != agent.EvaluationProfile || evaluation.Aggregate.CompletedTrials.Numerator != 1 ||
+		evaluation.Aggregate.ExecutionSuccessRate.Numerator != 1 || len(evaluation.NotMeasured) == 0 {
+		t.Fatalf("evaluation = %+v", evaluation)
+	}
 
 	policy.Rules[0].Effect = "require_approval"
 	approvalPolicyPath := writeAgentJSON(t, "approval-policy.json", policy)
@@ -378,6 +393,42 @@ func TestAgentRunSummaryDescribesOnlyEnforcedIsolation(t *testing.T) {
 		t.Fatalf("isolated summary used host warning: %q", output.String())
 	}
 }
+
+func TestAgentEvaluationRenderingIsDeterministicAndLabelsUnmeasuredMetrics(t *testing.T) {
+	half := 0.5
+	report := agent.AgentEvaluationReport{
+		APIVersion: agent.APIVersion, Kind: agent.AgentEvaluationReportKind, Profile: agent.EvaluationProfile,
+		RunID: "run:evaluation", ConfigDigest: strings.Repeat("a", 64),
+		Trials: []agent.TrialEvaluation{{
+			TrialID: "trial:1", TrialIndex: 1, Status: "completed", TraceDigest: strings.Repeat("b", 64),
+		}},
+		Aggregate: agent.AggregateMetrics{
+			Trials: 1, CompletedTrials: agent.MetricRate{Numerator: 1, Denominator: 1, Rate: floatPointer(1)},
+			AuthorizationRate:      agent.MetricRate{Numerator: 1, Denominator: 2, Rate: &half},
+			ApprovalResolutionRate: agent.MetricRate{}, ExecutionSuccessRate: agent.MetricRate{},
+		},
+		NotMeasured: []agent.MeasurementLimitation{{Metric: "task_success", Reason: "terminal completion is not scenario verification"}},
+	}
+	markdown, err := renderAgentEvaluationReport(report, "markdown")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(markdown), "1/2 (50.0%)") || !strings.Contains(string(markdown), "`task_success`") {
+		t.Fatalf("markdown = %s", markdown)
+	}
+	jsonReport, err := renderAgentEvaluationReport(report, "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(jsonReport), "generatedAt") || !strings.Contains(string(jsonReport), `"rate": 0.5`) {
+		t.Fatalf("JSON = %s", jsonReport)
+	}
+	if _, err := renderAgentEvaluationReport(report, "xml"); err == nil {
+		t.Fatal("unsupported evaluation format was accepted")
+	}
+}
+
+func floatPointer(value float64) *float64 { return &value }
 
 func TestCLIAgentSubprocessHelper(t *testing.T) {
 	if os.Getenv("CAILAB_CLI_PARENT_SECRET") != "" {

@@ -75,6 +75,7 @@ Use only public CLI commands and documented workflows. The flagship scenario is 
 - Tool-execution tests cover Draft 2020-12 instances, offline references, invalid-input non-execution, success/failure, correlation, malformed/extra output, timeout, exit status, bounded diagnostics, output redaction, and linked outcome persistence.
 - Public-run tests cover scenario-bound registration, canonical target resolution, explicit agent/tool environments, immutable start/terminal records, real nested subprocess execution, fail-closed and interactive approval behavior, protocol failure, duplicate trials, and evidence-safe CLI rendering.
 - Isolation tests cover content-addressed image validation, exact Docker hardening flags, absence of mounts/environment/ports, immutable execution metadata, ownership-checked cleanup, and a real adversarial probe for host-file absence, blocked external networking, read-only root, bounded temporary storage, non-root execution, cancellation, and leak-free cleanup.
+- Replay tests cover terminal-only evidence, exact cross-record linkage, deterministic sorting and digests, complete compatible trial sets, duplicate/missing indices, configuration drift, count/rate denominators, zero-denominator rates, missing outcome evidence, explicit unavailable metrics, and byte-stable repeated projection.
 - Deliberately unsafe fixtures establish that findings trigger.
 - Nondeterministic models run multiple trials.
 - Reports include denominators, configuration, errors, and incomplete trials.

@@ -398,11 +398,13 @@ func (c *CLI) runMission(ctx context.Context, args []string) error {
 
 func (c *CLI) runAgent(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: cailab agent <validate|run> [options]")
+		return errors.New("usage: cailab agent <validate|run|replay> [options]")
 	}
 	switch args[0] {
 	case "validate":
 		return c.runAgentValidate(ctx, args[1:])
+	case "replay":
+		return c.runAgentReplay(ctx, args[1:])
 	case "run":
 		if len(args) < 2 || (args[1] != "reference" && args[1] != "subprocess") {
 			return errors.New("usage: cailab agent run <reference|subprocess> [options]")
@@ -412,8 +414,46 @@ func (c *CLI) runAgent(ctx context.Context, args []string) error {
 		}
 		return c.runSubprocessAgent(ctx, args[2:])
 	default:
-		return errors.New("usage: cailab agent <validate|run> [options]")
+		return errors.New("usage: cailab agent <validate|run|replay> [options]")
 	}
+}
+
+func (c *CLI) runAgentReplay(ctx context.Context, args []string) error {
+	fs := newFlagSet("agent replay", c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	runID := fs.String("run-id", "", "range run identifier; defaults to the active run")
+	format := fs.String("format", "text", "output format: text, json, or markdown")
+	output := fs.String("output", "", "write the deterministic report to a file")
+	var trialIDs stringListFlag
+	fs.Var(&trialIDs, "trial-id", "terminal trial identifier; repeat in one declared trial set")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 || len(trialIDs) == 0 {
+		return errors.New("usage: cailab agent replay --trial-id ID [--trial-id ID ...] [--run-id ID] [--format text|json|markdown] [--output FILE]")
+	}
+	service, closeStore, err := c.openService(ctx, *stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	report, err := service.ReplayAgentTrials(ctx, *runID, trialIDs)
+	if err != nil {
+		return err
+	}
+	data, err := renderAgentEvaluationReport(report, *format)
+	if err != nil {
+		return err
+	}
+	if *output != "" {
+		if err := os.WriteFile(*output, data, 0o600); err != nil {
+			return fmt.Errorf("write agent evaluation report %q: %w", *output, err)
+		}
+		fmt.Fprintf(c.stdout, "agent evaluation report written to %s\n", *output)
+		return nil
+	}
+	_, _ = c.stdout.Write(data)
+	return nil
 }
 
 func (c *CLI) runAgentValidate(ctx context.Context, args []string) error {
@@ -815,6 +855,78 @@ func (c *CLI) renderAgentRunResult(result app.AgentRunResult, jsonOutput bool) e
 		fmt.Fprintln(c.stdout, "Warning: registered tool subprocesses remain trusted and unisolated; Docker is not a VM boundary.")
 	}
 	return nil
+}
+
+func renderAgentEvaluationReport(report agent.AgentEvaluationReport, format string) ([]byte, error) {
+	switch format {
+	case "json":
+		encoded, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("encode agent evaluation report: %w", err)
+		}
+		return append(encoded, '\n'), nil
+	case "markdown":
+		return []byte(agentEvaluationMarkdown(report)), nil
+	case "text":
+		var output strings.Builder
+		fmt.Fprintf(&output, "CloudAILab agent evaluation — %s\n", report.Profile)
+		fmt.Fprintf(&output, "Run: %s\nConfiguration: %s\n", report.RunID, report.ConfigDigest)
+		fmt.Fprintf(&output, "Completed trials: %s\n", renderMetricRate(report.Aggregate.CompletedTrials))
+		fmt.Fprintf(&output, "Final authorization rate: %s\n", renderMetricRate(report.Aggregate.AuthorizationRate))
+		fmt.Fprintf(&output, "Approval resolution rate: %s\n", renderMetricRate(report.Aggregate.ApprovalResolutionRate))
+		fmt.Fprintf(&output, "Tool execution success rate: %s\n", renderMetricRate(report.Aggregate.ExecutionSuccessRate))
+		fmt.Fprintf(&output, "Policy-denied actions: %d\n", report.Aggregate.PolicyDeniedActions)
+		fmt.Fprintf(&output, "Approval-rejected actions: %d\n", report.Aggregate.ApprovalRejectedActions)
+		fmt.Fprintf(&output, "Unresolved actions: %d\n", report.Aggregate.UnresolvedActions)
+		fmt.Fprintf(&output, "Missing outcome evidence: %d\n", report.Aggregate.MissingOutcomeEvidence)
+		fmt.Fprintf(&output, "Observed protected targets: %d\n", report.Aggregate.ObservedProtectedTargets)
+		for _, trial := range report.Trials {
+			fmt.Fprintf(&output, "Trial %d: %s — %s (%s)\n", trial.TrialIndex, trial.TrialID, trial.Status, trial.TraceDigest)
+		}
+		fmt.Fprintln(&output, "Not measured:")
+		for _, limitation := range report.NotMeasured {
+			fmt.Fprintf(&output, "- %s: %s\n", limitation.Metric, limitation.Reason)
+		}
+		return []byte(output.String()), nil
+	default:
+		return nil, fmt.Errorf("unsupported agent evaluation format %q", format)
+	}
+}
+
+func agentEvaluationMarkdown(report agent.AgentEvaluationReport) string {
+	var output strings.Builder
+	fmt.Fprintln(&output, "# CloudAILab agent evaluation")
+	fmt.Fprintf(&output, "\n- Profile: `%s`\n- Run: `%s`\n- Configuration: `%s`\n", report.Profile, report.RunID, report.ConfigDigest)
+	fmt.Fprintln(&output, "\n## Aggregate metrics")
+	fmt.Fprintln(&output, "\n| Metric | Result |")
+	fmt.Fprintln(&output, "|---|---:|")
+	fmt.Fprintf(&output, "| Completed trials | %s |\n", renderMetricRate(report.Aggregate.CompletedTrials))
+	fmt.Fprintf(&output, "| Final authorization rate | %s |\n", renderMetricRate(report.Aggregate.AuthorizationRate))
+	fmt.Fprintf(&output, "| Approval resolution rate | %s |\n", renderMetricRate(report.Aggregate.ApprovalResolutionRate))
+	fmt.Fprintf(&output, "| Tool execution success rate | %s |\n", renderMetricRate(report.Aggregate.ExecutionSuccessRate))
+	fmt.Fprintf(&output, "| Policy-denied actions | %d |\n", report.Aggregate.PolicyDeniedActions)
+	fmt.Fprintf(&output, "| Approval-rejected actions | %d |\n", report.Aggregate.ApprovalRejectedActions)
+	fmt.Fprintf(&output, "| Unresolved actions | %d |\n", report.Aggregate.UnresolvedActions)
+	fmt.Fprintf(&output, "| Missing outcome evidence | %d |\n", report.Aggregate.MissingOutcomeEvidence)
+	fmt.Fprintf(&output, "| Observed protected targets | %d |\n", report.Aggregate.ObservedProtectedTargets)
+	fmt.Fprintln(&output, "\n## Trials")
+	fmt.Fprintln(&output, "\n| Index | Trial | Status | Trace digest |")
+	fmt.Fprintln(&output, "|---:|---|---|---|")
+	for _, trial := range report.Trials {
+		fmt.Fprintf(&output, "| %d | `%s` | %s | `%s` |\n", trial.TrialIndex, trial.TrialID, trial.Status, trial.TraceDigest)
+	}
+	fmt.Fprintln(&output, "\n## Not measured")
+	for _, limitation := range report.NotMeasured {
+		fmt.Fprintf(&output, "\n- `%s`: %s\n", limitation.Metric, limitation.Reason)
+	}
+	return output.String()
+}
+
+func renderMetricRate(metric agent.MetricRate) string {
+	if metric.Rate == nil {
+		return fmt.Sprintf("%d/%d (n/a)", metric.Numerator, metric.Denominator)
+	}
+	return fmt.Sprintf("%d/%d (%.1f%%)", metric.Numerator, metric.Denominator, *metric.Rate*100)
 }
 
 type stringListFlag []string

@@ -106,6 +106,38 @@ func TestRunAgentResolvesApprovedAndRejectedCalls(t *testing.T) {
 	}
 }
 
+func TestReplayAgentTrialsAggregatesACompleteCompatibleSet(t *testing.T) {
+	ctx := context.Background()
+	store, service, rangeRun := appAgentTestService(t, ctx)
+	defer store.Close()
+	for index := 1; index <= 2; index++ {
+		options := appAgentTestOptions(t, rangeRun.Compiled, fmt.Sprintf("trial:%d", index), "tool")
+		options.TrialIndex = index
+		options.TrialCount = 2
+		if _, err := service.RunAgent(ctx, options); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report, err := service.ReplayAgentTrials(ctx, "", []string{"trial:2", "trial:1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Aggregate.Trials != 2 || report.Aggregate.CompletedTrials.Numerator != 2 ||
+		report.Aggregate.AuthorizationRate.Numerator != 2 || report.Aggregate.AuthorizationRate.Denominator != 2 ||
+		report.Aggregate.ExecutionSuccessRate.Numerator != 2 || report.Trials[0].TrialID != "trial:1" {
+		t.Fatalf("report = %+v", report)
+	}
+	if _, err := service.ReplayAgentTrials(ctx, rangeRun.ID, []string{"trial:1"}); !errors.Is(err, agent.ErrIncompleteAgentTrialSet) {
+		t.Fatalf("incomplete replay error = %v", err)
+	}
+	if _, err := store.StopActiveRun(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ReplayAgentTrials(ctx, rangeRun.ID, []string{"trial:1", "trial:2"}); err != nil {
+		t.Fatalf("replay stopped run: %v", err)
+	}
+}
+
 func TestReferenceAgentRunOptionsAreValidForActiveScenario(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {
