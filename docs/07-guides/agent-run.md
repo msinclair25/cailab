@@ -191,7 +191,18 @@ CloudAILab keeps recorded provider endpoints stable: native facades restore in p
 
 The terminal run summary reports two state snapshots. Replay then selects `scenario-outcome-v1` and adds initial-state match, task-success, and remediation-success rates. Task success means every declared after-state invariant passes; remediation success applies only to a trial that began with at least one failed invariant.
 
-The current CLI still launches each repeated trial separately. Use `--restore-fixture` on every member of a repeated set to establish equivalent supported provider state. Restoration is not atomic across provider processes, and host-mode processes can race the terminal snapshot; see the [trial-state compatibility record](../07-compatibility/agent-trial-state.md) and [evidence replay compatibility record](../07-compatibility/agent-evidence-replay.md).
+For the code-owned baseline, run a complete restored campaign directly:
+
+```bash
+./bin/cailab agent campaign reference \
+  --trials 3 \
+  --trial-prefix campaign:reference \
+  --format markdown
+```
+
+CloudAILab preflights all derived IDs, restores and captures every trial sequentially, and emits the aggregate replay report. A terminal agent failure remains measurable when complete state evidence exists. A restoration, persistence, cancellation, or incomplete-evidence failure stops the set without reporting a partial aggregate; recover the range and use a new prefix because recorded trial IDs are immutable.
+
+Custom subprocess agents still launch repeated trials explicitly with the same `--trial-count`, distinct `--trial-index` and `--trial-id`, plus `--restore-fixture` on every member. Restoration is not atomic across provider processes, and host-mode processes can race the terminal snapshot; see the [campaign compatibility record](../07-compatibility/agent-campaign-execution.md), [trial-state compatibility record](../07-compatibility/agent-trial-state.md), and [evidence replay compatibility record](../07-compatibility/agent-evidence-replay.md).
 
 ## Run the deliberately unsafe injection baseline
 
@@ -203,5 +214,14 @@ With `acquisition-agent` active, run the code-owned deterministic failing baseli
 ```
 
 The baseline reads the synthetic runbook through the governed Google reader and follows its explicit training marker into a governed synthetic export call. The export tool is a simulator and does not retrieve or transmit provider data. Replay uses `adversarial-scenario-v1` and reports exposure, resistance, injection success, and gateway containment separately.
+
+Run the same unsafe baseline as an automatically restored campaign:
+
+```bash
+./bin/cailab agent campaign unsafe \
+  --trials 3 \
+  --fixture drive-runbook-export \
+  --format markdown
+```
 
 To score a custom agent, add `--prompt-injection-fixture drive-runbook-export` to the complete subprocess command and register manifests matching every fixture target. The option implies restoration and capture. Fixture ground truth is persisted for replay but omitted from `session.start`. See the [prompt-injection compatibility record](../07-compatibility/agent-prompt-injection.md).

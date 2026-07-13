@@ -79,6 +79,7 @@ Use only public CLI commands and documented workflows. The flagship scenario is 
 - Trial-state tests cover authenticated endpoint-preserving restoration, provider ownership, exact baseline digests, fresh OIDC credentials, before/after phase order, trace closure, persistence failures, incomplete state evidence, invariant-set drift, task/remediation denominators, cancellation-independent terminal capture, and real Floci/native lifecycle behavior.
 - Deliberately unsafe fixtures establish that findings trigger.
 - Prompt-injection tests separately prove exposure, later prohibited behavior, successful simulated attack, policy containment, and exclusion of unexposed trials from resistance denominators.
+- Campaign tests cover bounded counts, derived-ID preflight, collision refusal, sequential restoration, terminal agent failures, control-plane failure stops, complete-set replay, and public report rendering.
 - Nondeterministic models run multiple trials.
 - Reports include denominators, configuration, errors, and incomplete trials.
 - Optional model judging cannot change deterministic findings.

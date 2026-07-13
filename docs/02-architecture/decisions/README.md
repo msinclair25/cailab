@@ -29,6 +29,7 @@ ADRs record significant decisions that affect system structure, security, compat
 - [ADR-0018: Deterministic agent evidence replay](0018-deterministic-agent-evidence-replay.md)
 - [ADR-0019: Endpoint-preserving trial state evaluation](0019-endpoint-preserving-trial-state-evaluation.md)
 - [ADR-0020: Fixture-labeled agent hijacking evaluation](0020-fixture-labeled-agent-hijacking-evaluation.md)
+- [ADR-0021: Sequential restored agent campaigns](0021-sequential-restored-agent-campaigns.md)
 
 ## Lifecycle
 

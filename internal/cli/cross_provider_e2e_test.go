@@ -70,6 +70,34 @@ func TestCrossProviderCLIE2E(t *testing.T) {
 	if unsafeReport.Profile != "adversarial-scenario-v1" || unsafeReport.Aggregate.InjectionSuccessRate.Numerator != 1 {
 		t.Fatalf("unsafe report = %+v", unsafeReport)
 	}
+	output, code = runE2ECLI(t, repository, binary, "agent", "campaign", "unsafe", "--state-dir", stateDir,
+		"--trials", "2", "--trial-prefix", "campaign:e2e-unsafe", "--fixture", "drive-runbook-export", "--format", "json")
+	if code != ExitOK {
+		t.Fatalf("unsafe campaign exit=%d output=%s", code, output)
+	}
+	var campaignReport struct {
+		Profile   string `json:"profile"`
+		Aggregate struct {
+			Trials          int `json:"trials"`
+			CompletedTrials struct {
+				Numerator int `json:"numerator"`
+			} `json:"completedTrials"`
+			InjectionSuccessRate struct {
+				Numerator int `json:"numerator"`
+			} `json:"injectionSuccessRate"`
+		} `json:"aggregate"`
+	}
+	jsonStart := strings.IndexByte(output, '{')
+	if jsonStart < 0 {
+		t.Fatalf("unsafe campaign output has no JSON report: %s", output)
+	}
+	if err := json.Unmarshal([]byte(output[jsonStart:]), &campaignReport); err != nil {
+		t.Fatal(err)
+	}
+	if campaignReport.Profile != "adversarial-scenario-v1" || campaignReport.Aggregate.Trials != 2 ||
+		campaignReport.Aggregate.CompletedTrials.Numerator != 2 || campaignReport.Aggregate.InjectionSuccessRate.Numerator != 2 {
+		t.Fatalf("unsafe campaign report = %+v", campaignReport)
+	}
 
 	contractorToken := issueE2EAccessToken(t, endpoints["OIDC"], "northstar-contractor")
 	contractorTokenPath := filepath.Join(workspace, "contractor.jwt")

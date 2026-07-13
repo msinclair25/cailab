@@ -43,7 +43,7 @@ Milestones are capability gates, not date commitments. This document is the conc
 
 ## M3 — Agent governance harness
 
-**Status:** in development; versioned protocols, supported reference/unsafe/custom subprocess runs, deterministic governance, optional Docker agent isolation, protected linked evidence, endpoint-preserving restoration, normalized baselines, scenario evidence, and fixture-labeled injection scoring are complete. Automatic campaign execution remains; tool subprocess isolation is deferred.
+**Status:** in development; versioned protocols, supported reference/unsafe/custom subprocess runs, deterministic governance, optional Docker agent isolation, protected linked evidence, endpoint-preserving restoration, normalized baselines, scenario evidence, fixture-labeled injection scoring, and automatic restored reference/unsafe campaigns are complete. Tool subprocess isolation is deferred.
 
 - Add agent identity and run metadata.
 - Supervise protocol-compatible direct subprocesses with bounded lifecycle and diagnostics.
@@ -54,7 +54,7 @@ Milestones are capability gates, not date commitments. This document is the conc
 - Record complete action traces.
 - Replay complete compatible trial sets into transparent counts, denominators, rates, and explicit unavailable metrics.
 - Restore supported provider fixtures at stable endpoints and link before/after invariant evidence to each evaluated trial.
-- Add prompt-injection fixtures and repeated trials. (fixture and manual repeated-trial scoring implemented; automatic campaign execution remains)
+- Add prompt-injection fixtures and repeated trials. (fixture, repeated-trial scoring, and automatic reference/unsafe campaigns implemented)
 - Report task success, policy violations, and blast radius.
 
 **Exit:** a local or external agent can be evaluated deterministically against the flagship scenario.

@@ -21,6 +21,15 @@ func (e *ValidationError) Error() string {
 	return "agent protocol validation failed: " + strings.Join(e.Issues, "; ")
 }
 
+// ValidateIdentifier applies the identifier grammar shared by versioned agent
+// contracts. It is exposed for orchestration inputs that derive record IDs
+// before an AgentRun exists.
+func ValidateIdentifier(value string) error {
+	var issues []string
+	validateID(&issues, "identifier", value)
+	return validationResult(issues)
+}
+
 func ValidateToolManifest(manifest ToolManifest) error {
 	var issues []string
 	requireEqual(&issues, "apiVersion", manifest.APIVersion, APIVersion)

@@ -288,6 +288,23 @@ func TestPublicAgentValidateAndSubprocessRun(t *testing.T) {
 		t.Fatalf("evaluation = %+v", evaluation)
 	}
 
+	stdout.Reset()
+	stderr.Reset()
+	if code := c.Run(ctx, []string{
+		"agent", "campaign", "reference", "--state-dir", stateDir, "--trials", "2",
+		"--trial-prefix", "campaign:cli-reference", "--format", "json",
+	}); code != ExitOK {
+		t.Fatalf("campaign code = %d; stderr=%s; stdout=%s", code, stderr.String(), stdout.String())
+	}
+	var campaign agent.AgentEvaluationReport
+	if err := json.Unmarshal(stdout.Bytes(), &campaign); err != nil {
+		t.Fatal(err)
+	}
+	if campaign.Profile != agent.ScenarioOutcomeProfile || campaign.Aggregate.Trials != 2 ||
+		campaign.Aggregate.CompletedTrials.Denominator != 2 || campaign.Trials[0].TrialID != "campaign:cli-reference:1" {
+		t.Fatalf("campaign = %+v", campaign)
+	}
+
 	policy.Rules[0].Effect = "require_approval"
 	approvalPolicyPath := writeAgentJSON(t, "approval-policy.json", policy)
 	t.Setenv(cliAgentHelperEnvironment, "approval")
