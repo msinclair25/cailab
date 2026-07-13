@@ -131,6 +131,8 @@ The Go project recommends govulncheck, fuzzing, and the race detector as complem
 - Clean-install smoke tests
 - Documentation and compatibility review
 
+The release workflow exercises packaging on relevant pull requests and manual dispatches but creates attestations and GitHub releases only for tags. Its repository-owned packager is covered by normal Go tests; Linux, macOS, and Windows jobs verify the complete checksum manifest and execute the matching archive before tag publication. Release actions are full-SHA pinned and write permissions exist only in separate tag-gated attestation and publication jobs.
+
 GitHub Actions receive minimum permissions and third-party actions are pinned to full commit SHAs. Release jobs are separate from pull-request jobs and use protected environments when credentials are introduced.
 
 ## Coverage policy

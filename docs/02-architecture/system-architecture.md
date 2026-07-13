@@ -82,6 +82,10 @@ The M2 federation command validates signed local identity, current Microsoft ass
 
 M3's public agent workflows launch deterministic inert reference, fixture-specific safe, deliberately unsafe, or configured protocol subprocess agents behind the governed tool gateway. The controller binds canonical targets, policy, approvals, protected output, and immutable linked evidence. Startup captures a normalized provider-state baseline; evaluated trials can restore owned runtimes at stable loopback endpoints and append before/after invariant reports. Scenario-owned injection ground truth is persisted but omitted from `session.start`; replay derives exposure, later prohibited behavior, attack success, and gateway containment from exact linked action evidence without running a model. Paired safe/unsafe controls validate positive and negative fixture behavior without implying model-general resistance. Host agents and tools remain unisolated. Optional Docker agent mode enforces the documented content-addressed, network-none, read-only, non-root boundary; tools remain on the trusted host side. See [ADR-0011](decisions/0011-versioned-agent-json-lines-protocol.md) through [ADR-0022](decisions/0022-paired-fixture-specific-agent-controls.md).
 
+## Release pipeline
+
+M4 uses a repository-owned Go packager as the source of archive layout and checksum selection. It creates fixed CGO-free targets from explicit version, commit, and source-date inputs; Syft inventories the staged binaries in SPDX JSON; and Linux, macOS, and Windows jobs verify the full manifest before executing their native archive. Pull requests and manual runs stop at a short-lived release candidate. Tags alone enter separate GitHub/Sigstore attestation and publication jobs with narrowly scoped write permissions. See [ADR-0023](decisions/0023-release-artifact-provenance-pipeline.md) and the [release verification guide](../07-guides/release-verification.md).
+
 ## Compatibility policy
 
 Every provider operation must have:

@@ -70,6 +70,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-033 | A trial is scored as resistant without consuming the attack, fixture expectations leak to the agent, an adapter failure is mislabeled as governance containment, or the unsafe baseline exports real data. | Ground truth omitted from `session.start`; exposure requires a linked successful outcome; only later exact prohibited decisions count; separate behavior/success/containment facts; containment from gateway disposition; fixed synthetic marker and simulated export only. |
 | TM-034 | A repeated campaign silently reuses trials, changes its denominator, runs against drifted state, races provider mutations, continues after incomplete restoration, or emits a score from a partial set. | Bounded count; preflighted derived IDs and collision checks; immutable one-based count/index metadata; sequential execution; verified restoration and before/after evidence per trial; fail-closed control-plane errors; complete-set replay only. |
 | TM-035 | A scripted safe control is presented as generally resistant, avoids leaked prohibited ground truth, or earns resistance without consuming the fixture. | Fixture-specific labeling; prohibited tool/action/resource tuple absent from child argv; no prohibited action/resource in `session.start`; exposure requires a successful linked outcome; no content-derived follow-up call; paired unsafe control; explicit limitations for models, adaptive attacks, semantic equivalents, and deployments. |
+| TM-036 | A mutable workflow dependency, injected tag/version, stale output, broad token, or unverified archive compromises a public release or misstates its origin. | Full-SHA action pins; explicit Syft version; semantic-version validation in workflow and Go tool; fixed cleaned staging paths; read-only module builds; sorted checksums; native smoke tests; separate least-privilege attestation/publication jobs; GitHub/Sigstore build and SBOM attestations. |
 
 ## Security invariants
 
@@ -131,6 +132,14 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - Evidence-safe traces still cannot measure sensitive-data exposure or effective blast radius.
 - Automatic campaigns are sequential and bounded but can be long-running. A stopped campaign is not resumable under the same immutable trial IDs and requires a new prefix after range recovery.
 - The safe fixture control is scripted and deterministic. Its positive result validates the exact evaluation path only; it says nothing about an LLM's reasoning, adaptive robustness, or a production agent deployment.
+
+## M4 residual risk
+
+- Artifact attestations establish recorded build origin and integrity, not that source, dependencies, workflow logic, or binaries are vulnerability-free.
+- Checksums do not establish authenticity unless the manifest or its attestation is independently trusted.
+- Equivalent source-date inputs and pinned module content reduce nondeterminism, but bit-for-bit independent reproduction across toolchain environments is not yet claimed.
+- Linux ARM64 is cross-compiled and packaged but is not yet executed on a native hosted release runner.
+- The SBOM reflects Syft's detection over staged binaries and can be incomplete; it complements rather than replaces `govulncheck`, dependency review, and source inspection.
 
 ## Review triggers
 
