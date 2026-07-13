@@ -8,7 +8,7 @@ last_reviewed: 2026-07-12
 
 ## Current scope
 
-CloudAILab defines typed and schema-backed contracts for M3 agent runs, tool registration, governance policy, agent messages, tool execution, decisions, redaction, decision events, and tool outcomes. The supported CLI validates scenario-bound registrations and runs either the deterministic reference agent or a protocol-compatible custom subprocess. The harness applies exact-match policy and manifest ceilings, validates Draft 2020-12 input offline, protects successful output, and commits immutable run plus linked decision/outcome evidence. Enforced isolation, full trace replay, interactive approval resolution, and aggregate metrics remain later M3 work.
+CloudAILab defines typed and schema-backed contracts for M3 agent runs, tool registration, governance policy, agent messages, tool execution, decisions, redaction, approval resolutions, decision events, and tool outcomes. The supported CLI validates scenario-bound registrations and runs either the deterministic reference agent or a protocol-compatible custom subprocess. The harness applies exact-match policy and manifest ceilings, validates Draft 2020-12 input offline, resolves approvals locally with default rejection, protects successful output, and commits immutable run plus linked decision/approval/outcome evidence. Enforced isolation, full trace replay, and aggregate metrics remain later M3 work.
 
 The normative schemas are:
 
@@ -19,8 +19,9 @@ The normative schemas are:
 - [Governance policy](../../schemas/agent/v1alpha1/governance-policy.json)
 - [Tool execution message](../../schemas/agent/v1alpha1/tool-execution-message.json)
 - [Tool outcome event](../../schemas/agent/v1alpha1/tool-outcome-event.json)
+- [Approval resolution event](../../schemas/agent/v1alpha1/approval-resolution-event.json)
 
-The executable validation, policy, gateway, and session contracts are in [`internal/agent`](../../internal/agent). [ADR-0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) defines the original wire contract; [ADR-0012](../02-architecture/decisions/0012-owned-agent-subprocess-sessions.md) defines the owned-process lifecycle; [ADR-0013](../02-architecture/decisions/0013-deterministic-tool-policy-and-evidence.md) defines policy/evidence semantics; and [ADR-0015](../02-architecture/decisions/0015-scenario-bound-public-agent-runs.md) defines protocol 1.1 and the public workflow.
+The executable validation, policy, gateway, and session contracts are in [`internal/agent`](../../internal/agent). [ADR-0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) defines the original wire contract; [ADR-0012](../02-architecture/decisions/0012-owned-agent-subprocess-sessions.md) defines the owned-process lifecycle; [ADR-0013](../02-architecture/decisions/0013-deterministic-tool-policy-and-evidence.md) defines policy/evidence semantics; [ADR-0015](../02-architecture/decisions/0015-scenario-bound-public-agent-runs.md) defines protocol 1.1 and the public workflow; and [ADR-0016](../02-architecture/decisions/0016-immutable-approval-resolution.md) defines approval resolution and evidence linkage.
 
 ## Framing
 
@@ -45,7 +46,7 @@ The current wire version is `1.1`. The internal-only `1.0` draft did not carry a
 | `tool.call` | Agent | Requests one declared tool, action, canonical resource ID, and JSON-object arguments. |
 | `tool.result` | Controller | Returns the deterministic decision, execution status, and optional content. |
 | `approval.required` | Controller | States that the correlated call was not executed and needs a decision. |
-| `approval.resolved` | Controller | Records the approval identity and outcome. It is not itself a tool result. |
+| `approval.resolved` | Controller | Reports the durably recorded local resolution. It is followed by a correlated `tool.result` and is not itself a tool result. |
 | `session.complete` | Agent | Reports completed, failed, or canceled agent work. |
 | `protocol.error` | Either | Reports a stable protocol error without changing authorization state. |
 
@@ -86,7 +87,15 @@ Every decision carries a stable reason code and policy version. `redact` require
 
 Governance policies default only to deny and match exact agent, tool, action, resource, tenant, and classification values. A protocol 1.1 agent declares the action and canonical resource ID; the controller resolves tenant/classification from active canonical scenario state. A manifest permission is a mandatory ceiling: policy cannot add undeclared authority. Multiple matching rules are independent of document order and use fixed precedence: `deny`, then `require_approval`, then `redact`, then `allow`. Redaction pointers are merged and sorted; a missing pointer becomes a stable deny.
 
-Policy redaction pointers apply to input arguments before execution. Input instances must satisfy the manifest's closed Draft 2020-12 schema; `$ref` and `$dynamicRef` are fragment-local and schema compilation has no external loader. Only allow and redact launch a tool. Deny and approval-required remain `not_executed`.
+Policy redaction pointers apply to input arguments before execution. Input instances must satisfy the manifest's closed Draft 2020-12 schema; `$ref` and `$dynamicRef` are fragment-local and schema compilation has no external loader. Direct allow and redact launch a tool. Deny remains `not_executed`; approval-required remains unexecuted until the separate resolution flow completes.
+
+## Approval resolution
+
+The public subprocess runner uses `--approval-mode reject` by default, so CI and unattended runs never wait for input or approve implicitly. `--approval-mode prompt --approver <id>` displays the agent, tool, action, canonical resource, classification, tenant, and policy reason. It omits raw tool arguments and accepts only the exact text `approve <approval-id>`; every other response rejects.
+
+The initial `require_approval` decision is not replaced. After a response, the gateway re-evaluates the same request against the current policy and manifest ceiling. A stale or mismatched approval fails closed, deny precedence is retained, and applicable redaction still applies. Rejection produces `approval:rejected`. Approval produces only allow or redact.
+
+Before sending `approval.resolved`, the store appends an `ApprovalResolutionEvent` linked to the original decision and input hash. An approved execution outcome must link to both records. The live continuation consumes the resolution once; duplicate resolutions, replayed continuations, rejected-outcome attempts, mismatched messages, and failed evidence writes do not execute the tool.
 
 ## Tool execution
 
@@ -98,7 +107,7 @@ Successful content is canonicalized and applies every manifest `sensitiveFields`
 
 An agent run records the exact scenario digest and seed, agent/provider/model version, policy digest, prompt hash, tool digests, trial index/count, status, and UTC timestamps. The store writes an immutable running record before launch and appends exactly one terminal record without changing configuration. A decision event adds a monotonic sequence, correlation ID, actor and tenant, tool, action, resource classification, decision, outcome, and canonical input/output hashes; decisions are accepted only while that trial is active.
 
-Sequence is authoritative for decision order. Wall-clock time is diagnostic context and does not determine policy or score. The gateway hashes canonical original arguments and does not persist them. It commits the immutable decision with `not_executed` before an allowed/redacted launch, then appends a separate `ToolOutcomeEvent` linked to that decision and stored record hash. Successful outcomes hash the exact protected content returned to the agent; failed outcomes carry a stable error code. Reads validate schema and hashes. Human and `--json` summaries omit raw arguments, transcripts, and child diagnostic text. This detects accidental inconsistency but is not protection from a local user who can rewrite the database. Full transcript persistence and replay remain planned.
+Sequence is authoritative for decision order. Wall-clock time is diagnostic context and does not determine policy or score. The gateway hashes canonical original arguments and does not persist them. It commits the immutable decision with `not_executed` before a direct allowed/redacted launch. Approval-required calls append a separate resolution record before any continuation. A `ToolOutcomeEvent` links to the direct decision or, for approved execution, to both the original decision and approval record. Successful outcomes hash the exact protected content returned to the agent; failed outcomes carry a stable error code. Reads validate schema and hashes. Human and `--json` summaries omit raw arguments, transcripts, and child diagnostic text. This detects accidental inconsistency but is not protection from a local user who can rewrite the database. Full transcript persistence and replay remain planned.
 
 ## Security boundary
 

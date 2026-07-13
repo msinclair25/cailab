@@ -74,6 +74,38 @@ func TestRunAgentPersistsFailedTerminalRecordAfterProtocolFailure(t *testing.T) 
 	}
 }
 
+func TestRunAgentResolvesApprovedAndRejectedCalls(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		approved     bool
+		wantOutcomes int
+	}{
+		{name: "approved", approved: true, wantOutcomes: 1},
+		{name: "rejected", approved: false, wantOutcomes: 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			store, service, rangeRun := appAgentTestService(t, ctx)
+			defer store.Close()
+			options := appAgentTestOptions(t, rangeRun.Compiled, "trial:"+test.name, "approval")
+			options.Policy.Rules[0].Effect = "require_approval"
+			options.Approver = agent.ApproverFunc(func(_ context.Context, request agent.ApprovalRequest) (agent.ApprovalResolution, error) {
+				if request.Resource.ID != "resource:a" || request.InputHash == "" {
+					t.Fatalf("approval request = %+v", request)
+				}
+				return agent.ApprovalResolution{Approved: test.approved, ResolvedBy: "user:reviewer"}, nil
+			})
+			result, err := service.RunAgent(ctx, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if result.Run.Status != "completed" || len(result.Approvals) != 1 || result.Approvals[0].Approved != test.approved || len(result.Outcomes) != test.wantOutcomes {
+				t.Fatalf("result = %+v", result)
+			}
+		})
+	}
+}
+
 func TestReferenceAgentRunOptionsAreValidForActiveScenario(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {
@@ -118,7 +150,7 @@ func TestAppAgentSubprocessHelper(t *testing.T) {
 	if err := encoder.Write(appAgentMessage(agent.MessageAgentReady, "message:ready", "", agent.AgentReadyPayload{AgentID: "agent:test", AgentVersion: "0.1.0"})); err != nil {
 		os.Exit(12)
 	}
-	if agentMode == "tool" {
+	if agentMode == "tool" || agentMode == "approval" {
 		call := appAgentMessage(agent.MessageToolCall, "call:1", "", agent.ToolCallPayload{
 			Tool: "test.read", Action: "test.read", Resource: "resource:a", Arguments: json.RawMessage(`{"resource":"resource:a"}`),
 		})
@@ -126,8 +158,22 @@ func TestAppAgentSubprocessHelper(t *testing.T) {
 			os.Exit(13)
 		}
 		response, err := decoder.Next()
-		if err != nil || response.Type != agent.MessageToolResult || response.CorrelationID != call.ID {
-			os.Exit(14)
+		if agentMode == "tool" {
+			if err != nil || response.Type != agent.MessageToolResult || response.CorrelationID != call.ID {
+				os.Exit(14)
+			}
+		} else {
+			if err != nil || response.Type != agent.MessageApprovalRequired || response.CorrelationID != call.ID {
+				os.Exit(14)
+			}
+			resolved, err := decoder.Next()
+			if err != nil || resolved.Type != agent.MessageApprovalResolved || resolved.CorrelationID != call.ID {
+				os.Exit(16)
+			}
+			final, err := decoder.Next()
+			if err != nil || final.Type != agent.MessageToolResult || final.CorrelationID != call.ID {
+				os.Exit(17)
+			}
 		}
 	}
 	if err := encoder.Write(appAgentMessage(agent.MessageSessionComplete, "message:complete", "", agent.SessionCompletePayload{Status: "completed"})); err != nil {

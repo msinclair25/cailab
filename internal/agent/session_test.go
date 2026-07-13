@@ -90,6 +90,79 @@ func TestRunSessionDispatchesApprovalRequirement(t *testing.T) {
 	}
 }
 
+func TestRunSessionResolvesAndContinuesApproval(t *testing.T) {
+	config := testSessionConfig(t, "approval-continuation")
+	var resolvedCalls, continuedCalls int
+	handler := approvalContinuationHandler{
+		handle: func(_ context.Context, call Message, _ ToolCallPayload) (Message, error) {
+			return testMessage(MessageApprovalRequired, "message:approval", call.ID, ApprovalRequiredPayload{
+				ApprovalID: "approval:1", ToolCallID: call.ID, Reason: "restricted data requires explicit approval",
+			}), nil
+		},
+		resolve: func(_ context.Context, call Message, _ ToolCallPayload, _ Message) (Message, error) {
+			resolvedCalls++
+			approved := true
+			return testMessage(MessageApprovalResolved, "message:resolved", call.ID, ApprovalResolvedPayload{
+				ApprovalID: "approval:1", Approved: &approved, ResolvedBy: "user:reviewer",
+			}), nil
+		},
+		continueCall: func(_ context.Context, call Message, _ ToolCallPayload, _ Message) (Message, error) {
+			continuedCalls++
+			return testMessage(MessageToolResult, "message:result", call.ID, ToolResultPayload{
+				Tool: "google.drive.read", Status: "succeeded", Content: json.RawMessage(`{"ok":true}`),
+				Decision: Decision{Effect: "allow", ReasonCode: "rule:approval", PolicyVersion: "0.1.0"},
+			}), nil
+		},
+	}
+	result, err := RunSession(context.Background(), config, handler)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Completion.Status != "completed" || resolvedCalls != 1 || continuedCalls != 1 {
+		t.Fatalf("result=%+v resolved=%d continued=%d", result, resolvedCalls, continuedCalls)
+	}
+}
+
+func TestRunSessionRejectsMismatchedApprovalResolution(t *testing.T) {
+	config := testSessionConfig(t, "approval-continuation")
+	handler := approvalContinuationHandler{
+		handle: func(_ context.Context, call Message, _ ToolCallPayload) (Message, error) {
+			return testMessage(MessageApprovalRequired, "message:approval", call.ID, ApprovalRequiredPayload{
+				ApprovalID: "approval:1", ToolCallID: call.ID, Reason: "approval required",
+			}), nil
+		},
+		resolve: func(_ context.Context, call Message, _ ToolCallPayload, _ Message) (Message, error) {
+			approved := true
+			return testMessage(MessageApprovalResolved, "message:resolved", call.ID, ApprovalResolvedPayload{
+				ApprovalID: "approval:other", Approved: &approved, ResolvedBy: "user:reviewer",
+			}), nil
+		},
+	}
+	if _, err := RunSession(context.Background(), config, handler); !errors.Is(err, ErrProtocolViolation) {
+		t.Fatalf("error = %v, want protocol violation", err)
+	}
+}
+
+func TestRunSessionCancelsApprovalResolution(t *testing.T) {
+	config := testSessionConfig(t, "approval-continuation")
+	config.HandshakeTimeout = 50 * time.Millisecond
+	config.SessionTimeout = 120 * time.Millisecond
+	handler := approvalContinuationHandler{
+		handle: func(_ context.Context, call Message, _ ToolCallPayload) (Message, error) {
+			return testMessage(MessageApprovalRequired, "message:approval", call.ID, ApprovalRequiredPayload{
+				ApprovalID: "approval:1", ToolCallID: call.ID, Reason: "approval required",
+			}), nil
+		},
+		resolve: func(ctx context.Context, _ Message, _ ToolCallPayload, _ Message) (Message, error) {
+			<-ctx.Done()
+			return Message{}, ctx.Err()
+		},
+	}
+	if _, err := RunSession(context.Background(), config, handler); !errors.Is(err, ErrSessionTimeout) {
+		t.Fatalf("error = %v, want session timeout", err)
+	}
+}
+
 func TestRunSessionRejectsLifecycleAndProtocolViolations(t *testing.T) {
 	tests := []struct {
 		name string
@@ -336,17 +409,29 @@ func TestSessionHelperProcess(t *testing.T) {
 		}))
 	case "undeclared-tool":
 		mustWriteHelper(testMessage(MessageToolCall, "call:1", "", ToolCallPayload{Tool: "microsoft.graph.write", Action: "graph.write", Resource: "microsoft:directory", Arguments: json.RawMessage(`{}`)}))
-	case "tool", "approval":
+	case "tool", "approval", "approval-continuation":
 		call := testMessage(MessageToolCall, "call:1", "", ToolCallPayload{Tool: "google.drive.read", Action: "drive.files.get", Resource: "google:file", Arguments: json.RawMessage(`{"fileId":"google:file"}`)})
 		mustWriteHelper(call)
 		response, err := input.Next()
 		expectedType := MessageToolResult
-		if mode == "approval" {
+		if mode == "approval" || mode == "approval-continuation" {
 			expectedType = MessageApprovalRequired
 		}
 		if err != nil || response.Type != expectedType || response.CorrelationID != call.ID {
 			fmt.Fprintln(os.Stderr, "invalid test tool response")
 			os.Exit(4)
+		}
+		if mode == "approval-continuation" {
+			resolved, err := input.Next()
+			if err != nil || resolved.Type != MessageApprovalResolved || resolved.CorrelationID != call.ID {
+				fmt.Fprintln(os.Stderr, "invalid test approval resolution")
+				os.Exit(9)
+			}
+			result, err := input.Next()
+			if err != nil || result.Type != MessageToolResult || result.CorrelationID != call.ID {
+				fmt.Fprintln(os.Stderr, "invalid test approved result")
+				os.Exit(10)
+			}
 		}
 		mustWriteHelper(testMessage(MessageSessionComplete, "message:complete", "", SessionCompletePayload{Status: "completed"}))
 	default:
@@ -392,4 +477,25 @@ func testSessionConfig(t *testing.T, mode string) SessionConfig {
 func testMessage(messageType, id, correlation string, payload any) Message {
 	data, _ := json.Marshal(payload)
 	return Message{ProtocolVersion: ProtocolVersion, ID: id, Type: messageType, CorrelationID: correlation, Payload: data}
+}
+
+type approvalContinuationHandler struct {
+	handle       func(context.Context, Message, ToolCallPayload) (Message, error)
+	resolve      func(context.Context, Message, ToolCallPayload, Message) (Message, error)
+	continueCall func(context.Context, Message, ToolCallPayload, Message) (Message, error)
+}
+
+func (h approvalContinuationHandler) HandleToolCall(ctx context.Context, call Message, payload ToolCallPayload) (Message, error) {
+	return h.handle(ctx, call, payload)
+}
+
+func (h approvalContinuationHandler) ResolveApproval(ctx context.Context, call Message, payload ToolCallPayload, required Message) (Message, error) {
+	return h.resolve(ctx, call, payload, required)
+}
+
+func (h approvalContinuationHandler) ContinueApprovedToolCall(ctx context.Context, call Message, payload ToolCallPayload, resolved Message) (Message, error) {
+	if h.continueCall == nil {
+		return Message{}, errors.New("unexpected approval continuation")
+	}
+	return h.continueCall(ctx, call, payload, resolved)
 }

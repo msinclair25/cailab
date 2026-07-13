@@ -57,8 +57,37 @@ WHERE run_id = ? AND trial_id = ? AND correlation_id = ? AND event_id = ?`,
 		return agent.ToolOutcomeEvent{}, fmt.Errorf("read tool outcome decision: %w", err)
 	}
 	decision, err := agent.DecodeDecisionEvent(decisionJSON)
-	if err != nil || decision.Tool != draft.Tool || decision.Outcome.Status != "not_executed" ||
-		(decision.Decision.Effect != "allow" && decision.Decision.Effect != "redact") {
+	if err != nil || decision.Tool != draft.Tool || decision.Outcome.Status != "not_executed" {
+		return agent.ToolOutcomeEvent{}, fmt.Errorf("%w: decision does not authorize an outcome", ErrDecisionEventIntegrity)
+	}
+	predecessorHash := decisionHash
+	approvalRecordHash := ""
+	switch decision.Decision.Effect {
+	case "allow", "redact":
+		if draft.ApprovalEventID != "" {
+			return agent.ToolOutcomeEvent{}, fmt.Errorf("%w: direct decision must not link approval evidence", ErrDecisionEventIntegrity)
+		}
+	case "require_approval":
+		if draft.ApprovalEventID == "" {
+			return agent.ToolOutcomeEvent{}, fmt.Errorf("%w: approved outcome is missing approval evidence", ErrDecisionEventIntegrity)
+		}
+		var approvalJSON []byte
+		var approvalDecisionHash string
+		if err := tx.QueryRowContext(ctx, `
+SELECT event_json, decision_record_hash, record_hash FROM agent_approval_resolutions
+WHERE run_id = ? AND trial_id = ? AND correlation_id = ? AND event_id = ? AND decision_event_id = ?`,
+			draft.RunID, draft.TrialID, draft.CorrelationID, draft.ApprovalEventID, draft.DecisionEventID).Scan(&approvalJSON, &approvalDecisionHash, &approvalRecordHash); err != nil {
+			return agent.ToolOutcomeEvent{}, fmt.Errorf("%w: read approval authorization: %v", ErrDecisionEventIntegrity, err)
+		}
+		approval, err := agent.DecodeApprovalResolutionEvent(approvalJSON)
+		canonicalApproval, canonicalErr := agent.CanonicalJSON(approvalJSON)
+		if err != nil || canonicalErr != nil || approvalDecisionHash != decisionHash ||
+			approvalRecordHash != decisionRecordHash(decisionHash, canonicalApproval) || !approval.Approved || approval.Tool != draft.Tool ||
+			(approval.Decision.Effect != "allow" && approval.Decision.Effect != "redact") {
+			return agent.ToolOutcomeEvent{}, fmt.Errorf("%w: approval does not authorize an outcome", ErrDecisionEventIntegrity)
+		}
+		predecessorHash = approvalRecordHash
+	default:
 		return agent.ToolOutcomeEvent{}, fmt.Errorf("%w: decision does not authorize an outcome", ErrDecisionEventIntegrity)
 	}
 	var duplicate int
@@ -82,13 +111,14 @@ SELECT 1 FROM agent_tool_outcomes WHERE run_id = ? AND trial_id = ? AND correlat
 	if err != nil {
 		return agent.ToolOutcomeEvent{}, fmt.Errorf("canonicalize tool outcome: %w", err)
 	}
-	recordHash := decisionRecordHash(decisionHash, canonical)
+	recordHash := decisionRecordHash(predecessorHash, canonical)
 	if _, err := tx.ExecContext(ctx, `
 INSERT INTO agent_tool_outcomes(
-    run_id, trial_id, correlation_id, event_id, decision_event_id, event_json, decision_record_hash, record_hash
-) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
+	 run_id, trial_id, correlation_id, event_id, decision_event_id, event_json,
+	 decision_record_hash, record_hash, approval_event_id, approval_record_hash
+) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		event.RunID, event.TrialID, event.CorrelationID, event.EventID, event.DecisionEventID,
-		canonical, decisionHash, recordHash); err != nil {
+		canonical, decisionHash, recordHash, nullIfEmpty(event.ApprovalEventID), approvalRecordHash); err != nil {
 		return agent.ToolOutcomeEvent{}, fmt.Errorf("insert tool outcome %q: %w", event.EventID, err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -99,10 +129,13 @@ INSERT INTO agent_tool_outcomes(
 
 func (s *Store) ToolOutcomeEvents(ctx context.Context, runID, trialID string) ([]agent.ToolOutcomeEvent, error) {
 	rows, err := s.db.QueryContext(ctx, `
-SELECT o.event_json, o.decision_record_hash, o.record_hash, d.record_hash
+SELECT o.event_json, o.decision_record_hash, o.record_hash, d.record_hash,
+       o.approval_event_id, o.approval_record_hash, a.record_hash
 FROM agent_tool_outcomes o
 LEFT JOIN agent_decision_events d
   ON d.run_id = o.run_id AND d.trial_id = o.trial_id AND d.correlation_id = o.correlation_id
+LEFT JOIN agent_approval_resolutions a
+  ON a.run_id = o.run_id AND a.trial_id = o.trial_id AND a.event_id = o.approval_event_id
 WHERE o.run_id = ? AND o.trial_id = ? ORDER BY d.sequence`, runID, trialID)
 	if err != nil {
 		return nil, fmt.Errorf("query tool outcomes: %w", err)
@@ -111,9 +144,10 @@ WHERE o.run_id = ? AND o.trial_id = ? ORDER BY d.sequence`, runID, trialID)
 	events := make([]agent.ToolOutcomeEvent, 0)
 	for rows.Next() {
 		var encoded []byte
-		var storedDecisionHash, storedRecordHash string
-		var currentDecisionHash sql.NullString
-		if err := rows.Scan(&encoded, &storedDecisionHash, &storedRecordHash, &currentDecisionHash); err != nil {
+		var storedDecisionHash, storedRecordHash, storedApprovalHash string
+		var currentDecisionHash, storedApprovalEventID, currentApprovalHash sql.NullString
+		if err := rows.Scan(&encoded, &storedDecisionHash, &storedRecordHash, &currentDecisionHash,
+			&storedApprovalEventID, &storedApprovalHash, &currentApprovalHash); err != nil {
 			return nil, fmt.Errorf("scan tool outcome: %w", err)
 		}
 		event, err := agent.DecodeToolOutcomeEvent(encoded)
@@ -121,7 +155,21 @@ WHERE o.run_id = ? AND o.trial_id = ? ORDER BY d.sequence`, runID, trialID)
 			return nil, fmt.Errorf("%w: decode tool outcome: %v", ErrDecisionEventIntegrity, err)
 		}
 		canonical, err := agent.CanonicalJSON(encoded)
-		if err != nil || !currentDecisionHash.Valid || storedDecisionHash != currentDecisionHash.String || storedRecordHash != decisionRecordHash(currentDecisionHash.String, canonical) {
+		predecessorHash := ""
+		if currentDecisionHash.Valid && storedDecisionHash == currentDecisionHash.String {
+			predecessorHash = currentDecisionHash.String
+		}
+		if event.ApprovalEventID != "" {
+			if !storedApprovalEventID.Valid || storedApprovalEventID.String != event.ApprovalEventID ||
+				!currentApprovalHash.Valid || storedApprovalHash != currentApprovalHash.String {
+				predecessorHash = ""
+			} else {
+				predecessorHash = currentApprovalHash.String
+			}
+		} else if storedApprovalEventID.Valid || storedApprovalHash != "" || currentApprovalHash.Valid {
+			predecessorHash = ""
+		}
+		if err != nil || predecessorHash == "" || storedRecordHash != decisionRecordHash(predecessorHash, canonical) {
 			return nil, fmt.Errorf("%w: inconsistent tool outcome %q", ErrDecisionEventIntegrity, event.EventID)
 		}
 		events = append(events, event)
@@ -130,4 +178,11 @@ WHERE o.run_id = ? AND o.trial_id = ? ORDER BY d.sequence`, runID, trialID)
 		return nil, fmt.Errorf("iterate tool outcomes: %w", err)
 	}
 	return events, nil
+}
+
+func nullIfEmpty(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }

@@ -22,7 +22,7 @@ var (
 	ErrActiveRun   = errors.New("an active run already exists")
 )
 
-const currentSchemaVersion = 5
+const currentSchemaVersion = 6
 
 type Store struct {
 	db *sql.DB
@@ -194,6 +194,32 @@ CREATE TABLE agent_runs (
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO schema_migrations(version, applied_at) VALUES(5, ?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
 			return fmt.Errorf("record state migration 5: %w", err)
+		}
+		version = 5
+	}
+	if version < 6 {
+		if _, err := tx.ExecContext(ctx, `
+CREATE TABLE agent_approval_resolutions (
+    run_id TEXT NOT NULL,
+    trial_id TEXT NOT NULL,
+    correlation_id TEXT NOT NULL,
+    approval_id TEXT NOT NULL UNIQUE,
+    event_id TEXT NOT NULL UNIQUE,
+    decision_event_id TEXT NOT NULL UNIQUE,
+    event_json BLOB NOT NULL,
+    decision_record_hash TEXT NOT NULL,
+    record_hash TEXT NOT NULL,
+    PRIMARY KEY (run_id, trial_id, correlation_id),
+    FOREIGN KEY (run_id) REFERENCES runs(id)
+);
+ALTER TABLE agent_tool_outcomes ADD COLUMN approval_event_id TEXT;
+ALTER TABLE agent_tool_outcomes ADD COLUMN approval_record_hash TEXT NOT NULL DEFAULT '';
+`); err != nil {
+			return fmt.Errorf("apply state migration 6: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO schema_migrations(version, applied_at) VALUES(6, ?)`, time.Now().UTC().Format(time.RFC3339Nano)); err != nil {
+			return fmt.Errorf("record state migration 6: %w", err)
 		}
 	}
 	if err := tx.Commit(); err != nil {

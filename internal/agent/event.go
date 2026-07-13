@@ -17,6 +17,9 @@ func ValidateToolOutcomeEvent(event ToolOutcomeEvent) error {
 	validateID(&issues, "trialId", event.TrialID)
 	validateID(&issues, "correlationId", event.CorrelationID)
 	validateID(&issues, "decisionEventId", event.DecisionEventID)
+	if event.ApprovalEventID != "" {
+		validateID(&issues, "approvalEventId", event.ApprovalEventID)
+	}
 	validateToolRef(&issues, "tool", event.Tool)
 	if event.Outcome.Status != "succeeded" && event.Outcome.Status != "failed" {
 		issues = append(issues, fmt.Sprintf("outcome.status has unsupported value %q", event.Outcome.Status))
@@ -39,7 +42,7 @@ func BuildToolOutcomeEvent(draft ToolOutcomeEventDraft, eventID string) (ToolOut
 	event := ToolOutcomeEvent{
 		APIVersion: APIVersion, Kind: ToolOutcomeEventKind, EventID: eventID,
 		OccurredAt: draft.OccurredAt, RunID: draft.RunID, TrialID: draft.TrialID,
-		CorrelationID: draft.CorrelationID, DecisionEventID: draft.DecisionEventID,
+		CorrelationID: draft.CorrelationID, DecisionEventID: draft.DecisionEventID, ApprovalEventID: draft.ApprovalEventID,
 		Tool: draft.Tool, Outcome: draft.Outcome, OutputHash: draft.OutputHash,
 	}
 	if err := ValidateToolOutcomeEvent(event); err != nil {

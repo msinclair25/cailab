@@ -293,7 +293,7 @@ Exit gate:
 
 ### M3 — Agent governance harness
 
-**Status:** in development. Versioned agent/policy/tool/outcome contracts, supported reference and custom subprocess runs, scenario-bound registration, exact-match policy, Draft 2020-12 validation, protected tool execution, immutable run metadata, and append-only decision/outcome evidence are implemented. Approval resolution, isolation, full trace replay, and scoring remain.
+**Status:** in development. Versioned agent/policy/tool/approval/outcome contracts, supported reference and custom subprocess runs, scenario-bound registration, exact-match policy, fail-closed or interactive approval resolution, Draft 2020-12 validation, protected tool execution, immutable run metadata, and append-only linked evidence are implemented. Isolation, full trace replay, and scoring remain.
 
 **Goal:** make an external agent a measurable principal in the range.
 
@@ -432,7 +432,7 @@ The following questions must be resolved through spikes and ADRs before dependen
 3. Built-in invariant predicates versus embedded policy engine — resolved by ADR-0006.
 4. Canonical policy condition representation — before M1 compatibility claims.
 5. Microsoft and Google pagination/error subset — before M2 facade implementation.
-6. Agent subprocess trace protocol and approval handshake — before M3.
+6. Agent subprocess trace protocol and approval handshake — resolved by ADR-0011, ADR-0012, and ADR-0016.
 7. Isolation implementation and supported host platforms — before claiming safe agent execution.
 
 ## Change control
@@ -445,6 +445,6 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Implement explicit approval resolution with immutable evidence and re-evaluation.
-2. Add enforced isolation modes before making any agent-containment claim.
-3. Build trace replay and repeated-trial scoring, then add the unsafe prompt-injection evaluation fixture.
+1. Add enforced isolation modes before making any agent-containment claim.
+2. Build trace replay and repeated-trial scoring.
+3. Add the unsafe prompt-injection evaluation fixture and evidence-linked report.

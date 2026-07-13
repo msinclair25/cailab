@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -268,6 +269,62 @@ func TestPublicAgentValidateAndSubprocessRun(t *testing.T) {
 	if strings.Contains(stdout.String(), "raw-cli-secret") {
 		t.Fatalf("evidence-safe output leaked raw arguments: %s", stdout.String())
 	}
+
+	policy.Rules[0].Effect = "require_approval"
+	approvalPolicyPath := writeAgentJSON(t, "approval-policy.json", policy)
+	t.Setenv(cliAgentHelperEnvironment, "approval")
+	stdout.Reset()
+	stderr.Reset()
+	if code := c.Run(ctx, []string{
+		"agent", "run", "subprocess", "--state-dir", stateDir, "--policy", approvalPolicyPath, "--tool", manifestPath,
+		"--prompt-file", promptPath, "--agent-id", "agent:cli-test", "--agent-version", "0.1.0",
+		"--provider", "test", "--model", "deterministic", "--actor-tenant", "tenant-a",
+		"--command", executable, "--arg", "-test.run=^TestCLIAgentSubprocessHelper$", "--directory", stateDir,
+		"--agent-env", cliAgentHelperEnvironment, "--tool-env", cliToolHelperEnvironment,
+		"--trial-id", "trial:approval-rejected", "--json",
+	}); code != ExitOK {
+		t.Fatalf("default rejection code = %d; stderr=%s; stdout=%s", code, stderr.String(), stdout.String())
+	}
+	var rejected agentRunSummary
+	if err := json.Unmarshal(stdout.Bytes(), &rejected); err != nil {
+		t.Fatal(err)
+	}
+	if len(rejected.Approvals) != 1 || rejected.Approvals[0].Approved || rejected.Approvals[0].Decision.ReasonCode != "approval:rejected" || len(rejected.Outcomes) != 0 {
+		t.Fatalf("default rejection summary = %+v", rejected)
+	}
+}
+
+func TestPromptApproverRequiresExactCorrelatedConfirmationWithoutRawArguments(t *testing.T) {
+	request := agent.ApprovalRequest{
+		ApprovalID: "approval:1", DecisionEventID: "event:1", RunID: "run:1", TrialID: "trial:1", CorrelationID: "call:1",
+		Actor:  agent.ActorRef{ID: "agent:test", Tenant: "tenant:a", Type: "agent"},
+		Tool:   agent.ToolRef{Name: "test.read", Version: "0.1.0", Digest: strings.Repeat("a", 64)},
+		Action: "test.read", Resource: agent.ResourceRef{ID: "resource:a", Tenant: "tenant:a", Classification: "restricted"},
+		ReasonCode: "rule:approval", InputHash: strings.Repeat("b", 64),
+	}
+	for _, test := range []struct {
+		name        string
+		input       string
+		wantApprove bool
+	}{
+		{name: "exact", input: "approve approval:1\n", wantApprove: true},
+		{name: "mismatch", input: "approve approval:other\n", wantApprove: false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			approver := promptApprover{input: bufio.NewReader(strings.NewReader(test.input)), output: &output, resolvedBy: "user:reviewer"}
+			resolution, err := approver.ResolveApproval(context.Background(), request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if resolution.Approved != test.wantApprove || resolution.ResolvedBy != "user:reviewer" {
+				t.Fatalf("resolution = %+v", resolution)
+			}
+			if strings.Contains(output.String(), "raw-cli-secret") || strings.Contains(output.String(), request.InputHash) {
+				t.Fatalf("approval prompt leaked protected input data: %q", output.String())
+			}
+		})
+	}
 }
 
 func TestCLIAgentSubprocessHelper(t *testing.T) {
@@ -301,8 +358,18 @@ func TestCLIAgentSubprocessHelper(t *testing.T) {
 		os.Exit(23)
 	}
 	response, err := decoder.Next()
+	if agentMode == "approval" {
+		if err != nil || response.Type != agent.MessageApprovalRequired || response.CorrelationID != call.ID {
+			os.Exit(24)
+		}
+		resolved, err := decoder.Next()
+		if err != nil || resolved.Type != agent.MessageApprovalResolved || resolved.CorrelationID != call.ID {
+			os.Exit(26)
+		}
+		response, err = decoder.Next()
+	}
 	if err != nil || response.Type != agent.MessageToolResult || response.CorrelationID != call.ID {
-		os.Exit(24)
+		os.Exit(27)
 	}
 	if err := encoder.Write(cliAgentMessage(agent.MessageSessionComplete, "message:complete", "", agent.SessionCompletePayload{Status: "completed"})); err != nil {
 		os.Exit(25)
