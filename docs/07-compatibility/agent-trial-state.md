@@ -39,7 +39,7 @@ Agent process completion remains separate. A failed process can still have a suc
 - A stable endpoint does not authenticate a registered host tool or isolate it.
 - A host-mode agent or detached descendant can race provider state because host execution remains unisolated.
 - The OIDC endpoint is stable, but signing keys and synthetic credentials intentionally change on restore.
-- Automatic campaign execution is limited to the code-owned reference and unsafe fixtures; custom subprocess trials remain individually launched.
+- Automatic campaign execution is limited to the code-owned reference, safe, and unsafe fixtures; custom subprocess trials remain individually launched.
 
 ## Tests
 

@@ -1,6 +1,6 @@
 ---
 title: Docker Agent Isolation Compatibility
-status: m3-development
+status: m3-complete
 last_reviewed: 2026-07-12
 ---
 

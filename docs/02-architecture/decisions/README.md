@@ -30,6 +30,7 @@ ADRs record significant decisions that affect system structure, security, compat
 - [ADR-0019: Endpoint-preserving trial state evaluation](0019-endpoint-preserving-trial-state-evaluation.md)
 - [ADR-0020: Fixture-labeled agent hijacking evaluation](0020-fixture-labeled-agent-hijacking-evaluation.md)
 - [ADR-0021: Sequential restored agent campaigns](0021-sequential-restored-agent-campaigns.md)
+- [ADR-0022: Paired fixture-specific agent controls](0022-paired-fixture-specific-agent-controls.md)
 
 ## Lifecycle
 

@@ -1,6 +1,6 @@
 ---
 title: Agent Protocol v1alpha1
-status: m3-development
+status: m3-complete
 last_reviewed: 2026-07-12
 ---
 
@@ -8,7 +8,7 @@ last_reviewed: 2026-07-12
 
 ## Current scope
 
-CloudAILab defines typed and schema-backed contracts for M3 agent runs, tools, governance, approvals, decisions, outcomes, trial state, fixture evaluation, evidence-safe traces, and reports. The supported CLI runs deterministic reference and deliberately unsafe baselines or a protocol-compatible custom agent in host subprocess or opt-in Docker isolation mode. It also runs bounded sequential reference/unsafe campaigns with verified fixture restoration before every trial and automatic aggregate replay. The harness enforces scenario-bound registration, deterministic policy, protected output, linked evidence, normalized provider baselines, endpoint-preserving restoration, scenario outcomes, and fixture-labeled injection scoring. Tool subprocess isolation and automatic custom-agent campaigns are not implemented.
+CloudAILab defines typed and schema-backed contracts for M3 agent runs, tools, governance, approvals, decisions, outcomes, trial state, fixture evaluation, evidence-safe traces, and reports. The supported CLI runs deterministic inert reference, fixture-specific safe, deliberately unsafe, or protocol-compatible custom agents in host subprocess or opt-in Docker isolation mode. It also runs bounded sequential reference/safe/unsafe campaigns with verified fixture restoration before every trial and automatic aggregate replay. The harness enforces scenario-bound registration, deterministic policy, protected output, linked evidence, normalized provider baselines, endpoint-preserving restoration, scenario outcomes, and fixture-labeled injection scoring. Tool subprocess isolation and automatic custom-agent campaigns are not implemented.
 
 The normative schemas are:
 
@@ -24,7 +24,7 @@ The normative schemas are:
 - [Agent evaluation report](../../schemas/agent/v1alpha1/agent-evaluation-report.json)
 - [Trial state evidence](../../schemas/agent/v1alpha1/trial-state-evidence.json)
 
-The executable validation, policy, gateway, session, state, and replay contracts are in [`internal/agent`](../../internal/agent). ADRs [0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) through [0018](../02-architecture/decisions/0018-deterministic-agent-evidence-replay.md) define the wire, lifecycle, governance, evidence, approval, isolation, and initial replay contracts. [ADR-0019](../02-architecture/decisions/0019-endpoint-preserving-trial-state-evaluation.md) defines provider restoration and scenario-outcome scoring.
+The executable validation, policy, gateway, session, state, and replay contracts are in [`internal/agent`](../../internal/agent). ADRs [0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) through [0018](../02-architecture/decisions/0018-deterministic-agent-evidence-replay.md) define the wire, lifecycle, governance, evidence, approval, isolation, and initial replay contracts. [ADR-0019](../02-architecture/decisions/0019-endpoint-preserving-trial-state-evaluation.md) through [ADR-0022](../02-architecture/decisions/0022-paired-fixture-specific-agent-controls.md) define restoration, adversarial scoring, campaigns, and paired fixture controls.
 
 ## Framing
 

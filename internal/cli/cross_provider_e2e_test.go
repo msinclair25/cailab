@@ -99,6 +99,65 @@ func TestCrossProviderCLIE2E(t *testing.T) {
 		t.Fatalf("unsafe campaign report = %+v", campaignReport)
 	}
 
+	output, code = runE2ECLI(t, repository, binary, "agent", "run", "safe", "--state-dir", stateDir, "--fixture", "drive-runbook-export")
+	if code != ExitOK || !strings.Contains(output, "2 state snapshot(s)") {
+		t.Fatalf("safe agent exit=%d output=%s", code, output)
+	}
+	output, code = runE2ECLI(t, repository, binary, "agent", "replay", "--state-dir", stateDir, "--trial-id", "trial:safe", "--format", "json")
+	if code != ExitOK {
+		t.Fatalf("safe replay exit=%d output=%s", code, output)
+	}
+	var safeReport struct {
+		Profile   string `json:"profile"`
+		Aggregate struct {
+			InjectionExposureRate struct {
+				Numerator int `json:"numerator"`
+			} `json:"injectionExposureRate"`
+			ResistanceRate struct {
+				Numerator int `json:"numerator"`
+			} `json:"promptInjectionResistanceRate"`
+			InjectionSuccessRate struct {
+				Numerator int `json:"numerator"`
+			} `json:"injectionSuccessRate"`
+		} `json:"aggregate"`
+	}
+	if err := json.Unmarshal([]byte(output), &safeReport); err != nil {
+		t.Fatal(err)
+	}
+	if safeReport.Profile != "adversarial-scenario-v1" || safeReport.Aggregate.InjectionExposureRate.Numerator != 1 ||
+		safeReport.Aggregate.ResistanceRate.Numerator != 1 || safeReport.Aggregate.InjectionSuccessRate.Numerator != 0 {
+		t.Fatalf("safe report = %+v", safeReport)
+	}
+
+	output, code = runE2ECLI(t, repository, binary, "agent", "campaign", "safe", "--state-dir", stateDir,
+		"--trials", "2", "--trial-prefix", "campaign:e2e-safe", "--fixture", "drive-runbook-export", "--format", "json")
+	if code != ExitOK {
+		t.Fatalf("safe campaign exit=%d output=%s", code, output)
+	}
+	var safeCampaignReport struct {
+		Profile   string `json:"profile"`
+		Aggregate struct {
+			Trials          int `json:"trials"`
+			CompletedTrials struct {
+				Numerator int `json:"numerator"`
+			} `json:"completedTrials"`
+			ResistanceRate struct {
+				Numerator int `json:"numerator"`
+			} `json:"promptInjectionResistanceRate"`
+			InjectionSuccessRate struct {
+				Numerator int `json:"numerator"`
+			} `json:"injectionSuccessRate"`
+		} `json:"aggregate"`
+	}
+	if err := json.Unmarshal([]byte(output), &safeCampaignReport); err != nil {
+		t.Fatal(err)
+	}
+	if safeCampaignReport.Profile != "adversarial-scenario-v1" || safeCampaignReport.Aggregate.Trials != 2 ||
+		safeCampaignReport.Aggregate.CompletedTrials.Numerator != 2 || safeCampaignReport.Aggregate.ResistanceRate.Numerator != 2 ||
+		safeCampaignReport.Aggregate.InjectionSuccessRate.Numerator != 0 {
+		t.Fatalf("safe campaign report = %+v", safeCampaignReport)
+	}
+
 	contractorToken := issueE2EAccessToken(t, endpoints["OIDC"], "northstar-contractor")
 	contractorTokenPath := filepath.Join(workspace, "contractor.jwt")
 	if err := os.WriteFile(contractorTokenPath, []byte(contractorToken+"\n"), 0o600); err != nil {

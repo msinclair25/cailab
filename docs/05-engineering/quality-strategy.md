@@ -78,6 +78,7 @@ Use only public CLI commands and documented workflows. The flagship scenario is 
 - Replay tests cover terminal-only evidence, exact cross-record linkage, deterministic sorting and digests, complete compatible trial sets, duplicate/missing indices, configuration drift, count/rate denominators, zero-denominator rates, missing outcome evidence, explicit unavailable metrics, and byte-stable repeated projection.
 - Trial-state tests cover authenticated endpoint-preserving restoration, provider ownership, exact baseline digests, fresh OIDC credentials, before/after phase order, trace closure, persistence failures, incomplete state evidence, invariant-set drift, task/remediation denominators, cancellation-independent terminal capture, and real Floci/native lifecycle behavior.
 - Deliberately unsafe fixtures establish that findings trigger.
+- Fixture-specific safe controls establish proven exposure without prohibited behavior and are tested not to receive prohibited ground truth through child configuration.
 - Prompt-injection tests separately prove exposure, later prohibited behavior, successful simulated attack, policy containment, and exclusion of unexposed trials from resistance denominators.
 - Campaign tests cover bounded counts, derived-ID preflight, collision refusal, sequential restoration, terminal agent failures, control-plane failure stops, complete-set replay, and public report rendering.
 - Nondeterministic models run multiple trials.

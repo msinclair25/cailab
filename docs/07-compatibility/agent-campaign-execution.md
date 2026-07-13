@@ -8,10 +8,11 @@ last_reviewed: 2026-07-12
 
 ## Supported contract
 
-CloudAILab automatically executes bounded repeated sets for its code-owned deterministic reference and deliberately unsafe fixtures:
+CloudAILab automatically executes bounded repeated sets for its code-owned deterministic inert reference, fixture-specific safe control, and deliberately unsafe fixtures:
 
 ```bash
 cailab agent campaign reference --trials 3 --format markdown
+cailab agent campaign safe --trials 3 --fixture drive-runbook-export --format json
 cailab agent campaign unsafe --trials 3 --fixture drive-runbook-export --format json
 ```
 
@@ -21,7 +22,7 @@ Trials run sequentially. A terminal agent failure remains in the declared denomi
 
 ## Explicit limitations
 
-- Automatic campaigns support only `reference` and `unsafe`; custom subprocess agents still use explicit `agent run subprocess` trial index/count flags followed by `agent replay`.
+- Automatic campaigns support only `reference`, `safe`, and `unsafe`; custom subprocess agents still use explicit `agent run subprocess` trial index/count flags followed by `agent replay`.
 - Campaigns do not run trials concurrently.
 - A partial campaign cannot resume or reuse its derived IDs. Recover the range if necessary and choose a new prefix.
 - Restoration is not atomic across providers, and host-mode process limitations still apply.
