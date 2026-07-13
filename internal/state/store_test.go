@@ -33,7 +33,8 @@ func TestRunLifecyclePersists(t *testing.T) {
 		t.Fatalf("second CreateRun() error = %v, want ErrActiveRun", err)
 	}
 	runtimes := []provider.Instance{{Provider: "aws", Engine: "floci", Name: "runtime", Endpoint: "http://127.0.0.1:4566", Status: "ready"}}
-	if err := store.SetRuntimes(ctx, run.ID, runtimes); err != nil {
+	baselineDigest := strings.Repeat("c", 64)
+	if err := store.SetRuntimeBaseline(ctx, run.ID, runtimes, baselineDigest); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Close(); err != nil {
@@ -49,7 +50,7 @@ func TestRunLifecyclePersists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if active.ID != run.ID || active.Compiled.Digest != compiled.Digest {
+	if active.ID != run.ID || active.Compiled.Digest != compiled.Digest || active.BaselineDigest != baselineDigest {
 		t.Fatalf("active run = %+v, want %q", active, run.ID)
 	}
 	if len(active.Runtimes) != 1 || active.Runtimes[0].Endpoint != runtimes[0].Endpoint {
@@ -136,6 +137,12 @@ VALUES(?, 'legacy', '0.1.0', 1, 'active', ?, '2026-07-11T00:00:00Z', '2026-07-11
 	if defaultValue != "'[]'" {
 		t.Fatalf("runtimes_json default = %q", defaultValue)
 	}
+	if err := store.db.QueryRowContext(ctx, `SELECT dflt_value FROM pragma_table_info('runs') WHERE name = 'baseline_digest'`).Scan(&defaultValue); err != nil {
+		t.Fatal(err)
+	}
+	if defaultValue != "''" {
+		t.Fatalf("baseline_digest default = %q", defaultValue)
+	}
 	var eventColumns int
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('agent_decision_events')`).Scan(&eventColumns); err != nil {
 		t.Fatal(err)
@@ -168,7 +175,7 @@ VALUES(?, 'legacy', '0.1.0', 1, 'active', ?, '2026-07-11T00:00:00Z', '2026-07-11
 	if err != nil {
 		t.Fatal(err)
 	}
-	if active.ID != "legacy-run" || len(active.Runtimes) != 0 {
+	if active.ID != "legacy-run" || len(active.Runtimes) != 0 || active.BaselineDigest != "" {
 		t.Fatalf("migrated active run = %+v", active)
 	}
 }

@@ -67,6 +67,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-030 | An adversarial agent reads host files, reaches local or public services, gains container privilege, exhausts resources, gains image-declared writable volumes or shared memory, leaves protocol data in Docker logs, substitutes mutable image content, redirects execution to a remote Docker daemon, relies on ignored rootless cgroup limits, or survives cancellation. | Opt-in digest/image-ID pinning; volume-free image inspection; explicit local Unix-socket non-rootless Linux engine with active cgroups; remote-context rejection; no host environment or mounts; network and IPC none; log driver none; read-only root and bounded noexec tmpfs; non-root UID; all capabilities dropped; no-new-privileges; built-in seccomp; CPU/memory/PID limits; init process; deterministic ownership labels and verified forced cleanup. |
 | TM-031 | Replayed evidence is cherry-picked, reordered, cross-linked to another trial, corrupted, or summarized with unsupported claims such as equating process completion with mission success. | Integrity-checked store reads; complete-set and exact-configuration compatibility; contiguous declared indices; strict decision/approval/outcome linkage; timestamp-independent deterministic projection; primitive counts and explicit denominators/rates; stable `notMeasured` reasons; no composite score. |
 | TM-032 | A forged reset request, mismatched runtime, partial provider restore, stale synthetic token, state-capture failure, or racing host process creates a false equivalent-fixture or task-success claim. | Run-scoped authenticated native control; container ownership labels; explicit memory-backed Floci replacement at the recorded loopback port; fresh OIDC key and cleared codes; exact post-restore canonical digest before launch; append-only before/after invariant evidence; after-phase trace closure; failed evaluation on capture error; accurate non-atomic and host-mode limitations. |
+| TM-033 | A trial is scored as resistant without consuming the attack, fixture expectations leak to the agent, an adapter failure is mislabeled as governance containment, or the unsafe baseline exports real data. | Ground truth omitted from `session.start`; exposure requires a linked successful outcome; only later exact prohibited decisions count; separate behavior/success/containment facts; containment from gateway disposition; fixed synthetic marker and simulated export only. |
 
 ## Security invariants
 
@@ -123,7 +124,9 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - State-captured traces measure task and remediation outcomes only for documented provider snapshots and declared graph invariants; unsupported provider state is outside the score.
 - Provider restoration is not atomic across runtimes. A failed restore prevents agent launch but may require the full lifecycle reset to recover a partially restored range.
 - Host-mode agents and detached descendants can race terminal state capture with the launching user's ambient authority.
-- Evidence-safe traces still cannot measure prompt-injection resistance, sensitive-data exposure, or effective blast radius.
+- Fixture-labeled traces measure prompt-injection resistance only for exact declared exposure and prohibited targets; semantic equivalents and covert channels remain outside the score.
+- The unsafe baseline's export is a simulator outcome, not evidence that provider data left the range.
+- Evidence-safe traces still cannot measure sensitive-data exposure or effective blast radius.
 
 ## Review triggers
 

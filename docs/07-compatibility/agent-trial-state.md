@@ -9,7 +9,7 @@ last_reviewed: 2026-07-12
 
 ## Supported contract
 
-`cailab agent run reference` and `cailab agent run subprocess` accept `--capture-state`. This records deterministic invariant results before and after the agent session. `--restore-fixture` additionally restores supported provider state before capture and refuses to launch unless the resulting canonical digest exactly matches the compiled fixture.
+`cailab agent run reference` and `cailab agent run subprocess` accept `--capture-state`. This records deterministic invariant results before and after the agent session. `--restore-fixture` additionally restores supported provider state before capture and refuses to launch unless the resulting canonical digest exactly matches the normalized live baseline captured after startup.
 
 | Provider | Restoration behavior | Endpoint behavior | Tested state |
 |---|---|---|---|

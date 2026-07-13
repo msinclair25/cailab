@@ -81,6 +81,7 @@ spec:
 - Provider-specific extensions are namespaced.
 - Intentional weaknesses include learning rationale and expected remediation classes.
 - Verification states the required outcome, not one mandatory implementation.
+- Agent evaluation fixtures declare inert ground truth only: an untrusted content resource, an exact exposure action, and exact prohibited targets. Scenario text is never executed implicitly.
 - Hidden ground truth is separable from the learner-visible scenario package.
 - Unknown fields are rejected by the decoder.
 - IDs are unique across tenants, principals, and resources.

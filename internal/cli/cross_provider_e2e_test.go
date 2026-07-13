@@ -48,6 +48,28 @@ func TestCrossProviderCLIE2E(t *testing.T) {
 	if output, code = runE2ECLI(t, repository, binary, "verify", "--state-dir", stateDir); code != ExitVerificationFailed {
 		t.Fatalf("initial verify exit=%d output=%s", code, output)
 	}
+	output, code = runE2ECLI(t, repository, binary, "agent", "run", "unsafe", "--state-dir", stateDir, "--fixture", "drive-runbook-export")
+	if code != ExitOK || !strings.Contains(output, "2 state snapshot(s)") {
+		t.Fatalf("unsafe agent exit=%d output=%s", code, output)
+	}
+	output, code = runE2ECLI(t, repository, binary, "agent", "replay", "--state-dir", stateDir, "--trial-id", "trial:unsafe", "--format", "json")
+	if code != ExitOK {
+		t.Fatalf("unsafe replay exit=%d output=%s", code, output)
+	}
+	var unsafeReport struct {
+		Profile   string `json:"profile"`
+		Aggregate struct {
+			InjectionSuccessRate struct {
+				Numerator int `json:"numerator"`
+			} `json:"injectionSuccessRate"`
+		} `json:"aggregate"`
+	}
+	if err := json.Unmarshal([]byte(output), &unsafeReport); err != nil {
+		t.Fatal(err)
+	}
+	if unsafeReport.Profile != "adversarial-scenario-v1" || unsafeReport.Aggregate.InjectionSuccessRate.Numerator != 1 {
+		t.Fatalf("unsafe report = %+v", unsafeReport)
+	}
 
 	contractorToken := issueE2EAccessToken(t, endpoints["OIDC"], "northstar-contractor")
 	contractorTokenPath := filepath.Join(workspace, "contractor.jwt")

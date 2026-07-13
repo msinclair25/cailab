@@ -293,7 +293,7 @@ Exit gate:
 
 ### M3 — Agent governance harness
 
-**Status:** in development. Versioned agent/policy/tool/approval/outcome/trace/state/report contracts, supported reference and custom subprocess runs, scenario-bound registration, deterministic governance, an opt-in Docker-isolated agent mode, endpoint-preserving fixture restoration, before/after invariant evidence, and deterministic repeated-trial action/task/remediation metrics are implemented. Automatic campaign execution, injection scoring, and the deliberately unsafe fixture remain; tool subprocess isolation is deferred.
+**Status:** in development. Versioned agent/policy/tool/approval/outcome/trace/state/report contracts, supported reference/unsafe/custom subprocess runs, deterministic governance, optional Docker agent isolation, endpoint-preserving restoration, normalized baselines, scenario evidence, fixture-labeled injection scoring, and a deliberately unsafe deterministic baseline are implemented. Automatic campaign execution remains; tool subprocess isolation is deferred.
 
 **Goal:** make an external agent a measurable principal in the range.
 
@@ -303,7 +303,7 @@ Deliverables:
 - Subprocess adapter and reference deterministic agent
 - User-provided subprocess tool registration and manifest validation
 - Governed tool gateway with allow, deny, redact, and approval decisions
-- Indirect prompt-injection fixture in Google-shaped content
+- Indirect prompt-injection fixture in Google-shaped content (implemented with deterministic unsafe baseline and fixture-labeled scoring)
 - Repeated-trial aggregate action/task/remediation metrics and endpoint-preserving fixture restoration (implemented); automatic campaign execution remains
 - Evidence-safe trace replay and evidence-linked report (implemented)
 - Optional local-model example; hosted providers remain user-configured
@@ -447,6 +447,6 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Add the unsafe prompt-injection evaluation fixture and fixture-labeled scoring.
-2. Add automatic repeated-campaign execution after the unsafe/reference fixtures establish reset semantics.
+1. Add automatic repeated-campaign execution using the established unsafe/reference fixtures and reset semantics.
+2. Add a safe reference-agent behavior fixture without claiming model-general resistance.
 3. Evaluate isolated tool execution only when a scenario requires an untrusted tool adapter.

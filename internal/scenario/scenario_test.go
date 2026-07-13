@@ -201,6 +201,30 @@ func TestRepositorySchemaAndReferenceScenario(t *testing.T) {
 	if oidcCompiled.Providers.OIDC == nil || len(oidcCompiled.Providers.OIDC.Clients) != 1 {
 		t.Fatalf("compiled OIDC provider = %+v", oidcCompiled.Providers.OIDC)
 	}
+	acquisition, err := Load(filepath.Join(root, "scenarios", "acquisition-agent", "scenario.yaml"))
+	if err != nil {
+		t.Fatalf("load acquisition scenario: %v", err)
+	}
+	acquisitionCompiled, err := Compile(acquisition, acquisition.Spec.Seed)
+	if err != nil {
+		t.Fatalf("compile acquisition scenario: %v", err)
+	}
+	if len(acquisitionCompiled.Evaluation.PromptInjections) != 1 || acquisitionCompiled.Evaluation.PromptInjections[0].ID != "drive-runbook-export" {
+		t.Fatalf("compiled evaluation = %+v", acquisitionCompiled.Evaluation)
+	}
+}
+
+func TestPromptInjectionFixtureReferencesCanonicalResources(t *testing.T) {
+	t.Parallel()
+	definition, err := Load(filepath.Join("..", "..", "scenarios", "acquisition-agent", "scenario.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition.Spec.Evaluation.PromptInjections[0].Prohibited[0].Resource = "resource:missing"
+	err = Validate(definition)
+	if err == nil || !strings.Contains(err.Error(), "references unknown id") {
+		t.Fatalf("Validate() prompt-injection fixture error = %v", err)
+	}
 }
 
 func TestMicrosoftGrantReferencesDeclaredDirectoryObjects(t *testing.T) {

@@ -215,6 +215,28 @@ func TestReferenceAgentRunOptionsAreValidForActiveScenario(t *testing.T) {
 	}
 }
 
+func TestUnsafeFixtureAgentRunOptionsBindScenarioGroundTruth(t *testing.T) {
+	definition, err := scenario.Load(filepath.Join("..", "..", "scenarios", "acquisition-agent", "scenario.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled, err := scenario.Compile(definition, definition.Spec.Seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	options, err := UnsafeFixtureAgentRunOptions(compiled, "http://127.0.0.1:8000", executable, t.TempDir(), "trial:unsafe", "drive-runbook-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !options.CaptureState || !options.RestoreFixture || options.EvaluationFixtureID != "drive-runbook-export" || len(options.Tools) != 2 || len(options.Policy.Rules) != 2 {
+		t.Fatalf("options = %+v", options)
+	}
+}
+
 func TestAppAgentSubprocessHelper(t *testing.T) {
 	agentMode := os.Getenv(appAgentHelperEnvironment)
 	toolMode := os.Getenv(appToolHelperEnvironment)
@@ -302,6 +324,11 @@ func appAgentTestService(t *testing.T, ctx context.Context) (*state.Store, *Serv
 		store.Close()
 		t.Fatal(err)
 	}
+	if err := store.SetRuntimeBaseline(ctx, rangeRun.ID, nil, digest); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	rangeRun.BaselineDigest = digest
 	service := New(store, nil)
 	current := time.Date(2026, 7, 12, 23, 0, 0, 0, time.UTC)
 	service.clock = func() time.Time {
