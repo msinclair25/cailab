@@ -75,6 +75,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-037 | An ambient working-directory catalog silently replaces built-in scenarios, or embedded verification data is mistaken for a secret from the launching OS account. | Immutable built-in `embed.FS` selected by default; explicit custom file/catalog flags; one strict validation path; documentation that embedding is distribution rather than confidentiality and host-mode agents retain the launching account's file authority. |
 | TM-038 | A mutable or compromised base image, oversized build context, root default, host mount, network access, writable path, or misleading isolation claim compromises the CI demo or makes it depend on undeclared host state. | Docker Official builder pinned by tag and digest; allowlisted context; multi-stage CGO-free build; final-image contract inspection; numeric non-root user; no ports/volumes/source/toolchain; Docker `none` network; no IPC or mounts; read-only root; bounded tmpfs/resources; dropped capabilities; no-new-privileges; built-in seccomp; CI-only non-publication and explicit non-sandbox claim. |
 | TM-039 | A release omits license/notice material, ships stale dependency attribution, or treats an SBOM/classifier as a legal conclusion. | Apache-2.0 project license; required release documents; copied linked-component licenses/notices including the Go runtime; multi-target linked-module inventory drift gate; archive unit/smoke tests; independent SBOM, vulnerability, and human review; explicit non-legal-advice boundary. |
+| TM-040 | A recording helper executes an unintended binary, replaces an existing run, follows a forged external endpoint, hides an expected failure, consumes an oversized response, or leaves provider listeners active. | Explicit regular non-symlink executable; optional exact version/commit assertion; new or empty owner-only state; direct argv without a shell; exact expected exits; complete ready-runtime set and origin-only IPv4 loopback validation; bounded HTTP responses and redirect refusal; fixed synthetic Graph operation; signal-aware cleanup; inactive-run and endpoint-closure checks. |
 
 ## Security invariants
 
@@ -146,6 +147,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - Equivalent source-date inputs and pinned module content reduce nondeterminism, but bit-for-bit independent reproduction across toolchain environments is not yet claimed.
 - Linux ARM64 is cross-compiled and packaged but is not yet executed on a native hosted release runner.
 - The SBOM reflects Syft's detection over staged binaries and can be incomplete; it complements rather than replaces `govulncheck`, dependency review, and source inspection.
+- The portfolio runner's version/commit check prevents accidental candidate mix-ups but is not cryptographic authenticity. Recording still requires independent checksum and provenance verification of the selected binary.
 
 ## Review triggers
 
