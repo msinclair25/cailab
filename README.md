@@ -15,11 +15,11 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: versioned agent, policy, tool-execution, approval, and outcome contracts; supported reference and custom subprocess runs; scenario-bound tool registration; exact-match policy; interactive or fail-closed approval resolution; Draft 2020-12 input validation; protected tool output; immutable run metadata; and append-only linked evidence are implemented and test-backed. Enforced isolation, full trace replay, and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
+M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: versioned agent, policy, tool-execution, approval, and outcome contracts; supported reference and custom subprocess runs; scenario-bound tool registration; exact-match policy; interactive or fail-closed approval resolution; an opt-in Docker-isolated agent mode; Draft 2020-12 input validation; protected tool output; immutable run metadata; and append-only linked evidence are implemented and test-backed. Full trace replay and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
 
 ## Build and try the walking skeleton
 
-Prerequisites: Go 1.25.12 or newer. Docker is required only for AWS/Floci scenarios.
+Prerequisites: Go 1.25.12 or newer. Docker is required for AWS/Floci scenarios and the opt-in isolated agent mode.
 
 ```bash
 go build -o ./bin/cailab ./cmd/cailab
@@ -104,7 +104,7 @@ With any active scenario, the reference command launches the deterministic proto
 
 Protocol-compatible user agents can be launched with `cailab agent run subprocess`. Policies and tool manifests are selected explicitly for that trial and validated against the active scenario before a process starts. See the [agent-run guide](docs/07-guides/agent-run.md) for the complete workflow and security limitations.
 
-Agent and tool subprocesses are owned and bounded but **not isolated** from the launching user's filesystem, network, syscalls, or detached descendants. Do not run untrusted code in this mode.
+Host-mode agent and tool subprocesses are owned and bounded but **not isolated** from the launching user's filesystem, network, syscalls, or detached descendants. Do not run untrusted code in host mode. Custom agents can opt into the Linux CI-tested Docker boundary with `--isolation docker --image <immutable-image-id-or-digest>`; registered tool subprocesses remain trusted and unisolated. See the [agent-run guide](docs/07-guides/agent-run.md) and [Docker isolation compatibility record](docs/07-compatibility/agent-docker-isolation.md).
 
 ## Development checks
 
@@ -153,6 +153,7 @@ go run ./internal/tools/doccheck .
 - [Cross-provider federation compatibility matrix](docs/07-compatibility/cross-provider-federation.md)
 - [Agent protocol v1alpha1](docs/04-agents/agent-protocol.md)
 - [Agent-run guide](docs/07-guides/agent-run.md)
+- [Docker agent isolation compatibility](docs/07-compatibility/agent-docker-isolation.md)
 
 ## Working vocabulary
 

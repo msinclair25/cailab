@@ -8,7 +8,7 @@ last_reviewed: 2026-07-12
 
 ## Current scope
 
-CloudAILab defines typed and schema-backed contracts for M3 agent runs, tool registration, governance policy, agent messages, tool execution, decisions, redaction, approval resolutions, decision events, and tool outcomes. The supported CLI validates scenario-bound registrations and runs either the deterministic reference agent or a protocol-compatible custom subprocess. The harness applies exact-match policy and manifest ceilings, validates Draft 2020-12 input offline, resolves approvals locally with default rejection, protects successful output, and commits immutable run plus linked decision/approval/outcome evidence. Enforced isolation, full trace replay, and aggregate metrics remain later M3 work.
+CloudAILab defines typed and schema-backed contracts for M3 agent runs, tool registration, governance policy, agent messages, tool execution, decisions, redaction, approval resolutions, decision events, and tool outcomes. The supported CLI validates scenario-bound registrations and runs either the deterministic reference agent or a protocol-compatible custom agent in host subprocess or opt-in Docker isolation mode. The harness applies exact-match policy and manifest ceilings, validates Draft 2020-12 input offline, resolves approvals locally with default rejection, protects successful output, and commits immutable run plus linked decision/approval/outcome evidence. Full trace replay and aggregate metrics remain later M3 work; tool subprocess isolation is not implemented.
 
 The normative schemas are:
 
@@ -21,7 +21,7 @@ The normative schemas are:
 - [Tool outcome event](../../schemas/agent/v1alpha1/tool-outcome-event.json)
 - [Approval resolution event](../../schemas/agent/v1alpha1/approval-resolution-event.json)
 
-The executable validation, policy, gateway, and session contracts are in [`internal/agent`](../../internal/agent). [ADR-0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) defines the original wire contract; [ADR-0012](../02-architecture/decisions/0012-owned-agent-subprocess-sessions.md) defines the owned-process lifecycle; [ADR-0013](../02-architecture/decisions/0013-deterministic-tool-policy-and-evidence.md) defines policy/evidence semantics; [ADR-0015](../02-architecture/decisions/0015-scenario-bound-public-agent-runs.md) defines protocol 1.1 and the public workflow; and [ADR-0016](../02-architecture/decisions/0016-immutable-approval-resolution.md) defines approval resolution and evidence linkage.
+The executable validation, policy, gateway, and session contracts are in [`internal/agent`](../../internal/agent). [ADR-0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) defines the original wire contract; [ADR-0012](../02-architecture/decisions/0012-owned-agent-subprocess-sessions.md) defines the owned-process lifecycle; [ADR-0013](../02-architecture/decisions/0013-deterministic-tool-policy-and-evidence.md) defines policy/evidence semantics; [ADR-0015](../02-architecture/decisions/0015-scenario-bound-public-agent-runs.md) defines protocol 1.1 and the public workflow; [ADR-0016](../02-architecture/decisions/0016-immutable-approval-resolution.md) defines approval resolution and evidence linkage; and [ADR-0017](../02-architecture/decisions/0017-opt-in-docker-agent-isolation.md) defines the bounded Docker agent mode.
 
 ## Framing
 
@@ -52,11 +52,13 @@ The current wire version is `1.1`. The internal-only `1.0` draft did not carry a
 
 `tool.result`, `approval.required`, and `approval.resolved` require `correlationId`. The session controller additionally enforces direction, lifecycle order, expected agent identity/version, unique message IDs, declared-tool membership, and response correlation. Typed decoding by itself still validates only structure and payload semantics.
 
-## Subprocess lifecycle
+## Execution lifecycle
 
 The internal controller requires an absolute executable path, an absolute working directory, and an explicit complete environment. It never invokes a shell and does not inherit the controller's environment by default. It sends `session.start`, requires a matching `agent.ready` before tool activity, bounds handshake and whole-session time, caps both frame count and retained transcript bytes, continuously drains bounded standard error, and waits for every direct child it starts. Captured standard error remains an explicit untrusted field and is not automatically copied into formatted errors.
 
 The deterministic reference agent emits `agent.ready` followed by `session.complete` and makes no tool calls. `cailab agent run reference` exposes it as the reproducible public harness baseline. `cailab agent run subprocess` launches a user-selected implementation with explicit argv, directory, selected environment, identity, model labels, prompt hash, and trial metadata.
+
+Host mode uses the direct subprocess behavior above and is not isolated. Docker mode instead interprets the command and directory as absolute POSIX paths inside a content-addressed agent image. Before persistence, the runtime resolves the active context, requires an absolute local Unix socket and non-rootless Linux engine with active cgroups, pins that endpoint on every Docker command, verifies that the present image declares no volumes, and rejects remote contexts. CloudAILab invokes the absolute Docker CLI with no implicit pull, no host environment forwarding, no mounts, no published ports, network and IPC none, log driver none, read-only root, a 64 MiB noexec/nosuid/nodev `/tmp`, UID/GID 65532, all capabilities dropped, no-new-privileges, built-in seccomp, one CPU, 512 MiB memory with no additional swap, 128 PIDs, and a file-descriptor limit. A container-local init process reaps descendants. Run and trial labels must match before cleanup can force-remove a surviving container.
 
 ## Tool manifest
 
@@ -105,10 +107,12 @@ Successful content is canonicalized and applies every manifest `sensitiveFields`
 
 ## Reproducibility and evidence
 
-An agent run records the exact scenario digest and seed, agent/provider/model version, policy digest, prompt hash, tool digests, trial index/count, status, and UTC timestamps. The store writes an immutable running record before launch and appends exactly one terminal record without changing configuration. A decision event adds a monotonic sequence, correlation ID, actor and tenant, tool, action, resource classification, decision, outcome, and canonical input/output hashes; decisions are accepted only while that trial is active.
+An agent run records the exact scenario digest and seed, agent/provider/model version, policy digest, prompt hash, tool digests, optional enforced execution metadata, trial index/count, status, and UTC timestamps. Docker metadata includes profile `docker-strict-v1`, the engine, exact content-addressed image, network boundary, and filesystem boundary. A control change requires a new profile value. The store writes an immutable running record before launch and appends exactly one terminal record without changing configuration. A decision event adds a monotonic sequence, correlation ID, actor and tenant, tool, action, resource classification, decision, outcome, and canonical input/output hashes; decisions are accepted only while that trial is active.
 
 Sequence is authoritative for decision order. Wall-clock time is diagnostic context and does not determine policy or score. The gateway hashes canonical original arguments and does not persist them. It commits the immutable decision with `not_executed` before a direct allowed/redacted launch. Approval-required calls append a separate resolution record before any continuation. A `ToolOutcomeEvent` links to the direct decision or, for approved execution, to both the original decision and approval record. Successful outcomes hash the exact protected content returned to the agent; failed outcomes carry a stable error code. Reads validate schema and hashes. Human and `--json` summaries omit raw arguments, transcripts, and child diagnostic text. This detects accidental inconsistency but is not protection from a local user who can rewrite the database. Full transcript persistence and replay remain planned.
 
 ## Security boundary
 
-Protocol validation and owned process cleanup are not sandboxing. A declaration of `none`, `loopback`, or `read_only` becomes an isolation claim only when a runtime demonstrably enforces it. The current controller limits inherited environment and protocol resources, but the subprocess can still access the host filesystem, network, OS APIs, and independently detached descendants with the launching user's authority. It must be treated as unisolated.
+Protocol validation and host-process cleanup are not sandboxing. In host mode, the agent can still access the host filesystem, network, OS APIs, and independently detached descendants with the launching user's authority and must be treated as unisolated.
+
+The opt-in Docker agent mode enforces the documented container network, filesystem, privilege, and resource configuration and is covered by an adversarial integration probe. The claim stops at that boundary: Docker is not a VM; the daemon, runtime, kernel or Docker Desktop VM, and pinned image remain trusted; image-defined environment is part of the artifact; and registered tool subprocesses still run unisolated on the host. Tool manifest isolation fields remain requirements rather than enforcement claims.

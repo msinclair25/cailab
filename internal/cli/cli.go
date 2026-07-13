@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -536,7 +537,9 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 	modelName := fs.String("model", "", "agent model or implementation label")
 	actorTenant := fs.String("actor-tenant", "", "agent tenant in the active scenario")
 	command := fs.String("command", "", "absolute agent executable path")
-	directory := fs.String("directory", "", "absolute agent working directory; defaults to the current directory")
+	directory := fs.String("directory", "", "absolute agent working directory; defaults to the current directory or /workspace in Docker")
+	isolationMode := fs.String("isolation", "host", "agent execution boundary: host or docker")
+	containerImage := fs.String("image", "", "immutable Docker image ID or repository digest; required for Docker isolation")
 	trialID := fs.String("trial-id", "trial:1", "unique trial identifier within the active range run")
 	trialIndex := fs.Int("trial-index", 1, "one-based trial index")
 	trialCount := fs.Int("trial-count", 1, "declared trial count")
@@ -572,6 +575,10 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	container, err := c.agentContainerRuntime(ctx, *isolationMode, *containerImage, agentEnvironmentNames)
+	if err != nil {
+		return err
+	}
 	agentEnvironment, err := c.explicitEnvironment(agentEnvironmentNames)
 	if err != nil {
 		return err
@@ -583,15 +590,24 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 	promptDigest := sha256.Sum256(prompt)
 	workingDirectory := *directory
 	if workingDirectory == "" {
-		workingDirectory = "."
+		if container == nil {
+			workingDirectory = "."
+		} else {
+			workingDirectory = "/workspace"
+		}
 	}
-	workingDirectory, err = filepath.Abs(workingDirectory)
-	if err != nil {
-		return fmt.Errorf("resolve agent working directory: %w", err)
-	}
-	executable, err := filepath.Abs(*command)
-	if err != nil {
-		return fmt.Errorf("resolve agent executable: %w", err)
+	executable := *command
+	if container == nil {
+		workingDirectory, err = filepath.Abs(workingDirectory)
+		if err != nil {
+			return fmt.Errorf("resolve agent working directory: %w", err)
+		}
+		executable, err = filepath.Abs(executable)
+		if err != nil {
+			return fmt.Errorf("resolve agent executable: %w", err)
+		}
+	} else if !path.IsAbs(workingDirectory) || !path.IsAbs(executable) {
+		return errors.New("Docker agent command and directory must be absolute POSIX paths inside the image")
 	}
 	service, closeStore, err := c.openService(ctx, *stateDir)
 	if err != nil {
@@ -602,7 +618,8 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 		Agent:       agent.AgentRef{ID: *agentID, Version: *agentVersion, Adapter: "subprocess", Provider: *providerName, Model: *modelName},
 		ActorTenant: *actorTenant,
 		Command:     append([]string{executable}, commandArguments...), Directory: workingDirectory, Environment: agentEnvironment,
-		Policy: policy, Tools: registrations, Approver: approver, PromptHash: hex.EncodeToString(promptDigest[:]),
+		Container: container,
+		Policy:    policy, Tools: registrations, Approver: approver, PromptHash: hex.EncodeToString(promptDigest[:]),
 		TrialID: *trialID, TrialIndex: *trialIndex, TrialCount: *trialCount, SessionTimeout: *sessionTimeout,
 	}
 	result, runErr := service.RunAgent(ctx, options)
@@ -618,6 +635,38 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 		return fmt.Errorf("agent trial %q ended with status %s", result.Run.TrialID, result.Run.Status)
 	}
 	return nil
+}
+
+func (c *CLI) agentContainerRuntime(ctx context.Context, mode, image string, environmentNames []string) (*agent.ContainerRuntime, error) {
+	switch mode {
+	case "host":
+		if image != "" {
+			return nil, errors.New("--image is allowed only with --isolation docker")
+		}
+		return nil, nil
+	case "docker":
+		if len(environmentNames) != 0 {
+			return nil, errors.New("--agent-env is not allowed with Docker isolation")
+		}
+		if err := agent.ValidateContainerImageReference(image); err != nil {
+			return nil, fmt.Errorf("validate Docker agent image: %w", err)
+		}
+		engine, err := exec.LookPath("docker")
+		if err != nil {
+			return nil, errors.New("Docker CLI not found; install Docker 20.10 or newer for isolated agent runs")
+		}
+		engine, err = filepath.Abs(engine)
+		if err != nil {
+			return nil, fmt.Errorf("resolve Docker CLI: %w", err)
+		}
+		runtime, err := agent.NewContainerRuntime(ctx, engine, image)
+		if err != nil {
+			return nil, fmt.Errorf("prepare Docker agent isolation: %w", err)
+		}
+		return runtime, nil
+	default:
+		return nil, fmt.Errorf("isolation must be host or docker, got %q", mode)
+	}
 }
 
 func (c *CLI) approver(mode, resolvedBy string) (agent.Approver, error) {
@@ -758,7 +807,13 @@ func (c *CLI) renderAgentRunResult(result app.AgentRunResult, jsonOutput bool) e
 	fmt.Fprintf(c.stdout, "✓ agent trial %s ended with status %s\n", result.Run.TrialID, result.Run.Status)
 	fmt.Fprintf(c.stdout, "Agent: %s@%s (%s / %s)\n", result.Run.Agent.ID, result.Run.Agent.Version, result.Run.Agent.Provider, result.Run.Agent.Model)
 	fmt.Fprintf(c.stdout, "Evidence: %d decision(s), %d approval(s), %d tool outcome(s)\n", len(result.Decisions), len(result.Approvals), len(result.Outcomes))
-	fmt.Fprintln(c.stdout, "Warning: subprocess ownership is not filesystem, network, syscall, or descendant isolation.")
+	if result.Run.Execution == nil {
+		fmt.Fprintln(c.stdout, "Warning: subprocess ownership is not filesystem, network, syscall, or descendant isolation.")
+	} else {
+		fmt.Fprintln(c.stdout, "Isolation: Docker network none, read-only root filesystem, no host mounts, dropped capabilities, and bounded resources.")
+		fmt.Fprintf(c.stdout, "Agent image: %s\n", result.Run.Execution.Image)
+		fmt.Fprintln(c.stdout, "Warning: registered tool subprocesses remain trusted and unisolated; Docker is not a VM boundary.")
+	}
 	return nil
 }
 

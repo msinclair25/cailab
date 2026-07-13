@@ -26,6 +26,7 @@ type AgentRunOptions struct {
 	Command        []string
 	Directory      string
 	Environment    []string
+	Container      *agent.ContainerRuntime
 	Policy         agent.GovernancePolicy
 	Tools          []RegisteredTool
 	Approver       agent.Approver
@@ -76,13 +77,14 @@ func (s *Service) RunAgent(ctx context.Context, options AgentRunOptions) (AgentR
 		Policy:     agent.PolicyRef{Version: options.Policy.Version, Digest: policyDigest},
 		PromptHash: options.PromptHash,
 		Tools:      refs,
+		Execution:  agent.ContainerExecutionRef(options.Container),
 		Trial:      agent.TrialRef{Index: options.TrialIndex, Count: options.TrialCount},
 		Status:     "running",
 		StartedAt:  startedAt,
 	}
 	sessionConfig := agent.SessionConfig{
 		Command: options.Command, Directory: options.Directory, Environment: options.Environment,
-		Run: run, SessionTimeout: options.SessionTimeout,
+		Container: options.Container, Run: run, SessionTimeout: options.SessionTimeout,
 	}
 	if err := agent.ValidateSessionConfig(sessionConfig); err != nil {
 		return AgentRunResult{}, fmt.Errorf("validate agent runtime: %w", err)
