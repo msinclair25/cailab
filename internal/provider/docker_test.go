@@ -29,6 +29,7 @@ type fakeRunner struct {
 	runID      string
 	inspect    string
 	discovered string
+	managed    string
 }
 
 func (f *fakeRunner) Run(_ context.Context, name string, args ...string) (string, error) {
@@ -44,6 +45,12 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) (string
 	case "inspect":
 		if f.inspect != "" {
 			return f.inspect, nil
+		}
+		if strings.Contains(strings.Join(args, " "), managedLabel) {
+			if f.managed == "" {
+				return "true\n", nil
+			}
+			return f.managed + "\n", nil
 		}
 		return f.runID + "\n", nil
 	case "ps":
@@ -102,6 +109,7 @@ func TestDockerManagerLifecycle(t *testing.T) {
 		"--cap-drop ALL",
 		"--security-opt no-new-privileges",
 		"FLOCI_SERVICES_IAM_ENFORCEMENT_ENABLED=true",
+		"FLOCI_STORAGE_MODE=memory",
 	} {
 		if !strings.Contains(runArgs, required) {
 			t.Errorf("docker run args %q do not contain %q", runArgs, required)
@@ -113,6 +121,61 @@ func TestDockerManagerLifecycle(t *testing.T) {
 	last := runner.calls[len(runner.calls)-1]
 	if got := strings.Join(last.args, " "); got != "rm --force "+instances[0].Name {
 		t.Fatalf("last call = %q", got)
+	}
+}
+
+func TestDockerManagerReplacesOwnedFlociAtSamePort(t *testing.T) {
+	t.Parallel()
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"completed":{"ready":true}}`)),
+			Header:     make(http.Header),
+		}, nil
+	})}
+	runID := "aws-restore"
+	runner := &fakeRunner{runID: runID, port: "127.0.0.1:4566"}
+	manager := &DockerManager{runner: runner, httpClient: client, now: time.Now}
+	compiled := scenario.Compiled{
+		Runtimes:  scenario.Runtimes{AWS: &scenario.AWSRuntime{Engine: "floci", Image: scenario.FlociImage, IAMEnforcement: true}},
+		Providers: scenario.Providers{AWS: &scenario.AWSProvider{Region: "us-east-1"}},
+	}
+	instance := Instance{
+		Provider: "aws", Engine: "floci", Name: containerName(runID, "floci"),
+		Endpoint: "http://127.0.0.1:4566", Status: "ready",
+	}
+	restored, err := manager.Restore(context.Background(), runID, []Instance{instance}, compiled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(restored) != 1 || restored[0].Endpoint != instance.Endpoint || restored[0].ContainerID != "container-id" {
+		t.Fatalf("restored = %+v", restored)
+	}
+	var removed, replaced bool
+	for _, call := range runner.calls {
+		args := strings.Join(call.args, " ")
+		removed = removed || args == "rm --force "+instance.Name
+		replaced = replaced || strings.Contains(args, "run --detach") && strings.Contains(args, "--publish 127.0.0.1:4566:4566")
+	}
+	if !removed || !replaced {
+		t.Fatalf("Docker calls = %+v", runner.calls)
+	}
+}
+
+func TestDockerManagerRestoreRejectsOwnershipMismatch(t *testing.T) {
+	t.Parallel()
+	runner := &fakeRunner{runID: "another-run"}
+	manager := &DockerManager{runner: runner, httpClient: http.DefaultClient, now: time.Now}
+	runID := "expected-run"
+	compiled := scenario.Compiled{
+		Runtimes:  scenario.Runtimes{AWS: &scenario.AWSRuntime{Engine: "floci", Image: scenario.FlociImage}},
+		Providers: scenario.Providers{AWS: &scenario.AWSProvider{Region: "us-east-1"}},
+	}
+	_, err := manager.Restore(context.Background(), runID, []Instance{{
+		Provider: "aws", Engine: "floci", Name: containerName(runID, "floci"), Endpoint: "http://127.0.0.1:4566",
+	}}, compiled)
+	if err == nil || !strings.Contains(err.Error(), "run label does not match") {
+		t.Fatalf("Restore() error = %v", err)
 	}
 }
 

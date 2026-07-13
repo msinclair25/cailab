@@ -216,3 +216,10 @@ func digestCompiled(compiled Compiled) (string, error) {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:]), nil
 }
+
+// StateDigest returns the canonical digest of a compiled scenario snapshot.
+// The embedded Digest field is excluded so live snapshots can be compared to
+// the original compiled fixture without changing their source manifest ID.
+func StateDigest(compiled Compiled) (string, error) {
+	return digestCompiled(compiled)
+}

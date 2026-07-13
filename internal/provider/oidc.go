@@ -133,6 +133,8 @@ func (f *oidcFacade) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.handleShutdown(w, r)
 	case "/_cailab/rotate":
 		f.handleRotate(w, r)
+	case "/_cailab/reset":
+		f.handleReset(w, r)
 	case "/.well-known/openid-configuration", "/.well-known/oauth-authorization-server":
 		f.handleDiscovery(w, r)
 	case "/jwks":
@@ -209,6 +211,43 @@ func (f *oidcFacade) handleRotate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSONContent(w, http.StatusOK, set)
+}
+
+func (f *oidcFacade) handleReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeOAuthError(w, http.StatusMethodNotAllowed, "invalid_request", "Method not allowed.")
+		return
+	}
+	if !f.validControlRequest(r) {
+		writeOAuthError(w, http.StatusForbidden, "access_denied", "Invalid runtime control credentials.")
+		return
+	}
+	key, err := f.generateKey()
+	if err != nil {
+		writeOAuthError(w, http.StatusInternalServerError, "server_error", "Could not refresh the signing key.")
+		return
+	}
+	jwk, err := publicJWK(&key.PublicKey)
+	if err != nil {
+		writeOAuthError(w, http.StatusInternalServerError, "server_error", "Could not prepare the signing key.")
+		return
+	}
+	f.mu.Lock()
+	previousKeys := f.keys
+	previousCodes := f.codes
+	f.keys = []oidcSigningKey{{PrivateKey: key, PublicKey: &key.PublicKey, KeyID: jwk.KeyID}}
+	f.codes = make(map[string]oidcAuthorizationCode)
+	err = f.persistLocked()
+	if err != nil {
+		f.keys = previousKeys
+		f.codes = previousCodes
+	}
+	f.mu.Unlock()
+	if err != nil {
+		writeOAuthError(w, http.StatusInternalServerError, "server_error", "Could not persist the restored issuer state.")
+		return
+	}
+	writeJSONContent(w, http.StatusOK, map[string]any{"status": "restored"})
 }
 
 func (f *oidcFacade) validControlRequest(r *http.Request) bool {

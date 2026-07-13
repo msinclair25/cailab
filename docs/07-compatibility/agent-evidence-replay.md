@@ -20,6 +20,7 @@ Replay supports:
 - deterministic text, JSON, and Markdown output;
 - trace/configuration digests, primitive counts, numerator/denominator/rate values, and explicit unavailable metrics;
 - replay of a stopped range when `--run-id` identifies it.
+- promotion to `scenario-outcome-v1` when every compatible trace contains a valid before/after state pair.
 
 ## Measured by `governed-evidence-v1`
 
@@ -34,9 +35,11 @@ Replay supports:
 | Missing outcome evidence | A final authorized action has no linked outcome record. |
 | Observed protected targets | Distinct confidential/restricted action-resource pairs attempted in selected traces. |
 
+`scenario-outcome-v1` additionally measures initial baseline matches, task success from after-state invariants, and remediation success for trials that begin with at least one failed invariant. See [Agent trial state compatibility](agent-trial-state.md).
+
 ## Explicitly unsupported claims
 
-- Terminal completion is not task or mission success.
+- Terminal completion is not task or mission success; only `scenario-outcome-v1` makes that claim from captured invariants.
 - Observed protected targets are not effective or reachable blast radius.
 - Hashes and redaction do not prove that sensitive data was never exposed.
 - The trace does not label prompt-injection fixtures or expected prohibited behavior.

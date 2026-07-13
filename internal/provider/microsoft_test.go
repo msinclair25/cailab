@@ -138,6 +138,50 @@ func TestMicrosoftSnapshotTracksLivePermissionGrants(t *testing.T) {
 	assertPath(t, snapshot, "microsoft:security-admin", "microsoft:directory-data", true)
 }
 
+func TestMicrosoftControlResetRestoresBaselineWithoutChangingEndpoint(t *testing.T) {
+	t.Parallel()
+	compiled := loadMicrosoftScenario(t)
+	baseline, err := cloneProviderState(*compiled.Providers.Microsoft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := cloneProviderState(*compiled.Providers.Microsoft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facade := &microsoftFacade{
+		provider: current, baseline: baseline, statePath: filepath.Join(t.TempDir(), "state.json"),
+		runID: "test-run", controlToken: "control", shutdown: func() {}, baseURL: "http://cailab.test",
+	}
+	if err := facade.persist(); err != nil {
+		t.Fatal(err)
+	}
+	client := &http.Client{Transport: handlerRoundTripper{handler: facade}}
+	response := graphRequest(t, client, http.MethodDelete, facade.baseURL+"/v1.0/oauth2PermissionGrants/"+riskyGrantID, LocalGraphToken)
+	response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete status = %d", response.StatusCode)
+	}
+	request, _ := http.NewRequest(http.MethodPost, facade.baseURL+"/_cailab/reset", nil)
+	request.Header.Set("Authorization", "Bearer control")
+	request.Header.Set("X-CloudAILab-Run", "test-run")
+	response, err = client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("reset status = %d", response.StatusCode)
+	}
+	snapshot, err := snapshotMicrosoftWithClient(context.Background(), facade.baseURL, compiled, client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Providers.Microsoft.OAuth2PermissionGrants) != len(compiled.Providers.Microsoft.OAuth2PermissionGrants) {
+		t.Fatalf("restored grants = %+v", snapshot.Providers.Microsoft.OAuth2PermissionGrants)
+	}
+}
+
 func TestMicrosoftNativeIntegration(t *testing.T) {
 	if os.Getenv("CAILAB_NATIVE_INTEGRATION") != "1" {
 		t.Skip("set CAILAB_NATIVE_INTEGRATION=1 to run the native facade lifecycle")
@@ -182,6 +226,14 @@ func TestMicrosoftNativeIntegration(t *testing.T) {
 	}
 	assertPath(t, snapshot, "microsoft:analyst", "microsoft:directory-data", false)
 	assertPath(t, snapshot, "microsoft:security-admin", "microsoft:directory-data", true)
+	if _, err := manager.Restore(context.Background(), runID, instances, compiled); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = manager.Snapshot(context.Background(), instances, compiled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertPath(t, snapshot, "microsoft:analyst", "microsoft:directory-data", true)
 	if err := manager.Stop(context.Background(), runID, instances, compiled); err != nil {
 		t.Fatal(err)
 	}

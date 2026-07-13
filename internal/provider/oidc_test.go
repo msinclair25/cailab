@@ -307,6 +307,22 @@ func TestOIDCNativeIntegration(t *testing.T) {
 	if len(rotated.Keys) != 2 {
 		t.Fatalf("rotated keys = %+v", rotated)
 	}
+	if _, err := manager.Restore(context.Background(), runID, instances, compiled); err != nil {
+		t.Fatal(err)
+	}
+	response, err = http.Get(instances[0].Endpoint + "/jwks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored OIDCJWKSet
+	if err := json.NewDecoder(response.Body).Decode(&restored); err != nil {
+		response.Body.Close()
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if len(restored.Keys) != 1 {
+		t.Fatalf("restored keys = %+v", restored)
+	}
 	if _, err := manager.Snapshot(context.Background(), instances, compiled); err != nil {
 		t.Fatal(err)
 	}
@@ -342,6 +358,19 @@ func newTestOIDCFacade(t *testing.T, now *time.Time) *oidcFacade {
 		t.Fatal(err)
 	}
 	return facade
+}
+
+func TestOIDCControlResetClearsCodesAndReplacesSigningKey(t *testing.T) {
+	now := time.Date(2026, 7, 12, 12, 0, 0, 0, time.UTC)
+	facade := newTestOIDCFacade(t, &now)
+	oldKeyID := facade.keys[0].KeyID
+	facade.codes["code:stale"] = oidcAuthorizationCode{ClientID: testOIDCClientID, ExpiresAt: now.Add(time.Minute)}
+	response := oidcRequest(t, facade, http.MethodPost, testOIDCIssuer+"/_cailab/reset", "", "Bearer control-token", "oidc-test")
+	var body map[string]any
+	decodeOIDCResponse(t, response, http.StatusOK, &body)
+	if body["status"] != "restored" || len(facade.codes) != 0 || len(facade.keys) != 1 || facade.keys[0].KeyID == oldKeyID {
+		t.Fatalf("reset state: body=%v codes=%v keys=%v", body, facade.codes, facade.keys)
+	}
 }
 
 func authorizationURL(redirectURI, subject, state, nonce string) string {

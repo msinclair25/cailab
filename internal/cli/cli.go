@@ -519,12 +519,14 @@ func (c *CLI) runReferenceAgent(ctx context.Context, args []string) error {
 	fs := newFlagSet("agent run reference", c.stderr)
 	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
 	trialID := fs.String("trial-id", "trial:1", "unique trial identifier within the active range run")
+	captureState := fs.Bool("capture-state", false, "capture deterministic before/after scenario verification evidence")
+	restoreFixture := fs.Bool("restore-fixture", false, "restore the compiled provider fixture before launch; implies --capture-state")
 	jsonOutput := fs.Bool("json", false, "emit evidence-safe JSON summary")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: cailab agent run reference [--state-dir DIR] [--trial-id ID] [--json]")
+		return errors.New("usage: cailab agent run reference [--state-dir DIR] [--trial-id ID] [--capture-state] [--restore-fixture] [--json]")
 	}
 	service, closeStore, err := c.openService(ctx, *stateDir)
 	if err != nil {
@@ -551,6 +553,8 @@ func (c *CLI) runReferenceAgent(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	options.CaptureState = *captureState || *restoreFixture
+	options.RestoreFixture = *restoreFixture
 	result, runErr := service.RunAgent(ctx, options)
 	if result.Run.TrialID != "" {
 		if err := c.renderAgentRunResult(result, *jsonOutput); err != nil {
@@ -583,6 +587,8 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 	trialID := fs.String("trial-id", "trial:1", "unique trial identifier within the active range run")
 	trialIndex := fs.Int("trial-index", 1, "one-based trial index")
 	trialCount := fs.Int("trial-count", 1, "declared trial count")
+	captureState := fs.Bool("capture-state", false, "capture deterministic before/after scenario verification evidence")
+	restoreFixture := fs.Bool("restore-fixture", false, "restore the compiled provider fixture before launch; implies --capture-state")
 	sessionTimeout := fs.Duration("timeout", 60*time.Second, "whole agent session timeout")
 	jsonOutput := fs.Bool("json", false, "emit evidence-safe JSON summary")
 	approvalMode := fs.String("approval-mode", "reject", "approval handling: reject or prompt")
@@ -658,8 +664,9 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 		Agent:       agent.AgentRef{ID: *agentID, Version: *agentVersion, Adapter: "subprocess", Provider: *providerName, Model: *modelName},
 		ActorTenant: *actorTenant,
 		Command:     append([]string{executable}, commandArguments...), Directory: workingDirectory, Environment: agentEnvironment,
-		Container: container,
-		Policy:    policy, Tools: registrations, Approver: approver, PromptHash: hex.EncodeToString(promptDigest[:]),
+		Container:    container,
+		CaptureState: *captureState || *restoreFixture, RestoreFixture: *restoreFixture,
+		Policy: policy, Tools: registrations, Approver: approver, PromptHash: hex.EncodeToString(promptDigest[:]),
 		TrialID: *trialID, TrialIndex: *trialIndex, TrialCount: *trialCount, SessionTimeout: *sessionTimeout,
 	}
 	result, runErr := service.RunAgent(ctx, options)
@@ -825,6 +832,7 @@ type agentRunSummary struct {
 	Decisions  []agent.DecisionEvent           `json:"decisions"`
 	Approvals  []agent.ApprovalResolutionEvent `json:"approvals"`
 	Outcomes   []agent.ToolOutcomeEvent        `json:"outcomes"`
+	States     []agent.TrialStateEvidence      `json:"states"`
 }
 
 func (c *CLI) renderAgentRunResult(result app.AgentRunResult, jsonOutput bool) error {
@@ -836,7 +844,7 @@ func (c *CLI) renderAgentRunResult(result app.AgentRunResult, jsonOutput bool) e
 		}
 		encoded, err := json.MarshalIndent(agentRunSummary{
 			Run: result.Run, Completion: completion,
-			Decisions: result.Decisions, Approvals: result.Approvals, Outcomes: result.Outcomes,
+			Decisions: result.Decisions, Approvals: result.Approvals, Outcomes: result.Outcomes, States: result.States,
 		}, "", "  ")
 		if err != nil {
 			return fmt.Errorf("encode agent run summary: %w", err)
@@ -846,7 +854,10 @@ func (c *CLI) renderAgentRunResult(result app.AgentRunResult, jsonOutput bool) e
 	}
 	fmt.Fprintf(c.stdout, "✓ agent trial %s ended with status %s\n", result.Run.TrialID, result.Run.Status)
 	fmt.Fprintf(c.stdout, "Agent: %s@%s (%s / %s)\n", result.Run.Agent.ID, result.Run.Agent.Version, result.Run.Agent.Provider, result.Run.Agent.Model)
-	fmt.Fprintf(c.stdout, "Evidence: %d decision(s), %d approval(s), %d tool outcome(s)\n", len(result.Decisions), len(result.Approvals), len(result.Outcomes))
+	fmt.Fprintf(c.stdout, "Evidence: %d decision(s), %d approval(s), %d tool outcome(s), %d state snapshot(s)\n", len(result.Decisions), len(result.Approvals), len(result.Outcomes), len(result.States))
+	if result.Run.State != nil {
+		fmt.Fprintf(c.stdout, "Scenario state: %s (restore=%t, baseline=%s)\n", result.Run.State.Profile, result.Run.State.Restore, result.Run.State.BaselineDigest)
+	}
 	if result.Run.Execution == nil {
 		fmt.Fprintln(c.stdout, "Warning: subprocess ownership is not filesystem, network, syscall, or descendant isolation.")
 	} else {
@@ -875,6 +886,15 @@ func renderAgentEvaluationReport(report agent.AgentEvaluationReport, format stri
 		fmt.Fprintf(&output, "Final authorization rate: %s\n", renderMetricRate(report.Aggregate.AuthorizationRate))
 		fmt.Fprintf(&output, "Approval resolution rate: %s\n", renderMetricRate(report.Aggregate.ApprovalResolutionRate))
 		fmt.Fprintf(&output, "Tool execution success rate: %s\n", renderMetricRate(report.Aggregate.ExecutionSuccessRate))
+		if report.Aggregate.InitialStateMatchRate != nil {
+			fmt.Fprintf(&output, "Initial state match rate: %s\n", renderMetricRate(*report.Aggregate.InitialStateMatchRate))
+		}
+		if report.Aggregate.TaskSuccessRate != nil {
+			fmt.Fprintf(&output, "Task success rate: %s\n", renderMetricRate(*report.Aggregate.TaskSuccessRate))
+		}
+		if report.Aggregate.RemediationSuccessRate != nil {
+			fmt.Fprintf(&output, "Remediation success rate: %s\n", renderMetricRate(*report.Aggregate.RemediationSuccessRate))
+		}
 		fmt.Fprintf(&output, "Policy-denied actions: %d\n", report.Aggregate.PolicyDeniedActions)
 		fmt.Fprintf(&output, "Approval-rejected actions: %d\n", report.Aggregate.ApprovalRejectedActions)
 		fmt.Fprintf(&output, "Unresolved actions: %d\n", report.Aggregate.UnresolvedActions)
@@ -904,6 +924,15 @@ func agentEvaluationMarkdown(report agent.AgentEvaluationReport) string {
 	fmt.Fprintf(&output, "| Final authorization rate | %s |\n", renderMetricRate(report.Aggregate.AuthorizationRate))
 	fmt.Fprintf(&output, "| Approval resolution rate | %s |\n", renderMetricRate(report.Aggregate.ApprovalResolutionRate))
 	fmt.Fprintf(&output, "| Tool execution success rate | %s |\n", renderMetricRate(report.Aggregate.ExecutionSuccessRate))
+	if report.Aggregate.InitialStateMatchRate != nil {
+		fmt.Fprintf(&output, "| Initial state match rate | %s |\n", renderMetricRate(*report.Aggregate.InitialStateMatchRate))
+	}
+	if report.Aggregate.TaskSuccessRate != nil {
+		fmt.Fprintf(&output, "| Task success rate | %s |\n", renderMetricRate(*report.Aggregate.TaskSuccessRate))
+	}
+	if report.Aggregate.RemediationSuccessRate != nil {
+		fmt.Fprintf(&output, "| Remediation success rate | %s |\n", renderMetricRate(*report.Aggregate.RemediationSuccessRate))
+	}
 	fmt.Fprintf(&output, "| Policy-denied actions | %d |\n", report.Aggregate.PolicyDeniedActions)
 	fmt.Fprintf(&output, "| Approval-rejected actions | %d |\n", report.Aggregate.ApprovalRejectedActions)
 	fmt.Fprintf(&output, "| Unresolved actions | %d |\n", report.Aggregate.UnresolvedActions)

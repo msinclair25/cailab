@@ -109,6 +109,12 @@ func ValidateAgentRun(run AgentRun) error {
 			issues = append(issues, "execution.filesystem must be read_only")
 		}
 	}
+	if run.State != nil {
+		if run.State.Profile != TrialStateProfile {
+			issues = append(issues, fmt.Sprintf("state.profile has unsupported value %q", run.State.Profile))
+		}
+		validateDigest(&issues, "state.baselineDigest", run.State.BaselineDigest)
+	}
 	validateVersion(&issues, "policy.version", run.Policy.Version)
 	validateDigest(&issues, "policy.digest", run.Policy.Digest)
 	validateDigest(&issues, "promptHash", run.PromptHash)

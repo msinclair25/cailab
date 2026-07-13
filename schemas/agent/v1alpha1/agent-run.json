@@ -16,6 +16,7 @@
     "promptHash": { "$ref": "#/$defs/digest" },
     "tools": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/toolRef" } },
     "execution": { "$ref": "#/$defs/execution" },
+    "state": { "$ref": "#/$defs/state" },
     "trial": { "$ref": "#/$defs/trial" },
     "status": { "enum": ["planned", "running", "completed", "failed", "canceled"] },
     "startedAt": { "type": "string", "format": "date-time" },
@@ -97,6 +98,16 @@
         },
         "network": { "const": "none" },
         "filesystem": { "const": "read_only" }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "baselineDigest", "restore"],
+      "properties": {
+        "profile": { "const": "scenario-state-v1" },
+        "baselineDigest": { "$ref": "#/$defs/digest" },
+        "restore": { "type": "boolean" }
       }
     }
   }

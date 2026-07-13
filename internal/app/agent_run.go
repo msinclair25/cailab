@@ -10,9 +10,12 @@ import (
 
 	"github.com/msinclair25/cailab/internal/agent"
 	"github.com/msinclair25/cailab/internal/scenario"
+	"github.com/msinclair25/cailab/internal/state"
+	"github.com/msinclair25/cailab/internal/verify"
 )
 
 const agentRunPersistenceTimeout = 2 * time.Second
+const trialStateCaptureTimeout = 30 * time.Second
 
 type RegisteredTool struct {
 	Manifest    agent.ToolManifest
@@ -27,6 +30,8 @@ type AgentRunOptions struct {
 	Directory      string
 	Environment    []string
 	Container      *agent.ContainerRuntime
+	CaptureState   bool
+	RestoreFixture bool
 	Policy         agent.GovernancePolicy
 	Tools          []RegisteredTool
 	Approver       agent.Approver
@@ -43,9 +48,13 @@ type AgentRunResult struct {
 	Decisions []agent.DecisionEvent
 	Approvals []agent.ApprovalResolutionEvent
 	Outcomes  []agent.ToolOutcomeEvent
+	States    []agent.TrialStateEvidence
 }
 
 func ValidateAgentRunOptions(compiled scenario.Compiled, options AgentRunOptions) error {
+	if options.RestoreFixture && !options.CaptureState {
+		return errors.New("fixture restoration requires state capture")
+	}
 	_, _, err := validateAgentRegistrations(compiled, options)
 	return err
 }
@@ -82,6 +91,11 @@ func (s *Service) RunAgent(ctx context.Context, options AgentRunOptions) (AgentR
 		Status:     "running",
 		StartedAt:  startedAt,
 	}
+	if options.CaptureState {
+		run.State = &agent.TrialStateRef{
+			Profile: agent.TrialStateProfile, BaselineDigest: rangeRun.Compiled.Digest, Restore: options.RestoreFixture,
+		}
+	}
 	sessionConfig := agent.SessionConfig{
 		Command: options.Command, Directory: options.Directory, Environment: options.Environment,
 		Container: options.Container, Run: run, SessionTimeout: options.SessionTimeout,
@@ -104,11 +118,56 @@ func (s *Service) RunAgent(ctx context.Context, options AgentRunOptions) (AgentR
 		Events:   s.store,
 		Clock:    s.clock,
 	}
-	session, sessionErr := agent.RunSession(ctx, sessionConfig, gateway)
+	var session agent.SessionResult
+	var sessionErr error
+	var stateCaptureErr error
+	beforeCaptured := false
+	if run.State != nil {
+		if s.provider == nil {
+			stateCaptureErr = errors.New("state capture requires a provider manager")
+		} else if options.RestoreFixture {
+			restoredInstances, restoreErr := s.provider.Restore(ctx, rangeRun.ID, rangeRun.Runtimes, rangeRun.Compiled)
+			if len(restoredInstances) > 0 {
+				restorePersistCtx, restorePersistCancel := context.WithTimeout(context.WithoutCancel(ctx), agentRunPersistenceTimeout)
+				err := s.store.SetRuntimes(restorePersistCtx, rangeRun.ID, restoredInstances)
+				restorePersistCancel()
+				if err != nil {
+					stateCaptureErr = fmt.Errorf("persist restored trial runtimes: %w", err)
+				} else {
+					rangeRun.Runtimes = restoredInstances
+				}
+			}
+			if restoreErr != nil {
+				stateCaptureErr = errors.Join(stateCaptureErr, fmt.Errorf("restore trial fixture: %w", restoreErr))
+			}
+		}
+		if stateCaptureErr == nil {
+			if _, err := s.captureTrialState(ctx, rangeRun, run, "before", options.RestoreFixture); err != nil {
+				stateCaptureErr = err
+			} else {
+				beforeCaptured = true
+			}
+		}
+		sessionErr = stateCaptureErr
+	}
+	if sessionErr == nil {
+		session, sessionErr = agent.RunSession(ctx, sessionConfig, gateway)
+	}
+	if run.State != nil && beforeCaptured {
+		captureCtx, captureCancel := context.WithTimeout(context.WithoutCancel(ctx), trialStateCaptureTimeout)
+		_, captureErr := s.captureTrialState(captureCtx, rangeRun, run, "after", false)
+		captureCancel()
+		if captureErr != nil {
+			stateCaptureErr = captureErr
+			sessionErr = errors.Join(sessionErr, captureErr)
+		}
+	}
 	terminal := run
 	endedAt := s.clock().UTC()
 	terminal.EndedAt = &endedAt
-	if sessionErr == nil {
+	if stateCaptureErr != nil {
+		terminal.Status = "failed"
+	} else if sessionErr == nil {
 		terminal.Status = session.Completion.Status
 	} else if errors.Is(sessionErr, context.Canceled) {
 		terminal.Status = "canceled"
@@ -132,11 +191,42 @@ func (s *Service) RunAgent(ctx context.Context, options AgentRunOptions) (AgentR
 	if err != nil {
 		return AgentRunResult{Run: terminal, Session: session, Decisions: decisions, Approvals: approvals}, fmt.Errorf("read agent trial outcomes: %w", err)
 	}
-	result := AgentRunResult{Run: terminal, Session: session, Decisions: decisions, Approvals: approvals, Outcomes: outcomes}
+	states, err := s.store.TrialStateEvidence(persistCtx, run.RunID, run.TrialID)
+	if err != nil {
+		return AgentRunResult{Run: terminal, Session: session, Decisions: decisions, Approvals: approvals, Outcomes: outcomes}, fmt.Errorf("read agent trial states: %w", err)
+	}
+	result := AgentRunResult{Run: terminal, Session: session, Decisions: decisions, Approvals: approvals, Outcomes: outcomes, States: states}
 	if sessionErr != nil {
 		return result, sessionErr
 	}
 	return result, nil
+}
+
+func (s *Service) captureTrialState(ctx context.Context, rangeRun state.Run, run agent.AgentRun, phase string, restored bool) (agent.TrialStateEvidence, error) {
+	snapshot, err := s.provider.Snapshot(ctx, rangeRun.Runtimes, rangeRun.Compiled)
+	if err != nil {
+		return agent.TrialStateEvidence{}, fmt.Errorf("capture %s trial provider state: %w", phase, err)
+	}
+	digest, err := scenario.StateDigest(snapshot)
+	if err != nil {
+		return agent.TrialStateEvidence{}, fmt.Errorf("digest %s trial provider state: %w", phase, err)
+	}
+	if restored && digest != rangeRun.Compiled.Digest {
+		return agent.TrialStateEvidence{}, fmt.Errorf("restored trial fixture digest %s does not match baseline %s", digest, rangeRun.Compiled.Digest)
+	}
+	report, err := verify.Evaluate(rangeRun.ID, snapshot)
+	if err != nil {
+		return agent.TrialStateEvidence{}, fmt.Errorf("verify %s trial provider state: %w", phase, err)
+	}
+	evidence := agent.TrialStateEvidence{
+		APIVersion: agent.APIVersion, Kind: agent.TrialStateEvidenceKind,
+		RunID: run.RunID, TrialID: run.TrialID, Phase: phase, CapturedAt: s.clock().UTC(),
+		SnapshotDigest: digest, FixtureRestored: restored, Verification: report,
+	}
+	if err := s.store.AppendTrialStateEvidence(ctx, evidence); err != nil {
+		return agent.TrialStateEvidence{}, fmt.Errorf("persist %s trial state evidence: %w", phase, err)
+	}
+	return evidence, nil
 }
 
 func validateAgentRegistrations(compiled scenario.Compiled, options AgentRunOptions) (map[string]RegisteredTool, []agent.ToolRef, error) {

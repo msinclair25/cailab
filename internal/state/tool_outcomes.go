@@ -34,6 +34,9 @@ WHERE run_id = ? AND trial_id = ? AND terminal_json IS NULL`, draft.RunID, draft
 	} else if err != nil {
 		return agent.ToolOutcomeEvent{}, fmt.Errorf("verify active agent trial for tool outcome: %w", err)
 	}
+	if err := ensureTrialStateOpen(ctx, tx, draft.RunID, draft.TrialID); err != nil {
+		return agent.ToolOutcomeEvent{}, err
+	}
 	var nextSequence int64
 	var headHash string
 	if err := tx.QueryRowContext(ctx, `

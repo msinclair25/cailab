@@ -111,6 +111,47 @@ func TestGoogleFacadeRejectsUnsupportedQuery(t *testing.T) {
 	}
 }
 
+func TestGoogleControlResetRestoresBaselineWithoutChangingEndpoint(t *testing.T) {
+	compiled := loadGoogleScenario(t)
+	baseline, err := cloneProviderState(*compiled.Providers.Google)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current, err := cloneProviderState(*compiled.Providers.Google)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facade := &googleFacade{
+		provider: current, baseline: baseline, statePath: filepath.Join(t.TempDir(), "state.json"),
+		runID: "google-test", controlToken: "control",
+	}
+	server := httptest.NewServer(facade)
+	defer server.Close()
+	response := googleRequest(t, http.DefaultClient, http.MethodDelete, server.URL+"/drive/v3/files/file_retention_plan/permissions/permission_contractor", LocalGoogleToken)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("delete status = %d", response.StatusCode)
+	}
+	request, _ := http.NewRequest(http.MethodPost, server.URL+"/_cailab/reset", nil)
+	request.Header.Set("Authorization", "Bearer control")
+	request.Header.Set("X-CloudAILab-Run", "google-test")
+	response, err = http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("reset status = %d", response.StatusCode)
+	}
+	snapshot, err := snapshotGoogleWithClient(context.Background(), server.URL, compiled, http.DefaultClient)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Providers.Google.DrivePermissions) != len(compiled.Providers.Google.DrivePermissions) {
+		t.Fatalf("restored permissions = %+v", snapshot.Providers.Google.DrivePermissions)
+	}
+}
+
 func TestNativeStartupFailureRemovesIncompleteRunDirectory(t *testing.T) {
 	compiled := loadGoogleScenario(t)
 	manager := NewNativeProcessManager(t.TempDir())
@@ -171,6 +212,14 @@ func TestGoogleNativeIntegration(t *testing.T) {
 	}
 	assertPath(t, snapshot, "principal:contractor", "resource:retention-plan", false)
 	assertPath(t, snapshot, "principal:records-admin", "resource:retention-plan", true)
+	if _, err := manager.Restore(context.Background(), runID, instances, compiled); err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err = manager.Snapshot(context.Background(), instances, compiled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertPath(t, snapshot, "principal:contractor", "resource:retention-plan", true)
 	if err := manager.Stop(context.Background(), runID, instances, compiled); err != nil {
 		t.Fatal(err)
 	}

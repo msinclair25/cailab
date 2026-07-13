@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudailab.dev/schemas/agent/v1alpha1/trial-state-evidence.json",
+  "title": "CloudAILab Trial State Evidence v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "runId", "trialId", "phase", "capturedAt", "snapshotDigest", "fixtureRestored", "verification"],
+  "properties": {
+    "apiVersion": { "const": "cloudailab.dev/agent/v1alpha1" },
+    "kind": { "const": "TrialStateEvidence" },
+    "runId": { "$ref": "#/$defs/id" },
+    "trialId": { "$ref": "#/$defs/id" },
+    "phase": { "enum": ["before", "after"] },
+    "capturedAt": { "type": "string", "format": "date-time" },
+    "snapshotDigest": { "$ref": "#/$defs/digest" },
+    "fixtureRestored": { "type": "boolean" },
+    "verification": { "$ref": "#/$defs/verification" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "phase": { "const": "after" } } },
+      "then": { "properties": { "fixtureRestored": { "const": false } } }
+    }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9._:-]{0,127}$" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["runId", "scenario", "scenarioVersion", "digest", "passed", "passedCount", "failedCount", "results"],
+      "properties": {
+        "runId": { "$ref": "#/$defs/id" },
+        "scenario": { "$ref": "#/$defs/id" },
+        "scenarioVersion": { "$ref": "#/$defs/version" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "passed": { "type": "boolean" },
+        "passedCount": { "type": "integer", "minimum": 0 },
+        "failedCount": { "type": "integer", "minimum": 0 },
+        "results": { "type": "array", "items": { "$ref": "#/$defs/result" } }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["invariantId", "severity", "description", "passed", "message"],
+      "properties": {
+        "invariantId": { "$ref": "#/$defs/id" },
+        "severity": { "enum": ["low", "medium", "high", "critical"] },
+        "description": { "type": "string", "minLength": 1 },
+        "passed": { "type": "boolean" },
+        "message": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    }
+  }
+}

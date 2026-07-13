@@ -258,7 +258,7 @@ func TestPublicAgentValidateAndSubprocessRun(t *testing.T) {
 		"--prompt-file", promptPath, "--agent-id", "agent:cli-test", "--agent-version", "0.1.0",
 		"--provider", "test", "--model", "deterministic", "--actor-tenant", "tenant-a",
 		"--command", executable, "--arg", "-test.run=^TestCLIAgentSubprocessHelper$", "--directory", stateDir,
-		"--agent-env", cliAgentHelperEnvironment, "--tool-env", cliToolHelperEnvironment, "--json",
+		"--agent-env", cliAgentHelperEnvironment, "--tool-env", cliToolHelperEnvironment, "--restore-fixture", "--json",
 	}); code != ExitOK {
 		t.Fatalf("run code = %d; stderr=%s; stdout=%s", code, stderr.String(), stdout.String())
 	}
@@ -282,8 +282,9 @@ func TestPublicAgentValidateAndSubprocessRun(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &evaluation); err != nil {
 		t.Fatal(err)
 	}
-	if evaluation.Profile != agent.EvaluationProfile || evaluation.Aggregate.CompletedTrials.Numerator != 1 ||
-		evaluation.Aggregate.ExecutionSuccessRate.Numerator != 1 || len(evaluation.NotMeasured) == 0 {
+	if evaluation.Profile != agent.ScenarioOutcomeProfile || evaluation.Aggregate.CompletedTrials.Numerator != 1 ||
+		evaluation.Aggregate.ExecutionSuccessRate.Numerator != 1 || evaluation.Aggregate.TaskSuccessRate == nil ||
+		evaluation.Aggregate.TaskSuccessRate.Numerator != 1 || len(evaluation.NotMeasured) == 0 {
 		t.Fatalf("evaluation = %+v", evaluation)
 	}
 

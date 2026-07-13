@@ -137,7 +137,7 @@ CloudAILab displays canonical target metadata and the approval ID on standard er
 
 ## Replay and aggregate repeated trials
 
-Declare a repeated set when launching each trial. Use unique IDs, one-based contiguous indices, the same count, and identical agent/policy/prompt/tool/execution configuration:
+Declare a repeated set when launching each trial. Use unique IDs, one-based contiguous indices, the same count, and identical agent/policy/prompt/tool/execution configuration. The following commands are illustrative; replace the ellipses with the complete registration and agent options:
 
 ```bash
 ./bin/cailab agent run subprocess \
@@ -167,4 +167,28 @@ Use `--format text`, `json`, or `markdown`. After `cailab down`, add `--run-id <
 
 Replay does not start an agent or tool and does not mutate provider state. It rejects incomplete, duplicated, incompatible, non-terminal, or inconsistently linked evidence. The report includes counts, explicit denominators/rates, configuration and trace digests, failures, and unavailable metrics. It does not claim task success from process completion.
 
-The current CLI does not automatically execute or reset a repeated set. If a trial can mutate the scenario, restore the intended fixture state before the next trial and record that procedure externally. Matching run metadata alone does not prove that mutable provider state was identical. Per-trial state snapshots and automated reset are later M3 work. See the [evidence replay compatibility record](../07-compatibility/agent-evidence-replay.md).
+## Capture and restore scenario outcomes
+
+Add `--capture-state` to either agent-run mode to persist deterministic provider-state digests and invariant reports immediately before and after the session:
+
+```bash
+./bin/cailab agent run subprocess \
+  ...same required agent options... \
+  --capture-state
+```
+
+Add `--restore-fixture` when the trial must start from the compiled scenario fixture. It implies state capture:
+
+```bash
+./bin/cailab agent run subprocess \
+  ...same required agent options... \
+  --restore-fixture
+```
+
+These are illustrative flag fragments; replace the ellipses with the complete command from [Run your agent](#run-your-agent).
+
+CloudAILab keeps recorded provider endpoints stable: native facades restore in process, and the owned memory-backed Floci container is replaced at the exact recorded loopback port. OIDC codes are cleared and signing material is refreshed. The agent does not start until a post-restore snapshot matches the compiled baseline digest exactly.
+
+The terminal run summary reports two state snapshots. Replay then selects `scenario-outcome-v1` and adds initial-state match, task-success, and remediation-success rates. Task success means every declared after-state invariant passes; remediation success applies only to a trial that began with at least one failed invariant.
+
+The current CLI still launches each repeated trial separately. Use `--restore-fixture` on every member of a repeated set to establish equivalent supported provider state. Restoration is not atomic across provider processes, and host-mode processes can race the terminal snapshot; see the [trial-state compatibility record](../07-compatibility/agent-trial-state.md) and [evidence replay compatibility record](../07-compatibility/agent-evidence-replay.md).

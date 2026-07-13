@@ -36,6 +36,8 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | FR-023 | The system shall allow users to register versioned custom tool adapters with declared schemas, permissions, risk classification, timeout, transport, and isolation requirements. | Must |
 | FR-024 | The system shall authorize each supported local federation exchange from a validated signed token, current provider state, and typed trust contract before invoking a permissive emulator. | Must |
 | FR-025 | The CLI shall validate scenario-bound policy and tool registrations and run a reference or protocol-compatible subprocess agent against an active scenario. | Must |
+| FR-026 | The system shall optionally capture deterministic provider-state digests and invariant results before and after an agent trial and link them to that trial. | Must |
+| FR-027 | The system shall restore supported provider fixtures without changing their recorded loopback endpoints and shall verify the canonical baseline digest before launching an evaluated agent. | Should |
 
 ## Non-functional requirements
 
@@ -64,6 +66,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SEC-019 | An approval-required call shall remain unexecuted until an exact local resolution is re-evaluated and durably linked; unattended runs shall reject by default, and approval prompts and evidence shall omit raw tool arguments. |
 | NFR-SEC-020 | Docker-isolated agent execution shall require a present content-addressed image without declared volumes and an explicitly pinned local Unix-socket non-rootless Linux engine with active cgroups, reject remote contexts, forward no host environment or mounts, disable external networking, shared-memory IPC, and Docker log persistence, enforce a read-only root with bounded temporary storage, drop privileges and capabilities, select the built-in seccomp profile, apply CPU/memory/PID limits, and never fall back silently to host execution. |
 | NFR-SEC-021 | Agent replay shall consume only integrity-checked evidence-safe records, reject inconsistent decision/approval/outcome linkage, and shall not expose raw protocol frames, tool arguments, successful tool content, or child diagnostics. |
+| NFR-SEC-022 | Provider fixture restoration shall require run-scoped runtime ownership, authenticated native control, and matching container labels; a failed or unverified restore shall not launch the agent. |
 
 ### Reliability and reproducibility
 
@@ -80,6 +83,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-REL-009 | Approval resolutions shall be append-only, linked to the exact original decision and input hash, consumed once for live continuation, and required as an integrity-checked predecessor for approved tool outcomes. |
 | NFR-REL-010 | Agent-container cleanup shall verify run and trial ownership labels before forced removal and shall execute after success, failure, timeout, or cancellation using a bounded cleanup context. |
 | NFR-REL-011 | Agent replay shall require a complete explicitly selected compatible trial set, order trials by contiguous declared index, exclude wall-clock timestamps from scoring, emit counts with denominators and rates, identify unavailable metrics, and produce equivalent output for equivalent evidence. |
+| NFR-REL-012 | State-captured trials shall append bounded canonical before evidence prior to governed decisions and after evidence following session termination; the after record shall close further action evidence, and restored initial state shall match the compiled baseline digest. |
 
 ### Usability and portability
 

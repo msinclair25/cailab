@@ -4,7 +4,7 @@
   "title": "CloudAILab Agent Trace v1alpha1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["apiVersion", "kind", "run", "decisions", "approvals", "outcomes"],
+  "required": ["apiVersion", "kind", "run", "decisions", "approvals", "outcomes", "states"],
   "properties": {
     "apiVersion": { "const": "cloudailab.dev/agent/v1alpha1" },
     "kind": { "const": "AgentTrace" },
@@ -20,6 +20,11 @@
     "outcomes": {
       "type": "array",
       "items": { "$ref": "https://cloudailab.dev/schemas/agent/v1alpha1/tool-outcome-event.json" }
+    },
+    "states": {
+      "type": "array",
+      "maxItems": 2,
+      "items": { "$ref": "https://cloudailab.dev/schemas/agent/v1alpha1/trial-state-evidence.json" }
     }
   }
 }

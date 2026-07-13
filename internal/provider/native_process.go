@@ -206,6 +206,71 @@ func (m *NativeProcessManager) Snapshot(ctx context.Context, instances []Instanc
 	return snapshot, nil
 }
 
+// Restore asks each owned native runtime to replace mutable state with its
+// startup baseline without changing its loopback endpoint.
+func (m *NativeProcessManager) Restore(ctx context.Context, runID string, instances []Instance, compiled scenario.Compiled) ([]Instance, error) {
+	for _, name := range []string{"oidc", "microsoft", "google"} {
+		if !nativeRuntimeConfigured(compiled, name) {
+			continue
+		}
+		instance, found := nativeInstance(instances, name)
+		if !found {
+			return nil, fmt.Errorf("restore %s runtime: owned instance is not recorded", name)
+		}
+		if err := m.restoreInstance(ctx, runID, name, instance); err != nil {
+			return nil, err
+		}
+	}
+	return append([]Instance(nil), instances...), nil
+}
+
+func (m *NativeProcessManager) restoreInstance(ctx context.Context, runID, provider string, instance Instance) error {
+	expectedDir := m.runtimeDir(runID, provider)
+	expectedControl := filepath.Join(expectedDir, "control.json")
+	controlPath, err := filepath.Abs(instance.ControlPath)
+	if err != nil || controlPath != expectedControl {
+		return fmt.Errorf("refuse to restore %s runtime: control path does not match run %q", provider, runID)
+	}
+	data, err := os.ReadFile(controlPath)
+	if err != nil {
+		return fmt.Errorf("read %s runtime control: %w", provider, err)
+	}
+	var control NativeRuntimeControl
+	if err := json.Unmarshal(data, &control); err != nil {
+		return fmt.Errorf("decode %s runtime control: %w", provider, err)
+	}
+	if control.RunID != runID || control.ControlToken == "" {
+		return fmt.Errorf("refuse to restore %s runtime: run identity does not match %q", provider, runID)
+	}
+	readyData, err := os.ReadFile(filepath.Join(expectedDir, "ready.json"))
+	if err != nil {
+		return fmt.Errorf("read %s runtime ownership record: %w", provider, err)
+	}
+	var ready nativeReady
+	if err := json.Unmarshal(readyData, &ready); err != nil {
+		return fmt.Errorf("decode %s runtime ownership record: %w", provider, err)
+	}
+	if ready.RunID != runID || ready.Endpoint != instance.Endpoint || !isIPv4LoopbackEndpoint(ready.Endpoint) {
+		return fmt.Errorf("refuse to restore %s runtime: endpoint ownership does not match run %q", provider, runID)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(instance.Endpoint, "/")+"/_cailab/reset", nil)
+	if err != nil {
+		return fmt.Errorf("build %s restore request: %w", provider, err)
+	}
+	request.Header.Set("Authorization", "Bearer "+control.ControlToken)
+	request.Header.Set("X-CloudAILab-Run", runID)
+	response, err := m.httpClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("restore %s runtime: %w", provider, err)
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<20))
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("%s runtime rejected restore with status %d", provider, response.StatusCode)
+	}
+	return nil
+}
+
 func nativeInstance(instances []Instance, provider string) (Instance, bool) {
 	for _, instance := range instances {
 		if instance.Provider == provider && instance.Engine == "native" {

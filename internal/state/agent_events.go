@@ -40,6 +40,9 @@ WHERE run_id = ? AND trial_id = ? AND terminal_json IS NULL`, draft.RunID, draft
 	} else if err != nil {
 		return agent.DecisionEvent{}, fmt.Errorf("verify active agent trial %q: %w", draft.TrialID, err)
 	}
+	if err := ensureTrialStateOpen(ctx, tx, draft.RunID, draft.TrialID); err != nil {
+		return agent.DecisionEvent{}, err
+	}
 	var duplicate int
 	if err := tx.QueryRowContext(ctx, `
 SELECT 1 FROM agent_decision_events WHERE run_id = ? AND trial_id = ? AND correlation_id = ?`,

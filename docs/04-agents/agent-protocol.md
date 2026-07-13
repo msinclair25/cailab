@@ -8,7 +8,7 @@ last_reviewed: 2026-07-12
 
 ## Current scope
 
-CloudAILab defines typed and schema-backed contracts for M3 agent runs, tool registration, governance policy, agent messages, tool execution, decisions, redaction, approval resolutions, decision events, tool outcomes, evidence-safe traces, and evaluation reports. The supported CLI validates scenario-bound registrations and runs either the deterministic reference agent or a protocol-compatible custom agent in host subprocess or opt-in Docker isolation mode. The harness applies exact-match policy and manifest ceilings, validates Draft 2020-12 input offline, resolves approvals locally with default rejection, protects successful output, commits immutable run plus linked decision/approval/outcome evidence, and deterministically replays a complete compatible trial set into evidence-supported aggregate metrics. Tool subprocess isolation, per-trial scenario-outcome capture/reset, and adversarial-fixture scoring are not implemented.
+CloudAILab defines typed and schema-backed contracts for M3 agent runs, tools, governance, approvals, decisions, outcomes, trial state, evidence-safe traces, and evaluation reports. The supported CLI runs the deterministic reference agent or a protocol-compatible custom agent in host subprocess or opt-in Docker isolation mode. The harness enforces scenario-bound registration, exact-match policy and manifest ceilings, offline Draft 2020-12 input validation, fail-closed approval, protected output, immutable linked action evidence, opt-in endpoint-preserving fixture restoration, before/after invariant evidence, and deterministic repeated-trial action/task/remediation metrics. Tool subprocess isolation, automatic campaign execution, and adversarial-fixture scoring are not implemented.
 
 The normative schemas are:
 
@@ -22,8 +22,9 @@ The normative schemas are:
 - [Approval resolution event](../../schemas/agent/v1alpha1/approval-resolution-event.json)
 - [Agent trace](../../schemas/agent/v1alpha1/agent-trace.json)
 - [Agent evaluation report](../../schemas/agent/v1alpha1/agent-evaluation-report.json)
+- [Trial state evidence](../../schemas/agent/v1alpha1/trial-state-evidence.json)
 
-The executable validation, policy, gateway, session, and replay contracts are in [`internal/agent`](../../internal/agent). [ADR-0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) defines the original wire contract; [ADR-0012](../02-architecture/decisions/0012-owned-agent-subprocess-sessions.md) defines the owned-process lifecycle; [ADR-0013](../02-architecture/decisions/0013-deterministic-tool-policy-and-evidence.md) defines policy/evidence semantics; [ADR-0015](../02-architecture/decisions/0015-scenario-bound-public-agent-runs.md) defines protocol 1.1 and the public workflow; [ADR-0016](../02-architecture/decisions/0016-immutable-approval-resolution.md) defines approval resolution and evidence linkage; [ADR-0017](../02-architecture/decisions/0017-opt-in-docker-agent-isolation.md) defines the bounded Docker agent mode; and [ADR-0018](../02-architecture/decisions/0018-deterministic-agent-evidence-replay.md) defines the initial evaluation profile.
+The executable validation, policy, gateway, session, state, and replay contracts are in [`internal/agent`](../../internal/agent). ADRs [0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) through [0018](../02-architecture/decisions/0018-deterministic-agent-evidence-replay.md) define the wire, lifecycle, governance, evidence, approval, isolation, and initial replay contracts. [ADR-0019](../02-architecture/decisions/0019-endpoint-preserving-trial-state-evaluation.md) defines provider restoration and scenario-outcome scoring.
 
 ## Framing
 
@@ -120,6 +121,14 @@ Sequence is authoritative for decision order. Wall-clock time is diagnostic cont
 Replay validates the sequence and every run/trial/correlation, decision/approval, and decision/outcome link again. It then reports terminal completion, final authorization disposition, initial policy denials, approval resolutions, tool outcomes, missing outcome evidence, and distinct confidential/restricted action-resource targets observed in the trace. Every rate carries its numerator and denominator; a zero denominator produces `null` rather than a fabricated percentage. The report has no generated timestamp or composite score, so equivalent evidence produces equivalent JSON.
 
 The profile explicitly marks task success, prompt-injection resistance, remediation quality, sensitive-data exposure, and effective blast radius as unmeasured. A terminal agent process is not scenario success; observed targets are not all reachable authority; and evidence-safe hashes do not prove absence of disclosure. Replay does not re-run policy, tools, providers, scenario invariants, or a model. Full protocol-transcript persistence is intentionally not part of this evidence-safe contract.
+
+## Trial state and scenario outcomes
+
+State capture is opt-in. `--capture-state` adds immutable `scenario-state-v1` metadata to the run and appends one `before` and one `after` `TrialStateEvidence` record. Each record contains the supported provider snapshot digest and the exact deterministic invariant report used by `cailab verify`. The before record must commit before any governed decision; the after record is captured after session termination with a separate bounded context and closes further action evidence.
+
+`--restore-fixture` implies capture. Native provider processes authenticate a run-scoped reset request and restore state without changing listeners. CloudAILab ownership-checks and replaces the memory-backed Floci container at the exact recorded loopback port, then rehydrates it. The local issuer clears codes and rotates to fresh signing material. CloudAILab snapshots all configured providers and requires an exact compiled baseline digest before it sends `session.start`; mismatch or restoration failure records a failed trial without launching the agent.
+
+When every selected compatible trial has a complete state pair, replay uses `scenario-outcome-v1`. `initialStateMatchRate` reports baseline equivalence. `taskSuccessRate` counts after states where all declared invariants pass. `remediationSuccessRate` includes only trials that began with a failed invariant and counts those ending with all invariants passing. These are scenario-level measures, not process completion, provider-parity, or semantic model judgments. Prompt-injection resistance, sensitive-data exposure, and effective blast radius remain unavailable until dedicated evidence contracts exist.
 
 ## Security boundary
 

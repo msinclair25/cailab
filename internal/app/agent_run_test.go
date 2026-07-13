@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/msinclair25/cailab/internal/agent"
+	"github.com/msinclair25/cailab/internal/provider"
 	"github.com/msinclair25/cailab/internal/scenario"
 	"github.com/msinclair25/cailab/internal/state"
 )
@@ -138,6 +139,64 @@ func TestReplayAgentTrialsAggregatesACompleteCompatibleSet(t *testing.T) {
 	}
 }
 
+func TestRunAgentRestoresCapturesAndScoresScenarioOutcome(t *testing.T) {
+	ctx := context.Background()
+	store, service, rangeRun := appAgentTestService(t, ctx)
+	defer store.Close()
+	remediated := rangeRun.Compiled
+	remediated.Edges = nil
+	replacement := []provider.Instance{{Provider: "aws", Engine: "floci", Name: "test-runtime", ContainerID: "replacement", Endpoint: "http://127.0.0.1:4566", Status: "ready"}}
+	manager := &fakeProviderManager{snapshots: []scenario.Compiled{rangeRun.Compiled, remediated}, restoredRuntimes: replacement}
+	service.provider = manager
+	options := appAgentTestOptions(t, rangeRun.Compiled, "trial:state", "tool")
+	options.CaptureState = true
+	options.RestoreFixture = true
+	result, err := service.RunAgent(ctx, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !manager.restored || result.Run.State == nil || !result.Run.State.Restore || len(result.States) != 2 ||
+		result.States[0].Verification.Passed || !result.States[1].Verification.Passed {
+		t.Fatalf("result = %+v, manager = %+v", result, manager)
+	}
+	persisted, err := service.Status(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(persisted.Runtimes) != 1 || persisted.Runtimes[0].ContainerID != "replacement" {
+		t.Fatalf("persisted runtimes = %+v", persisted.Runtimes)
+	}
+	report, err := service.ReplayAgentTrials(ctx, rangeRun.ID, []string{"trial:state"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Profile != agent.ScenarioOutcomeProfile || report.Aggregate.TaskSuccessRate == nil ||
+		report.Aggregate.TaskSuccessRate.Numerator != 1 || report.Aggregate.RemediationSuccessRate == nil ||
+		report.Aggregate.RemediationSuccessRate.Numerator != 1 || report.Aggregate.InitialStateMatchRate == nil ||
+		report.Aggregate.InitialStateMatchRate.Numerator != 1 {
+		t.Fatalf("report = %+v", report)
+	}
+}
+
+func TestRunAgentRestoreFailureDoesNotLaunchAgent(t *testing.T) {
+	ctx := context.Background()
+	store, service, rangeRun := appAgentTestService(t, ctx)
+	defer store.Close()
+	manager := &fakeProviderManager{restoreErr: errors.New("replacement failed")}
+	service.provider = manager
+	options := appAgentTestOptions(t, rangeRun.Compiled, "trial:restore-failure", "tool")
+	options.CaptureState = true
+	options.RestoreFixture = true
+	options.Command = []string{"/definitely-not-a-cailab-agent"}
+	result, err := service.RunAgent(ctx, options)
+	if err == nil || !strings.Contains(err.Error(), "replacement failed") {
+		t.Fatalf("RunAgent() error = %v", err)
+	}
+	if !manager.restored || result.Run.Status != "failed" || len(result.States) != 0 {
+		t.Fatalf("result = %+v, manager = %+v", result, manager)
+	}
+}
+
 func TestReferenceAgentRunOptionsAreValidForActiveScenario(t *testing.T) {
 	executable, err := os.Executable()
 	if err != nil {
@@ -227,7 +286,17 @@ func appAgentTestService(t *testing.T, ctx context.Context) (*state.Store, *Serv
 			{ID: "tenant:a", Kind: "tenant", Type: "organization", DisplayName: "Tenant A"},
 			{ID: "resource:a", Kind: "resource", Tenant: "tenant:a", Type: "test", DisplayName: "Resource A", Classification: "restricted"},
 		},
+		Edges: []scenario.Relationship{{ID: "edge:vulnerable", From: "tenant:a", To: "resource:a", Type: "can_access"}},
+		Invariants: []scenario.Invariant{{
+			ID: "path-closed", Type: "path_absent", From: "tenant:a", To: "resource:a", Severity: "high",
+			Description: "The prohibited path is absent.",
+		}},
 	}
+	digest, err := scenario.StateDigest(compiled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiled.Digest = digest
 	rangeRun, err := store.CreateRun(ctx, compiled)
 	if err != nil {
 		store.Close()
