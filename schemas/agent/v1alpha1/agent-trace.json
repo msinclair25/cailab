@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cloudailab.dev/schemas/agent/v1alpha1/agent-trace.json",
+  "title": "CloudAILab Agent Trace v1alpha1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "run", "decisions", "approvals", "outcomes"],
+  "properties": {
+    "apiVersion": { "const": "cloudailab.dev/agent/v1alpha1" },
+    "kind": { "const": "AgentTrace" },
+    "run": { "$ref": "https://cloudailab.dev/schemas/agent/v1alpha1/agent-run.json" },
+    "decisions": {
+      "type": "array",
+      "items": { "$ref": "https://cloudailab.dev/schemas/agent/v1alpha1/decision-event.json" }
+    },
+    "approvals": {
+      "type": "array",
+      "items": { "$ref": "https://cloudailab.dev/schemas/agent/v1alpha1/approval-resolution-event.json" }
+    },
+    "outcomes": {
+      "type": "array",
+      "items": { "$ref": "https://cloudailab.dev/schemas/agent/v1alpha1/tool-outcome-event.json" }
+    }
+  }
+}

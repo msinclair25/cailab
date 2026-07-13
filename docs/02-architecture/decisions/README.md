@@ -26,6 +26,7 @@ ADRs record significant decisions that affect system structure, security, compat
 - [ADR-0015: Scenario-bound public agent runs](0015-scenario-bound-public-agent-runs.md)
 - [ADR-0016: Immutable approval resolution](0016-immutable-approval-resolution.md)
 - [ADR-0017: Opt-in Docker agent isolation](0017-opt-in-docker-agent-isolation.md)
+- [ADR-0018: Deterministic agent evidence replay](0018-deterministic-agent-evidence-replay.md)
 
 ## Lifecycle
 

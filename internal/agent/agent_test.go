@@ -207,7 +207,10 @@ func TestProtocolRejectsOversizedAndInvalidUTF8Frames(t *testing.T) {
 }
 
 func TestCommittedAgentSchemasAreValidJSON(t *testing.T) {
-	for _, name := range []string{"tool-manifest.json", "agent-run.json", "protocol-message.json", "decision-event.json", "governance-policy.json", "tool-execution-message.json", "tool-outcome-event.json", "approval-resolution-event.json"} {
+	compiler := jsonschema.NewCompiler()
+	compiler.DefaultDraft(jsonschema.Draft2020)
+	var locations []string
+	for _, name := range []string{"tool-manifest.json", "agent-run.json", "protocol-message.json", "decision-event.json", "governance-policy.json", "tool-execution-message.json", "tool-outcome-event.json", "approval-resolution-event.json", "agent-trace.json", "agent-evaluation-report.json"} {
 		data, err := os.ReadFile(filepath.Join("..", "..", "schemas", "agent", "v1alpha1", name))
 		if err != nil {
 			t.Fatal(err)
@@ -219,16 +222,18 @@ func TestCommittedAgentSchemasAreValidJSON(t *testing.T) {
 		if schema["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
 			t.Fatalf("%s has unexpected $schema", name)
 		}
-		if name == "approval-resolution-event.json" {
-			compiler := jsonschema.NewCompiler()
-			compiler.DefaultDraft(jsonschema.Draft2020)
-			location := "mem://cloudailab/" + name
-			if err := compiler.AddResource(location, schema); err != nil {
-				t.Fatalf("%s add resource: %v", name, err)
-			}
-			if _, err := compiler.Compile(location); err != nil {
-				t.Fatalf("%s compile: %v", name, err)
-			}
+		location, ok := schema["$id"].(string)
+		if !ok || location == "" {
+			t.Fatalf("%s has no $id", name)
+		}
+		if err := compiler.AddResource(location, schema); err != nil {
+			t.Fatalf("%s add resource: %v", name, err)
+		}
+		locations = append(locations, location)
+	}
+	for _, location := range locations {
+		if _, err := compiler.Compile(location); err != nil {
+			t.Fatalf("%s compile: %v", location, err)
 		}
 	}
 }
