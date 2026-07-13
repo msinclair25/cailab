@@ -449,6 +449,7 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Merge the release-readiness change, exercise `0.1.0-rc.1` through the manual release workflow, and inspect the exact candidate archives, SBOM, checksums, legal bundle, and native smoke evidence.
-2. Record and link the portfolio demo from that verified candidate commit.
-3. Move the changelog entry to `0.1.0`, record the final tag decision, and create the first version tag only after the repository owner explicitly approves the Apache-2.0 license and residual-risk acceptances.
+The release-readiness change and manual `0.1.0-rc.1` exercise are complete. The exact candidate archives, SBOM, checksums, legal bundle, reproducibility, and native smoke evidence are recorded in the [release-candidate readiness audit](../05-engineering/release-readiness-audit.md).
+
+1. Record and link the portfolio demo from that verified candidate commit.
+2. Move the changelog entry to `0.1.0`, record the final tag decision, and create the first version tag only after the repository owner explicitly approves the Apache-2.0 license and residual-risk acceptances.
