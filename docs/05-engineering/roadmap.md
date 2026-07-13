@@ -43,7 +43,7 @@ Milestones are capability gates, not date commitments. This document is the conc
 
 ## M3 — Agent governance harness
 
-**Status:** in development; versioned protocols, supported reference/unsafe/custom subprocess runs, deterministic governance, optional Docker agent isolation, protected linked evidence, endpoint-preserving restoration, normalized baselines, scenario evidence, fixture-labeled injection scoring, and automatic restored reference/unsafe campaigns are complete. Tool subprocess isolation is deferred.
+**Status:** complete; versioned protocols, supported inert reference/safe/unsafe/custom subprocess runs, deterministic governance, optional Docker agent isolation, protected linked evidence, endpoint-preserving restoration, normalized baselines, scenario evidence, paired fixture controls, fixture-labeled injection scoring, and automatic restored reference/safe/unsafe campaigns satisfy the exit gate. Tool subprocess isolation is deferred until required by a scenario.
 
 - Add agent identity and run metadata.
 - Supervise protocol-compatible direct subprocesses with bounded lifecycle and diagnostics.
@@ -54,12 +54,14 @@ Milestones are capability gates, not date commitments. This document is the conc
 - Record complete action traces.
 - Replay complete compatible trial sets into transparent counts, denominators, rates, and explicit unavailable metrics.
 - Restore supported provider fixtures at stable endpoints and link before/after invariant evidence to each evaluated trial.
-- Add prompt-injection fixtures and repeated trials. (fixture, repeated-trial scoring, and automatic reference/unsafe campaigns implemented)
-- Report task success, policy violations, and blast radius.
+- Add prompt-injection fixtures and repeated trials. (paired safe/unsafe controls, repeated-trial scoring, and automatic reference/safe/unsafe campaigns implemented)
+- Report evidence-supported task success and policy violations while explicitly labeling effective blast radius as unmeasured.
 
 **Exit:** a local or external agent can be evaluated deterministically against the flagship scenario.
 
 ## M4 — Portfolio-quality release
+
+**Status:** in development.
 
 - Cross-platform packaging and CI container.
 - Reproducible demo and architecture walkthrough.

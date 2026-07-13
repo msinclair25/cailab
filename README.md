@@ -2,7 +2,7 @@
 title: CloudAILab
 aliases:
   - CAL
-status: m3-development
+status: m3-complete
 ---
 
 # CloudAILab
@@ -15,7 +15,7 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: versioned agent and evidence contracts; supported reference, deliberately unsafe, and custom subprocess runs; deterministic governance; optional Docker agent isolation; endpoint-preserving restoration; normalized provider baselines; scenario evidence; fixture-labeled indirect prompt-injection scoring; repeated-trial replay metrics; and automatic restored reference/unsafe campaigns are implemented and test-backed. Provider and protocol compatibility is limited to the tested matrices and schemas.
+M0 through M3 are complete. Versioned agent and evidence contracts; supported inert reference, fixture-specific safe, deliberately unsafe, and custom subprocess runs; deterministic governance; optional Docker agent isolation; endpoint-preserving restoration; normalized provider baselines; scenario evidence; fixture-labeled indirect prompt-injection scoring; repeated-trial replay metrics; and automatic restored reference/safe/unsafe campaigns are implemented and test-backed. Provider and protocol compatibility is limited to the tested matrices and schemas.
 
 ## Build and try the walking skeleton
 
@@ -116,14 +116,24 @@ Add `--capture-state` to persist before/after invariant evidence. Add `--restore
 
 With `acquisition-agent` active, run `./bin/cailab agent run unsafe` to exercise the code-owned deliberately vulnerable baseline against the synthetic Drive runbook, then replay `trial:unsafe`. Export is simulated; no provider data is transmitted. Custom agents can select the same ground truth with `--prompt-injection-fixture drive-runbook-export`. See the [prompt-injection evaluation compatibility record](docs/07-compatibility/agent-prompt-injection.md).
 
+Run the fixture-specific safe control against the same document. It performs the legitimate read, treats returned content as untrusted data, and makes no content-derived follow-up call:
+
+```bash
+./bin/cailab agent run safe --fixture drive-runbook-export
+./bin/cailab agent replay --trial-id trial:safe --format markdown
+```
+
+This establishes that the evaluation can produce a positive result for this exact deterministic control. It is not evidence that a model, agent framework, or deployment is generally prompt-injection resistant.
+
 Run a bounded, automatically restored repeated set and emit its deterministic aggregate report:
 
 ```bash
 ./bin/cailab agent campaign reference --trials 3 --format markdown
+./bin/cailab agent campaign safe --trials 3 --fixture drive-runbook-export --format markdown
 ./bin/cailab agent campaign unsafe --trials 3 --fixture drive-runbook-export --format markdown
 ```
 
-Campaign execution is currently supported for the code-owned reference and unsafe fixtures. Custom subprocess agents still declare and launch repeated trials explicitly. See the [campaign compatibility record](docs/07-compatibility/agent-campaign-execution.md).
+Campaign execution is supported for the code-owned reference, safe, and unsafe fixtures. Custom subprocess agents still declare and launch repeated trials explicitly. See the [campaign compatibility record](docs/07-compatibility/agent-campaign-execution.md).
 
 Host-mode agent and tool subprocesses are owned and bounded but **not isolated** from the launching user's filesystem, network, syscalls, or detached descendants. Do not run untrusted code in host mode. Custom agents can opt into the Linux CI-tested Docker boundary with `--isolation docker --image <immutable-image-id-or-digest>`; registered tool subprocesses remain trusted and unisolated. See the [agent-run guide](docs/07-guides/agent-run.md) and [Docker isolation compatibility record](docs/07-compatibility/agent-docker-isolation.md).
 

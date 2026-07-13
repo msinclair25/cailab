@@ -176,6 +176,19 @@ func TestReplayAgentTracesMeasuresPromptInjectionAndGovernanceContainment(t *tes
 		t.Fatalf("report = %+v", report)
 	}
 
+	safeTrace := trace
+	safeTrace.Decisions = append([]DecisionEvent(nil), trace.Decisions[:1]...)
+	safeTrace.Outcomes = append([]ToolOutcomeEvent(nil), trace.Outcomes[:1]...)
+	report, err = ReplayAgentTraces([]AgentTrace{safeTrace})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Aggregate.InjectionExposureRate.Numerator != 1 || report.Aggregate.PromptInjectionResistanceRate.Numerator != 1 ||
+		report.Aggregate.PromptInjectionResistanceRate.Denominator != 1 || report.Aggregate.InjectionSuccessRate.Numerator != 0 ||
+		report.Aggregate.GovernanceContainmentRate.Denominator != 0 {
+		t.Fatalf("safe control report = %+v", report)
+	}
+
 	trace.Decisions[1].Decision = Decision{Effect: "deny", ReasonCode: "policy:default_deny", PolicyVersion: "0.1.0"}
 	trace.Outcomes = trace.Outcomes[:1]
 	report, err = ReplayAgentTraces([]AgentTrace{trace})

@@ -216,6 +216,36 @@ func TestReferenceAgentRunOptionsAreValidForActiveScenario(t *testing.T) {
 }
 
 func TestUnsafeFixtureAgentRunOptionsBindScenarioGroundTruth(t *testing.T) {
+	compiled, executable := appPromptInjectionFixture(t)
+	options, err := UnsafeFixtureAgentRunOptions(compiled, "http://127.0.0.1:8000", executable, t.TempDir(), "trial:unsafe", "drive-runbook-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !options.CaptureState || !options.RestoreFixture || options.EvaluationFixtureID != "drive-runbook-export" || len(options.Tools) != 2 || len(options.Policy.Rules) != 2 {
+		t.Fatalf("options = %+v", options)
+	}
+	if options.Agent.ID != "agent:unsafe-fixture" || options.Policy.Rules[1].Effect != "allow" || !containsString(options.Command, "--prohibited-tool") {
+		t.Fatalf("unsafe options = %+v", options)
+	}
+}
+
+func TestSafeFixtureAgentRunOptionsBindOnlyLegitimateTaskToAgent(t *testing.T) {
+	compiled, executable := appPromptInjectionFixture(t)
+	options, err := SafeFixtureAgentRunOptions(compiled, "http://127.0.0.1:8000", executable, t.TempDir(), "trial:safe", "drive-runbook-export")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !options.CaptureState || !options.RestoreFixture || options.EvaluationFixtureID != "drive-runbook-export" || len(options.Tools) != 2 || len(options.Policy.Rules) != 2 {
+		t.Fatalf("options = %+v", options)
+	}
+	if options.Agent.ID != "agent:safe-fixture" || options.Policy.Rules[1].Effect != "deny" || containsString(options.Command, "--prohibited-tool") ||
+		containsString(options.Command, "cloudailab.synthetic.export") || containsString(options.Command, "aws:acquisition-data") {
+		t.Fatalf("safe options disclose prohibited target or lack deny policy = %+v", options)
+	}
+}
+
+func appPromptInjectionFixture(t *testing.T) (scenario.Compiled, string) {
+	t.Helper()
 	definition, err := scenario.Load(filepath.Join("..", "..", "scenarios", "acquisition-agent", "scenario.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -228,13 +258,7 @@ func TestUnsafeFixtureAgentRunOptionsBindScenarioGroundTruth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	options, err := UnsafeFixtureAgentRunOptions(compiled, "http://127.0.0.1:8000", executable, t.TempDir(), "trial:unsafe", "drive-runbook-export")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !options.CaptureState || !options.RestoreFixture || options.EvaluationFixtureID != "drive-runbook-export" || len(options.Tools) != 2 || len(options.Policy.Rules) != 2 {
-		t.Fatalf("options = %+v", options)
-	}
+	return compiled, executable
 }
 
 func TestAppAgentSubprocessHelper(t *testing.T) {

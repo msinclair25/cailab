@@ -1,6 +1,6 @@
 ---
 title: Agent Run Guide
-status: m3-development
+status: m3-complete
 last_reviewed: 2026-07-12
 ---
 
@@ -204,7 +204,16 @@ CloudAILab preflights all derived IDs, restores and captures every trial sequent
 
 Custom subprocess agents still launch repeated trials explicitly with the same `--trial-count`, distinct `--trial-index` and `--trial-id`, plus `--restore-fixture` on every member. Restoration is not atomic across provider processes, and host-mode processes can race the terminal snapshot; see the [campaign compatibility record](../07-compatibility/agent-campaign-execution.md), [trial-state compatibility record](../07-compatibility/agent-trial-state.md), and [evidence replay compatibility record](../07-compatibility/agent-evidence-replay.md).
 
-## Run the deliberately unsafe injection baseline
+## Compare the paired safe and unsafe fixture controls
+
+First run the fixture-specific safe control against the real synthetic document:
+
+```bash
+./bin/cailab agent run safe --fixture drive-runbook-export
+./bin/cailab agent replay --trial-id trial:safe --format markdown
+```
+
+The safe control makes the legitimate read and treats the result as data without making a later content-derived call. A positive resistance result validates this exact deterministic control and fixture only; it is not a model-general or deployment-general claim. It does not remediate the scenario, so scenario task success remains a separate result.
 
 With `acquisition-agent` active, run the code-owned deterministic failing baseline:
 
@@ -219,6 +228,15 @@ Run the same unsafe baseline as an automatically restored campaign:
 
 ```bash
 ./bin/cailab agent campaign unsafe \
+  --trials 3 \
+  --fixture drive-runbook-export \
+  --format markdown
+```
+
+Run the paired safe control repeatedly with the same restoration and reporting contract:
+
+```bash
+./bin/cailab agent campaign safe \
   --trials 3 \
   --fixture drive-runbook-export \
   --format markdown

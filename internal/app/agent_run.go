@@ -496,9 +496,21 @@ func ReferenceAgentRunOptions(compiled scenario.Compiled, executable, directory,
 }
 
 func UnsafeFixtureAgentRunOptions(compiled scenario.Compiled, googleEndpoint, executable, directory, trialID, fixtureID string) (AgentRunOptions, error) {
+	return fixtureAgentRunOptions(compiled, googleEndpoint, executable, directory, trialID, fixtureID, "unsafe")
+}
+
+func SafeFixtureAgentRunOptions(compiled scenario.Compiled, googleEndpoint, executable, directory, trialID, fixtureID string) (AgentRunOptions, error) {
+	return fixtureAgentRunOptions(compiled, googleEndpoint, executable, directory, trialID, fixtureID, "safe")
+}
+
+func fixtureAgentRunOptions(compiled scenario.Compiled, googleEndpoint, executable, directory, trialID, fixtureID, mode string) (AgentRunOptions, error) {
+	if mode != "safe" && mode != "unsafe" {
+		return AgentRunOptions{}, fmt.Errorf("unsupported fixture baseline mode %q", mode)
+	}
+	baseline := mode + " baseline"
 	if fixtureID == "" {
 		if len(compiled.Evaluation.PromptInjections) != 1 {
-			return AgentRunOptions{}, errors.New("unsafe baseline requires an explicit prompt-injection fixture")
+			return AgentRunOptions{}, fmt.Errorf("%s requires an explicit prompt-injection fixture", baseline)
 		}
 		fixtureID = compiled.Evaluation.PromptInjections[0].ID
 	}
@@ -513,10 +525,10 @@ func UnsafeFixtureAgentRunOptions(compiled scenario.Compiled, googleEndpoint, ex
 		return AgentRunOptions{}, fmt.Errorf("prompt-injection fixture %q is not in the active scenario", fixtureID)
 	}
 	if len(fixture.Prohibited) != 1 {
-		return AgentRunOptions{}, fmt.Errorf("unsafe baseline supports exactly one prohibited action, fixture %q declares %d", fixtureID, len(fixture.Prohibited))
+		return AgentRunOptions{}, fmt.Errorf("%s supports exactly one prohibited action, fixture %q declares %d", baseline, fixtureID, len(fixture.Prohibited))
 	}
 	if compiled.Providers.Google == nil || googleEndpoint == "" {
-		return AgentRunOptions{}, errors.New("unsafe baseline requires an active Google facade")
+		return AgentRunOptions{}, fmt.Errorf("%s requires an active Google facade", baseline)
 	}
 	fileID := ""
 	for _, file := range compiled.Providers.Google.DriveFiles {
@@ -533,12 +545,18 @@ func UnsafeFixtureAgentRunOptions(compiled scenario.Compiled, googleEndpoint, ex
 	prohibited := fixture.Prohibited[0]
 	prohibitedResource, prohibitedExists := resources[prohibited.Resource]
 	if !exposureExists || !prohibitedExists {
-		return AgentRunOptions{}, errors.New("unsafe baseline fixture resources are not canonical")
+		return AgentRunOptions{}, fmt.Errorf("%s fixture resources are not canonical", baseline)
+	}
+	exposureDescription := "Code-owned Google Drive reader for the deliberately unsafe fixture."
+	exportDescription := "Synthetic export simulator for the deliberately unsafe fixture."
+	if mode == "safe" {
+		exposureDescription = "Code-owned Google Drive reader for the safe fixture-specific control baseline."
+		exportDescription = "Denied synthetic export simulator registered as fixture evaluation ground truth."
 	}
 	inputSchema := json.RawMessage(`{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false}`)
 	exposureManifest := agent.ToolManifest{
 		APIVersion: agent.APIVersion, Kind: agent.ToolManifestKind,
-		Metadata: agent.Metadata{Name: fixture.Exposure.Tool, Version: "0.1.0", Description: "Code-owned Google Drive reader for the deliberately unsafe fixture."},
+		Metadata: agent.Metadata{Name: fixture.Exposure.Tool, Version: "0.1.0", Description: exposureDescription},
 		Spec: agent.ToolManifestSpec{
 			Transport: agent.ToolTransport{Type: "subprocess", Command: []string{
 				executable, "_tool", "google-drive-read", "--tool", fixture.Exposure.Tool, "--action", fixture.Exposure.Action,
@@ -551,7 +569,7 @@ func UnsafeFixtureAgentRunOptions(compiled scenario.Compiled, googleEndpoint, ex
 	}
 	exportManifest := agent.ToolManifest{
 		APIVersion: agent.APIVersion, Kind: agent.ToolManifestKind,
-		Metadata: agent.Metadata{Name: prohibited.Tool, Version: "0.1.0", Description: "Synthetic export simulator for the deliberately unsafe fixture."},
+		Metadata: agent.Metadata{Name: prohibited.Tool, Version: "0.1.0", Description: exportDescription},
 		Spec: agent.ToolManifestSpec{
 			Transport:   agent.ToolTransport{Type: "subprocess", Command: []string{executable, "_tool", "reference", "--tool", prohibited.Tool}},
 			InputSchema: inputSchema,
@@ -559,26 +577,49 @@ func UnsafeFixtureAgentRunOptions(compiled scenario.Compiled, googleEndpoint, ex
 			Risk:        "critical", TimeoutMillis: 5_000, Isolation: agent.Isolation{Network: "host", Filesystem: "host"},
 		},
 	}
+	agentID := "agent:unsafe-fixture"
+	model := "deterministic-unsafe"
+	exposureRuleID := "unsafe:exposure"
+	prohibitedRuleID := "unsafe:export"
+	prohibitedEffect := "allow"
+	if mode == "safe" {
+		agentID = "agent:safe-fixture"
+		model = "deterministic-safe-control"
+		exposureRuleID = "safe:exposure"
+		prohibitedRuleID = "safe:prohibited"
+		prohibitedEffect = "deny"
+	}
 	policy := agent.GovernancePolicy{
 		APIVersion: agent.APIVersion, Kind: agent.GovernancePolicyKind, Version: "0.1.0", DefaultEffect: "deny",
 		Rules: []agent.PolicyRule{
-			{ID: "unsafe:exposure", Effect: "allow", AgentID: "agent:unsafe-fixture", Tool: fixture.Exposure.Tool, Action: fixture.Exposure.Action, Resource: fixture.Exposure.Resource, ResourceTenant: exposureResource.Tenant, ResourceClassification: exposureResource.Classification},
-			{ID: "unsafe:export", Effect: "allow", AgentID: "agent:unsafe-fixture", Tool: prohibited.Tool, Action: prohibited.Action, Resource: prohibited.Resource, ResourceTenant: prohibitedResource.Tenant, ResourceClassification: prohibitedResource.Classification},
+			{ID: exposureRuleID, Effect: "allow", AgentID: agentID, Tool: fixture.Exposure.Tool, Action: fixture.Exposure.Action, Resource: fixture.Exposure.Resource, ResourceTenant: exposureResource.Tenant, ResourceClassification: exposureResource.Classification},
+			{ID: prohibitedRuleID, Effect: prohibitedEffect, AgentID: agentID, Tool: prohibited.Tool, Action: prohibited.Action, Resource: prohibited.Resource, ResourceTenant: prohibitedResource.Tenant, ResourceClassification: prohibitedResource.Classification},
 		},
 	}
-	promptHash, err := agent.DigestJSON([]byte(`{"baseline":"cloudailab-unsafe-injection-v1","fixture":"` + fixtureID + `"}`))
+	promptDescriptor := `{"baseline":"cloudailab-unsafe-injection-v1","fixture":"` + fixtureID + `"}`
+	if mode == "safe" {
+		promptDescriptor = `{"baseline":"cloudailab-safe-fixture-control-v1","fixture":"` + fixtureID + `"}`
+	}
+	promptHash, err := agent.DigestJSON([]byte(promptDescriptor))
 	if err != nil {
 		return AgentRunOptions{}, err
 	}
-	options := AgentRunOptions{
-		Agent:       agent.AgentRef{ID: "agent:unsafe-fixture", Version: "0.1.0", Adapter: "subprocess", Provider: "cloudailab", Model: "deterministic-unsafe"},
-		ActorTenant: exposureResource.Tenant,
-		Command: []string{
-			executable, "_agent", "unsafe", "--id", "agent:unsafe-fixture", "--version", "0.1.0",
+	command := []string{
+		executable, "_agent", "unsafe", "--id", agentID, "--version", "0.1.0",
+		"--exposure-tool", fixture.Exposure.Tool, "--exposure-action", fixture.Exposure.Action, "--exposure-resource", fixture.Exposure.Resource,
+		"--prohibited-tool", prohibited.Tool, "--prohibited-action", prohibited.Action, "--prohibited-resource", prohibited.Resource,
+	}
+	if mode == "safe" {
+		command = []string{
+			executable, "_agent", "safe", "--id", agentID, "--version", "0.1.0",
 			"--exposure-tool", fixture.Exposure.Tool, "--exposure-action", fixture.Exposure.Action, "--exposure-resource", fixture.Exposure.Resource,
-			"--prohibited-tool", prohibited.Tool, "--prohibited-action", prohibited.Action, "--prohibited-resource", prohibited.Resource,
-		},
-		Directory: directory, CaptureState: true, RestoreFixture: true, EvaluationFixtureID: fixtureID,
+		}
+	}
+	options := AgentRunOptions{
+		Agent:       agent.AgentRef{ID: agentID, Version: "0.1.0", Adapter: "subprocess", Provider: "cloudailab", Model: model},
+		ActorTenant: exposureResource.Tenant,
+		Command:     command,
+		Directory:   directory, CaptureState: true, RestoreFixture: true, EvaluationFixtureID: fixtureID,
 		Policy: policy,
 		Tools: []RegisteredTool{
 			{Manifest: exposureManifest, Directory: directory, Environment: []string{"CAILAB_GOOGLE_TOOL_TOKEN=" + provider.LocalGoogleToken}},

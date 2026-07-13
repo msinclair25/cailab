@@ -408,14 +408,14 @@ func (c *CLI) runAgent(ctx context.Context, args []string) error {
 	case "replay":
 		return c.runAgentReplay(ctx, args[1:])
 	case "run":
-		if len(args) < 2 || (args[1] != "reference" && args[1] != "subprocess" && args[1] != "unsafe") {
-			return errors.New("usage: cailab agent run <reference|subprocess|unsafe> [options]")
+		if len(args) < 2 || (args[1] != "reference" && args[1] != "subprocess" && args[1] != "safe" && args[1] != "unsafe") {
+			return errors.New("usage: cailab agent run <reference|subprocess|safe|unsafe> [options]")
 		}
 		if args[1] == "reference" {
 			return c.runReferenceAgent(ctx, args[2:])
 		}
-		if args[1] == "unsafe" {
-			return c.runUnsafeAgent(ctx, args[2:])
+		if args[1] == "safe" || args[1] == "unsafe" {
+			return c.runFixtureAgent(ctx, args[2:], args[1])
 		}
 		return c.runSubprocessAgent(ctx, args[2:])
 	case "campaign":
@@ -426,13 +426,13 @@ func (c *CLI) runAgent(ctx context.Context, args []string) error {
 }
 
 func (c *CLI) runAgentCampaign(ctx context.Context, args []string) error {
-	if len(args) == 0 || (args[0] != "reference" && args[0] != "unsafe") {
-		return errors.New("usage: cailab agent campaign <reference|unsafe> [options]")
+	if len(args) == 0 || (args[0] != "reference" && args[0] != "safe" && args[0] != "unsafe") {
+		return errors.New("usage: cailab agent campaign <reference|safe|unsafe> [options]")
 	}
 	if args[0] == "reference" {
 		return c.runReferenceAgentCampaign(ctx, args[1:])
 	}
-	return c.runUnsafeAgentCampaign(ctx, args[1:])
+	return c.runFixtureAgentCampaign(ctx, args[1:], args[0])
 }
 
 func (c *CLI) runReferenceAgentCampaign(ctx context.Context, args []string) error {
@@ -472,10 +472,10 @@ func (c *CLI) runReferenceAgentCampaign(ctx context.Context, args []string) erro
 	}, *format, *output)
 }
 
-func (c *CLI) runUnsafeAgentCampaign(ctx context.Context, args []string) error {
-	fs := newFlagSet("agent campaign unsafe", c.stderr)
+func (c *CLI) runFixtureAgentCampaign(ctx context.Context, args []string, mode string) error {
+	fs := newFlagSet("agent campaign "+mode, c.stderr)
 	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
-	trialPrefix := fs.String("trial-prefix", "campaign:unsafe", "prefix used to derive immutable trial identifiers")
+	trialPrefix := fs.String("trial-prefix", "campaign:"+mode, "prefix used to derive immutable trial identifiers")
 	trials := fs.Int("trials", 3, "number of restored trials")
 	fixtureID := fs.String("fixture", "", "prompt-injection fixture identifier; optional when the scenario declares exactly one")
 	format := fs.String("format", "text", "report format: text, json, or markdown")
@@ -484,7 +484,7 @@ func (c *CLI) runUnsafeAgentCampaign(ctx context.Context, args []string) error {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: cailab agent campaign unsafe [--trials COUNT] [--trial-prefix PREFIX] [--fixture ID] [--format text|json|markdown] [--output FILE] [--state-dir DIR]")
+		return fmt.Errorf("usage: cailab agent campaign %s [--trials COUNT] [--trial-prefix PREFIX] [--fixture ID] [--format text|json|markdown] [--output FILE] [--state-dir DIR]", mode)
 	}
 	service, closeStore, err := c.openService(ctx, *stateDir)
 	if err != nil {
@@ -506,11 +506,13 @@ func (c *CLI) runUnsafeAgentCampaign(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	options, err := app.UnsafeFixtureAgentRunOptions(rangeRun.Compiled, googleEndpoint, executable, directory, "campaign:preflight", *fixtureID)
+	options, err := fixtureAgentRunOptions(mode, rangeRun.Compiled, googleEndpoint, executable, directory, "campaign:preflight", *fixtureID)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(c.stderr, "warning: running CloudAILab's deliberately unsafe deterministic agent repeatedly against restored synthetic fixture data")
+	if mode == "unsafe" {
+		fmt.Fprintln(c.stderr, "warning: running CloudAILab's deliberately unsafe deterministic agent repeatedly against restored synthetic fixture data")
+	}
 	return c.executeAgentCampaign(ctx, service, app.AgentCampaignOptions{
 		Run: options, TrialPrefix: *trialPrefix, Trials: *trials,
 	}, *format, *output)
@@ -555,17 +557,17 @@ func (c *CLI) executeAgentCampaign(ctx context.Context, service *app.Service, op
 	return nil
 }
 
-func (c *CLI) runUnsafeAgent(ctx context.Context, args []string) error {
-	fs := newFlagSet("agent run unsafe", c.stderr)
+func (c *CLI) runFixtureAgent(ctx context.Context, args []string, mode string) error {
+	fs := newFlagSet("agent run "+mode, c.stderr)
 	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
-	trialID := fs.String("trial-id", "trial:unsafe", "unique trial identifier within the active range run")
+	trialID := fs.String("trial-id", "trial:"+mode, "unique trial identifier within the active range run")
 	fixtureID := fs.String("fixture", "", "prompt-injection fixture identifier; optional when the scenario declares exactly one")
 	jsonOutput := fs.Bool("json", false, "emit evidence-safe JSON summary")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: cailab agent run unsafe [--state-dir DIR] [--trial-id ID] [--fixture ID] [--json]")
+		return fmt.Errorf("usage: cailab agent run %s [--state-dir DIR] [--trial-id ID] [--fixture ID] [--json]", mode)
 	}
 	service, closeStore, err := c.openService(ctx, *stateDir)
 	if err != nil {
@@ -593,13 +595,15 @@ func (c *CLI) runUnsafeAgent(ctx context.Context, args []string) error {
 	}
 	directory, err := filepath.Abs(".")
 	if err != nil {
-		return fmt.Errorf("resolve unsafe baseline working directory: %w", err)
+		return fmt.Errorf("resolve %s baseline working directory: %w", mode, err)
 	}
-	options, err := app.UnsafeFixtureAgentRunOptions(rangeRun.Compiled, googleEndpoint, executable, directory, *trialID, *fixtureID)
+	options, err := fixtureAgentRunOptions(mode, rangeRun.Compiled, googleEndpoint, executable, directory, *trialID, *fixtureID)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(c.stderr, "warning: running CloudAILab's deliberately unsafe deterministic agent against synthetic fixture data")
+	if mode == "unsafe" {
+		fmt.Fprintln(c.stderr, "warning: running CloudAILab's deliberately unsafe deterministic agent against synthetic fixture data")
+	}
 	result, runErr := service.RunAgent(ctx, options)
 	if result.Run.TrialID != "" {
 		if err := c.renderAgentRunResult(result, *jsonOutput); err != nil {
@@ -613,6 +617,16 @@ func (c *CLI) runUnsafeAgent(ctx context.Context, args []string) error {
 		return fmt.Errorf("agent trial %q ended with status %s", result.Run.TrialID, result.Run.Status)
 	}
 	return nil
+}
+
+func fixtureAgentRunOptions(mode string, compiled scenario.Compiled, googleEndpoint, executable, directory, trialID, fixtureID string) (app.AgentRunOptions, error) {
+	if mode == "safe" {
+		return app.SafeFixtureAgentRunOptions(compiled, googleEndpoint, executable, directory, trialID, fixtureID)
+	}
+	if mode == "unsafe" {
+		return app.UnsafeFixtureAgentRunOptions(compiled, googleEndpoint, executable, directory, trialID, fixtureID)
+	}
+	return app.AgentRunOptions{}, fmt.Errorf("unsupported fixture agent mode %q", mode)
 }
 
 func (c *CLI) runAgentReplay(ctx context.Context, args []string) error {
@@ -1517,7 +1531,7 @@ func (c *CLI) runInternalRuntime(ctx context.Context, args []string) error {
 }
 
 func (c *CLI) runInternalAgent(ctx context.Context, args []string) error {
-	if len(args) == 0 || (args[0] != "reference" && args[0] != "unsafe") {
+	if len(args) == 0 || (args[0] != "reference" && args[0] != "safe" && args[0] != "unsafe") {
 		return errors.New("invalid private agent command")
 	}
 	mode := args[0]
@@ -1541,6 +1555,12 @@ func (c *CLI) runInternalAgent(ctx context.Context, args []string) error {
 			ID: *id, Version: *version,
 			Exposure:   agent.EvaluationActionRef{Tool: *exposureTool, Action: *exposureAction, Resource: *exposureResource},
 			Prohibited: agent.EvaluationActionRef{Tool: *prohibitedTool, Action: *prohibitedAction, Resource: *prohibitedResource},
+		})
+	}
+	if mode == "safe" {
+		return agent.ServeSafeFixtureAgent(ctx, c.stdin, c.stdout, agent.SafeFixtureAgentConfig{
+			ID: *id, Version: *version,
+			Exposure: agent.EvaluationActionRef{Tool: *exposureTool, Action: *exposureAction, Resource: *exposureResource},
 		})
 	}
 	return agent.ServeReferenceAgent(ctx, c.stdin, c.stdout, agent.ReferenceAgentConfig{ID: *id, Version: *version})

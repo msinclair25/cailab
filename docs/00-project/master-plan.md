@@ -3,7 +3,7 @@ title: CloudAILab Master Plan
 status: active
 plan_version: 0.1.0
 last_reviewed: 2026-07-12
-current_milestone: M3
+current_milestone: M4
 ---
 
 # CloudAILab master plan
@@ -293,7 +293,7 @@ Exit gate:
 
 ### M3 — Agent governance harness
 
-**Status:** in development. Versioned agent/policy/tool/approval/outcome/trace/state/report contracts, supported reference/unsafe/custom subprocess runs, deterministic governance, optional Docker agent isolation, endpoint-preserving restoration, normalized baselines, scenario evidence, fixture-labeled injection scoring, automatic restored reference/unsafe campaigns, and a deliberately unsafe deterministic baseline are implemented. Tool subprocess isolation is deferred.
+**Status:** complete. Versioned agent/policy/tool/approval/outcome/trace/state/report contracts, supported inert reference/safe/unsafe/custom subprocess runs, deterministic governance, optional Docker agent isolation, endpoint-preserving restoration, normalized baselines, scenario evidence, fixture-labeled injection scoring, automatic restored reference/safe/unsafe campaigns, and paired safe/unsafe deterministic controls are implemented and CI-backed. Tool subprocess isolation is deferred until a scenario requires an untrusted tool adapter.
 
 **Goal:** make an external agent a measurable principal in the range.
 
@@ -303,10 +303,10 @@ Deliverables:
 - Subprocess adapter and reference deterministic agent
 - User-provided subprocess tool registration and manifest validation
 - Governed tool gateway with allow, deny, redact, and approval decisions
-- Indirect prompt-injection fixture in Google-shaped content (implemented with deterministic unsafe baseline and fixture-labeled scoring)
-- Repeated-trial aggregate action/task/remediation metrics, endpoint-preserving fixture restoration, and automatic reference/unsafe campaign execution (implemented)
+- Indirect prompt-injection fixture in Google-shaped content (implemented with paired deterministic safe/unsafe controls and fixture-labeled scoring)
+- Repeated-trial aggregate action/task/remediation metrics, endpoint-preserving fixture restoration, and automatic reference/safe/unsafe campaign execution (implemented)
 - Evidence-safe trace replay and evidence-linked report (implemented)
-- Optional local-model example; hosted providers remain user-configured
+- User-configured local-model subprocess path; a packaged framework-specific example is deferred to M4 documentation
 
 Exit gate:
 
@@ -316,6 +316,8 @@ Exit gate:
 - Repeated results report trial count, rates, failures, and run configuration.
 
 ### M4 — Portfolio-quality public release
+
+**Status:** in development.
 
 **Goal:** deliver a secure, reproducible, and understandable public artifact.
 
@@ -447,5 +449,6 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Add a safe reference-agent behavior fixture without claiming model-general resistance.
-2. Evaluate isolated tool execution only when a scenario requires an untrusted tool adapter.
+1. Begin M4 release engineering with cross-platform artifacts, checksums, SBOMs, and provenance.
+2. Add clean-install smoke tests and a release-focused documentation audit.
+3. Evaluate isolated tool execution only when a scenario requires an untrusted tool adapter.

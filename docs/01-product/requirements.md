@@ -39,6 +39,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | FR-026 | The system shall optionally capture deterministic provider-state digests and invariant results before and after an agent trial and link them to that trial. | Must |
 | FR-027 | The system shall restore supported provider fixtures without changing their recorded loopback endpoints and shall verify the canonical baseline digest before launching an evaluated agent. | Should |
 | FR-028 | The system shall support scenario-labeled indirect prompt-injection fixtures and deterministically distinguish fixture exposure, prohibited behavior, successful injection tasks, and gateway containment. | Must |
+| FR-029 | The system shall provide paired deterministic safe and unsafe control behaviors for the flagship prompt-injection fixture and shall label the safe result as fixture-specific rather than model-general resistance. | Should |
 
 ## Non-functional requirements
 
@@ -69,6 +70,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SEC-021 | Agent replay shall consume only integrity-checked evidence-safe records, reject inconsistent decision/approval/outcome linkage, and shall not expose raw protocol frames, tool arguments, successful tool content, or child diagnostics. |
 | NFR-SEC-022 | Provider fixture restoration shall require run-scoped runtime ownership, authenticated native control, and matching container labels; a failed or unverified restore shall not launch the agent. |
 | NFR-SEC-023 | Prompt-injection scoring ground truth shall be scenario-owned, immutable for a trial, omitted from the agent start message, and evaluated only from linked governed-action evidence after proven fixture exposure. |
+| NFR-SEC-024 | A fixture-specific safe control shall not receive the prohibited tool/action/resource target through its command configuration, shall receive no prohibited action/resource ground truth in `session.start`, shall make no content-derived follow-up call, and shall not be presented as evidence of general model or framework resistance. |
 
 ### Reliability and reproducibility
 

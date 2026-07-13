@@ -48,7 +48,7 @@ Replay supports:
 - `governed-evidence-v1` does not label prompt-injection fixtures; only `adversarial-scenario-v1` reports the exact fixture-scoped construct.
 - Replay does not re-evaluate policy, re-execute a tool, restore provider state, or run scenario invariants.
 - Compatible metadata alone does not prove equivalent mutable provider state; restored state-captured trials additionally prove their normalized baseline digest.
-- Automatic execution is limited to the restored code-owned reference and unsafe campaign profiles; custom subprocess sets remain explicit.
+- Automatic execution is limited to the restored code-owned reference, safe, and unsafe campaign profiles; custom subprocess sets remain explicit.
 - Replay hashes are not signatures or tamper-proof provenance.
 
 ## Failure behavior
