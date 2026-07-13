@@ -4,6 +4,7 @@ package main
 import (
 	"archive/tar"
 	"archive/zip"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -64,7 +65,7 @@ func main() {
 
 func run(ctx context.Context, args []string, stdout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: release package|checksums [options]")
+		return errors.New("usage: release package|checksums|modules [options]")
 	}
 	switch args[0] {
 	case "package":
@@ -107,8 +108,26 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 		}
 		fmt.Fprintf(stdout, "wrote %d checksums to %s\n", count, filepath.Join(*directory, *output))
 		return nil
+	case "modules":
+		fs := flag.NewFlagSet("modules", flag.ContinueOnError)
+		fs.SetOutput(io.Discard)
+		packagePath := fs.String("package", "./cmd/cailab", "release binary package")
+		if err := fs.Parse(args[1:]); err != nil {
+			return fmt.Errorf("parse modules flags: %w", err)
+		}
+		if fs.NArg() != 0 {
+			return fmt.Errorf("unexpected modules arguments: %s", strings.Join(fs.Args(), " "))
+		}
+		modules, err := linkedReleaseModules(ctx, *packagePath)
+		if err != nil {
+			return err
+		}
+		for _, module := range modules {
+			fmt.Fprintln(stdout, module)
+		}
+		return nil
 	default:
-		return fmt.Errorf("unknown command %q; expected package or checksums", args[0])
+		return fmt.Errorf("unknown command %q; expected package, checksums, or modules", args[0])
 	}
 }
 
@@ -127,12 +146,12 @@ func packageRelease(ctx context.Context, config packageConfig) error {
 		}
 	}
 
-	readme, err := os.ReadFile("README.md")
+	distributionFiles, err := loadDistributionFiles(".")
 	if err != nil {
-		return fmt.Errorf("read README.md: %w", err)
+		return err
 	}
 	for _, releaseTarget := range releaseTargets {
-		if err := buildTarget(ctx, config, releaseTarget, binariesDir, packagesDir, readme); err != nil {
+		if err := buildTarget(ctx, config, releaseTarget, binariesDir, packagesDir, distributionFiles); err != nil {
 			return err
 		}
 	}
@@ -203,7 +222,61 @@ func validNumericIdentifier(identifier string) bool {
 	return true
 }
 
-func buildTarget(ctx context.Context, config packageConfig, releaseTarget target, binariesDir, packagesDir string, readme []byte) error {
+func loadDistributionFiles(root string) ([]archiveFile, error) {
+	required := []string{"CHANGELOG.md", "LICENSE", "NOTICE", "README.md", "THIRD_PARTY_NOTICES.md", "third_party/modules.txt"}
+	files := make([]archiveFile, 0, len(required)+16)
+	for _, name := range required {
+		path := filepath.Join(root, name)
+		info, err := os.Lstat(path)
+		if err != nil {
+			return nil, fmt.Errorf("inspect release document %s: %w", name, err)
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("release document is not a regular file: %s", name)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read release document %s: %w", name, err)
+		}
+		files = append(files, archiveFile{Name: name, Mode: 0o644, Data: data})
+	}
+	licensesRoot := filepath.Join(root, "third_party", "licenses")
+	licensesInfo, err := os.Lstat(licensesRoot)
+	if err != nil {
+		return nil, fmt.Errorf("inspect third-party license directory: %w", err)
+	}
+	if !licensesInfo.IsDir() || licensesInfo.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("third-party license path is not a regular directory: %s", licensesRoot)
+	}
+	err = filepath.WalkDir(licensesRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == licensesRoot || entry.IsDir() {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() {
+			return fmt.Errorf("release license path is not a regular file: %s", path)
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return fmt.Errorf("resolve release license path %s: %w", path, err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read release license %s: %w", relative, err)
+		}
+		files = append(files, archiveFile{Name: filepath.ToSlash(relative), Mode: 0o644, Data: data})
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("collect third-party licenses: %w", err)
+	}
+	sort.Slice(files, func(left, right int) bool { return files[left].Name < files[right].Name })
+	return files, nil
+}
+
+func buildTarget(ctx context.Context, config packageConfig, releaseTarget target, binariesDir, packagesDir string, distributionFiles []archiveFile) error {
 	rootName := fmt.Sprintf("cailab_%s_%s_%s", config.Version, releaseTarget.GOOS, releaseTarget.GOARCH)
 	binaryName := "cailab"
 	if releaseTarget.GOOS == "windows" {
@@ -225,15 +298,48 @@ func buildTarget(ctx context.Context, config packageConfig, releaseTarget target
 	if err != nil {
 		return fmt.Errorf("read %s/%s binary: %w", releaseTarget.GOOS, releaseTarget.GOARCH, err)
 	}
-	files := []archiveFile{
-		{Name: filepath.ToSlash(filepath.Join(rootName, binaryName)), Mode: 0o755, Data: binary},
-		{Name: filepath.ToSlash(filepath.Join(rootName, "README.md")), Mode: 0o644, Data: readme},
+	files := []archiveFile{{Name: filepath.ToSlash(filepath.Join(rootName, binaryName)), Mode: 0o755, Data: binary}}
+	for _, distributionFile := range distributionFiles {
+		distributionFile.Name = filepath.ToSlash(filepath.Join(rootName, filepath.FromSlash(distributionFile.Name)))
+		files = append(files, distributionFile)
 	}
 	archivePath := filepath.Join(packagesDir, rootName+"."+releaseTarget.Format)
 	if err := writeArchive(archivePath, releaseTarget.Format, config.Date, files); err != nil {
 		return fmt.Errorf("archive %s/%s: %w", releaseTarget.GOOS, releaseTarget.GOARCH, err)
 	}
 	return nil
+}
+
+func linkedReleaseModules(ctx context.Context, packagePath string) ([]string, error) {
+	if strings.TrimSpace(packagePath) == "" {
+		return nil, errors.New("--package is required")
+	}
+	const moduleTemplate = `{{with .Module}}{{if not .Main}}{{.Path}}@{{.Version}}{{end}}{{end}}`
+	modules := make(map[string]struct{})
+	for _, releaseTarget := range releaseTargets {
+		command := exec.CommandContext(ctx, "go", "list", "-mod=readonly", "-deps", "-f", moduleTemplate, packagePath)
+		command.Env = releaseEnvironment(os.Environ(), releaseTarget)
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		command.Stdout = &stdout
+		command.Stderr = &stderr
+		err := command.Run()
+		if err != nil {
+			return nil, fmt.Errorf("list linked modules for %s/%s: %w: %s", releaseTarget.GOOS, releaseTarget.GOARCH, err, strings.TrimSpace(stderr.String()))
+		}
+		for _, line := range strings.Split(stdout.String(), "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				modules[line] = struct{}{}
+			}
+		}
+	}
+	result := make([]string, 0, len(modules))
+	for module := range modules {
+		result = append(result, module)
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 func releaseEnvironment(environment []string, releaseTarget target) []string {

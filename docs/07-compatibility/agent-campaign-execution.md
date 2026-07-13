@@ -1,7 +1,7 @@
 ---
 title: Agent Campaign Execution Compatibility
 status: implemented
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 ---
 
 # Agent campaign execution compatibility

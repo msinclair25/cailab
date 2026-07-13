@@ -1,7 +1,7 @@
 ---
 title: Quality Strategy
 status: draft
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 ---
 
 # Quality strategy
@@ -110,8 +110,10 @@ The Go project recommends govulncheck, fuzzing, and the race detector as complem
 - Scenario and JSON Schema validation
 - Markdown formatting and link checks
 - Secret scanning and dependency review
+- Manual-build CodeQL analysis of the shipped Go command
 - Targeted integration tests when affected paths change
 - Digest-pinned CI image build, final-image contract inspection, and Docker `none` network walking-skeleton demo
+- Multi-target linked-module inventory comparison and release legal-bundle tests
 
 ### Default branch and scheduled
 
@@ -119,6 +121,7 @@ The Go project recommends govulncheck, fuzzing, and the race detector as complem
 - Bounded fuzzing
 - Cross-platform compile matrix
 - CI image build and hardened clean demo without publication
+- Release archive inspection for license, notice, changelog, and linked-component attribution
 - CodeQL and dependency/security scans
 - Cleanup leak detection
 
@@ -132,7 +135,7 @@ The Go project recommends govulncheck, fuzzing, and the race detector as complem
 - Clean-install smoke tests
 - Documentation and compatibility review
 
-The release workflow exercises packaging on relevant pull requests and manual dispatches but creates attestations and GitHub releases only for tags. Its repository-owned packager is covered by normal Go tests; Linux, macOS, and Windows jobs verify the complete checksum manifest and execute the matching archive before tag publication. The archive smoke path must enumerate built-in scenarios without a checkout or external data directory. Release actions are full-SHA pinned and write permissions exist only in separate tag-gated attestation and publication jobs.
+The release workflow exercises packaging on relevant pull requests and manual dispatches but creates attestations and GitHub releases only for tags. Its repository-owned packager is covered by normal Go tests; Linux, macOS, and Windows jobs verify the complete checksum manifest and execute the matching archive before tag publication. The archive smoke path must enumerate built-in scenarios without a checkout or external data directory. Release actions are full-SHA pinned and write permissions exist only in separate tag-gated attestation and publication jobs. Dedicated workflows run CodeQL for the explicitly built Go CLI on pull requests, `main`, and a weekly schedule, and review pull-request dependency changes at moderate-or-higher vulnerability severity.
 
 GitHub Actions receive minimum permissions and third-party actions are pinned to full commit SHAs. Release jobs are separate from pull-request jobs and use protected environments when credentials are introduced.
 
@@ -177,5 +180,5 @@ Every implementation review asks:
 - Unbounded host/network access described as isolated
 - Non-reproducible deterministic score
 - Missing compatibility limitation for known semantic divergence
-- Release artifact without checksum, SBOM, or provenance after M4
+- Release artifact without checksum, SBOM, provenance, project license/notice, or linked-component notice bundle after M4
 - README claim unsupported by the released implementation

@@ -172,9 +172,11 @@ The M4 release pipeline now builds CGO-free archives with an embedded built-in s
 
 See the [release verification guide](docs/07-guides/release-verification.md) for archive selection, checksum validation, provenance verification, SBOM inspection, and the limits of each signal.
 
+For source builds and future archives, start with [installation](docs/07-guides/installation.md). The repository is licensed under [Apache License 2.0](LICENSE); release archives carry the project license/notice, changelog, third-party notice index, exact linked-module inventory, and copied linked-component licenses. No public version tag exists yet.
+
 ## Principles
 
-- Deterministic security decisions; optional AI explanations.
+- Deterministic security decisions; any future AI explanation remains optional and non-authoritative.
 - One deep, end-to-end scenario before broad API coverage.
 - Explicit compatibility claims instead of implied cloud parity.
 - Local-first operation with no required cloud account or hosted model.
@@ -194,7 +196,13 @@ See the [release verification guide](docs/07-guides/release-verification.md) for
 - [Engineering standards](docs/05-engineering/engineering-standards.md)
 - [Quality strategy](docs/05-engineering/quality-strategy.md)
 - [Delivery roadmap](docs/05-engineering/roadmap.md)
+- [Release-candidate readiness audit](docs/05-engineering/release-readiness-audit.md)
 - [Technical basis and source register](docs/06-research/technical-basis.md)
+- [Installation](docs/07-guides/installation.md)
+- [Architecture walkthrough](docs/07-guides/architecture-walkthrough.md)
+- [Troubleshooting](docs/07-guides/troubleshooting.md)
+- [Upgrading](docs/07-guides/upgrading.md)
+- [Portfolio demo runbook](docs/07-guides/portfolio-demo.md)
 - [AWS cross-account lab](docs/07-guides/aws-cross-account-lab.md)
 - [AWS/Floci compatibility matrix](docs/07-compatibility/aws-floci-1.5.32.md)
 - [Microsoft consent lab](docs/07-guides/microsoft-consent-lab.md)
@@ -214,6 +222,12 @@ See the [release verification guide](docs/07-guides/release-verification.md) for
 - [Agent campaign execution compatibility](docs/07-compatibility/agent-campaign-execution.md)
 - [Release verification](docs/07-guides/release-verification.md)
 - [Clean container demo](docs/07-guides/clean-container-demo.md)
+- [Changelog](CHANGELOG.md)
+- [Security policy](SECURITY.md)
+- [Support policy](SUPPORT.md)
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 ## Working vocabulary
 

@@ -45,7 +45,7 @@ flowchart TD
     Graph --> Evaluator["Invariant and path evaluator"]
     Audit --> Evaluator
     Evaluator --> Reporter["Markdown, JSON and JUnit reports"]
-    Reporter -. optional evidence .-> Coach["AI coaching adapter"]
+    Reporter -. optional evidence .-> Coach["Planned AI coaching adapter"]
 ```
 
 ## Sources of truth
@@ -72,7 +72,7 @@ Accepted choices and their constraints are recorded in ADRs.
 
 ## Runtime deployment
 
-The target default is one `cailab` binary, with Docker or Podman required only for container-backed scenarios. The binary starts run-scoped native facade subprocesses and manages pinned external containers. Transparent HTTPS interception, host certificate installation, and hosted AI are optional advanced modes.
+The current default is one `cailab` binary, with the documented local Docker configuration required only for container-backed scenarios. The binary starts run-scoped native facade subprocesses and manages pinned external containers. Podman remains an untested target. Transparent HTTPS interception, host certificate installation, and hosted AI are optional advanced modes.
 
 The repository-owned scenario catalog is compiled into that binary. Default commands do not discover an ambient `./scenarios` directory; explicit paths and catalog flags preserve custom scenario workflows. Both sources enter the same strict validation and deterministic compilation boundary. Embedding establishes distribution and explicit source selection, not confidentiality from the launching OS account. See [ADR-0024](decisions/0024-embedded-built-in-scenario-catalog.md).
 
@@ -87,6 +87,8 @@ M3's public agent workflows launch deterministic inert reference, fixture-specif
 ## Release pipeline
 
 M4 uses a repository-owned Go packager as the source of archive layout and checksum selection. It creates fixed CGO-free targets from explicit version, commit, and source-date inputs; Syft inventories the staged binaries in SPDX JSON; and Linux, macOS, and Windows jobs verify the full manifest before executing their native archive. Pull requests and manual runs stop at a short-lived release candidate. Tags alone enter separate GitHub/Sigstore attestation and publication jobs with narrowly scoped write permissions. See [ADR-0023](decisions/0023-release-artifact-provenance-pipeline.md) and the [release verification guide](../07-guides/release-verification.md).
+
+The same packager requires a self-contained legal/documentation bundle: project license and notice, changelog, third-party notice index, and copied license material for the Go runtime and linked modules. A code-owned command computes the union of modules linked into every declared release target; CI and release jobs compare it with the versioned inventory before packaging. See [ADR-0026](decisions/0026-apache-license-release-notice-bundle.md).
 
 Separately, every pull request and `main` build creates an ephemeral CI-only Linux image from a digest-pinned Docker Official Go builder. A multi-stage build leaves only the CGO-free CLI and CGO-free code-owned demo runner in a `scratch`-based non-root image. CI inspects that contract and runs the walking skeleton with Docker's `none` network, no host mounts, a read-only root, bounded writable temporary storage, reduced privileges, and resource limits. The image is not published and is not a release or agent-isolation surface. See [ADR-0025](decisions/0025-ci-only-clean-demo-container.md) and the [clean container demo](../07-guides/clean-container-demo.md).
 

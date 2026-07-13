@@ -34,6 +34,7 @@ ADRs record significant decisions that affect system structure, security, compat
 - [ADR-0023: Release artifact and provenance pipeline](0023-release-artifact-provenance-pipeline.md)
 - [ADR-0024: Embedded built-in scenario catalog](0024-embedded-built-in-scenario-catalog.md)
 - [ADR-0025: CI-only clean demo container](0025-ci-only-clean-demo-container.md)
+- [ADR-0026: Apache-2.0 license and release notice bundle](0026-apache-license-release-notice-bundle.md)
 
 ## Lifecycle
 

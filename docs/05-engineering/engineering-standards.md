@@ -67,6 +67,7 @@ Use golden files only for stable structured output. Normalize timestamps and gen
 - Keep hosted model integration opt-in and redact outbound data.
 - Add regression tests for every security defect.
 - Generate an SBOM for releases.
+- Ship project and linked-component license/notice material with every release archive and fail CI when the linked-module inventory drifts.
 
 ## Documentation practice
 
