@@ -72,6 +72,66 @@ func TestArchivesAreDeterministicAndPreserveLayout(t *testing.T) {
 	}
 }
 
+func TestLoadDistributionFiles(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	for _, name := range []string{"CHANGELOG.md", "LICENSE", "NOTICE", "README.md", "THIRD_PARTY_NOTICES.md", "third_party/modules.txt"} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name), []byte(name+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	licensePath := filepath.Join(root, "third_party", "licenses", "example", "LICENSE")
+	if err := os.MkdirAll(filepath.Dir(licensePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(licensePath, []byte("license\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	files, err := loadDistributionFiles(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantNames := []string{
+		"CHANGELOG.md",
+		"LICENSE",
+		"NOTICE",
+		"README.md",
+		"THIRD_PARTY_NOTICES.md",
+		"third_party/licenses/example/LICENSE",
+		"third_party/modules.txt",
+	}
+	if len(files) != len(wantNames) {
+		t.Fatalf("files = %d, want %d", len(files), len(wantNames))
+	}
+	for index, want := range wantNames {
+		if files[index].Name != want || files[index].Mode != 0o644 {
+			t.Fatalf("file %d = %+v, want name %q and mode 0644", index, files[index], want)
+		}
+	}
+}
+
+func TestLoadDistributionFilesRequiresLegalBundle(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if _, err := loadDistributionFiles(root); err == nil || !strings.Contains(err.Error(), "CHANGELOG.md") {
+		t.Fatalf("loadDistributionFiles() error = %v, want missing release document", err)
+	}
+}
+
+func TestLoadDistributionFilesRejectsNonRegularDocument(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "CHANGELOG.md"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadDistributionFiles(root); err == nil || !strings.Contains(err.Error(), "not a regular file") {
+		t.Fatalf("loadDistributionFiles() error = %v, want non-regular document", err)
+	}
+}
+
 func TestWriteChecksumsSortedAndScoped(t *testing.T) {
 	t.Parallel()
 	directory := t.TempDir()

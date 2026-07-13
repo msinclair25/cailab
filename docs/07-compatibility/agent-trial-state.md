@@ -2,7 +2,7 @@
 title: Agent Trial State Compatibility
 status: implemented
 profile: scenario-state-v1
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 ---
 
 # Agent trial state compatibility

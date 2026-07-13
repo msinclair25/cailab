@@ -1,7 +1,7 @@
 ---
 title: Release Verification
 status: active
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 ---
 
 # Release verification
@@ -24,7 +24,7 @@ None of these facts proves the software is vulnerability-free. Review the source
 | macOS Apple silicon | `darwin_arm64.tar.gz` | Yes when the hosted macOS runner is ARM64 |
 | Windows x86-64 | `windows_amd64.zip` | Yes |
 
-The archives contain one versioned directory with the `cailab` executable and the repository README. Built-in scenario manifests are compiled into the executable, so no checkout or adjacent scenario directory is required. Docker remains required for AWS/Floci scenarios and optional Docker-isolated agent runs; the Microsoft, Google, local OIDC, and walking-skeleton paths do not require it.
+The archives contain one versioned directory with the `cailab` executable, README, changelog, project `LICENSE`/`NOTICE`, `THIRD_PARTY_NOTICES.md`, exact `third_party/modules.txt` linked-module inventory, and copied license material under `third_party/licenses/`. Built-in scenario manifests are compiled into the executable, so no checkout or adjacent scenario directory is required. Docker remains required for AWS/Floci scenarios and optional Docker-isolated agent runs; the Microsoft, Google, local OIDC, and walking-skeleton paths do not require it.
 
 ## Verify SHA-256
 
@@ -61,6 +61,8 @@ The command verifies the signed attestation and shows the workflow identity and 
 ## Inspect the SBOM
 
 The `cailab_VERSION_sbom.spdx.json` release asset is standard JSON. Search its `packages`, `relationships`, and file paths with any SPDX-compatible viewer or a JSON tool. The document covers the staged binaries for every packaged target, so repeated modules across targets are expected.
+
+The SBOM and third-party notice bundle answer different questions. The SBOM records components Syft detected; the notice bundle preserves reviewed license/copyright material for the Go runtime and version-locked modules linked into the declared target matrix. Neither is a legal opinion or a security guarantee.
 
 ## Execute the archive
 

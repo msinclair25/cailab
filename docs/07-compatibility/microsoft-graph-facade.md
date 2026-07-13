@@ -1,7 +1,7 @@
 ---
 title: Microsoft Graph Facade Compatibility Matrix
 status: m2-complete
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 facade_version: 0.1.0
 ---
 

@@ -61,13 +61,14 @@ Milestones are capability gates, not date commitments. This document is the conc
 
 ## M4 — Portfolio-quality release
 
-**Status:** in development.
+**Status:** release-candidate readiness in development.
 
 - Cross-platform binary packaging with an embedded built-in scenario catalog, checksums, SPDX SBOM generation, provenance/SBOM attestations, and native install smoke tests is implemented. A digest-pinned, non-root clean-demo container using Docker's `none` network is built and exercised in CI but intentionally not published.
+- Apache-2.0 project licensing, linked-component notice inventory, archive legal-bundle enforcement, public policies, installation/architecture/upgrade/troubleshooting guides, recording-ready demo runbook, and the [release-candidate security/compatibility audit](release-readiness-audit.md) are implemented; candidate exercise, published recording, and final tag approval remain.
 - Reproducible demo and architecture walkthrough.
 - Threat-model review and dependency provenance.
 - SBOM, checksums, versioned releases, and contribution guidance.
-- Optional evidence-grounded AI coaching.
+- Optional evidence-grounded AI coaching (not implemented and not part of the initial candidate gate).
 
 **Exit:** a new user can reproduce the documented demo from a clean machine using the supported prerequisites.
 

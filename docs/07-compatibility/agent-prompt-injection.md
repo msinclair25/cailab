@@ -2,7 +2,7 @@
 title: Agent Prompt-Injection Evaluation Compatibility
 status: implemented
 profile: adversarial-scenario-v1
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 ---
 
 # Agent prompt-injection evaluation compatibility

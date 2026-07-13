@@ -71,6 +71,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SEC-022 | Provider fixture restoration shall require run-scoped runtime ownership, authenticated native control, and matching container labels; a failed or unverified restore shall not launch the agent. |
 | NFR-SEC-023 | Prompt-injection scoring ground truth shall be scenario-owned, immutable for a trial, omitted from the agent start message, and evaluated only from linked governed-action evidence after proven fixture exposure. |
 | NFR-SEC-024 | A fixture-specific safe control shall not receive the prohibited tool/action/resource target through its command configuration, shall receive no prohibited action/resource ground truth in `session.start`, shall make no content-derived follow-up call, and shall not be presented as evidence of general model or framework resistance. |
+| NFR-SEC-025 | The public repository shall publish supported-version and private vulnerability-reporting instructions through an enabled private disclosure channel. |
 
 ### Reliability and reproducibility
 
@@ -95,12 +96,13 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 
 | ID | Requirement |
 |---|---|
-| NFR-USE-001 | The default local deployment shall require at most the CloudAILab binary and Docker or Podman. |
+| NFR-USE-001 | The default local deployment shall require at most the CloudAILab binary and, for container-backed workflows, one documented local container runtime; the initial supported runtime is Docker. |
 | NFR-USE-002 | `cailab doctor` shall detect missing prerequisites and provide actionable remediation. |
 | NFR-USE-003 | Linux CI shall run without cloud accounts, hosted models, or interactive prompts. |
 | NFR-USE-004 | Provider compatibility and limitations shall be documented and test-backed. |
 | NFR-USE-005 | The release executable shall list, show, validate, and start its built-in scenarios without a repository checkout or working-directory catalog; custom files and catalogs shall require explicit selection. |
 | NFR-USE-006 | CI shall build and execute the documented walking-skeleton demo in an ephemeral non-root container without cloud accounts, hosted models, host mounts, external networking, or a writable root filesystem. |
+| NFR-USE-007 | The public release documentation shall provide tested installation, architecture, upgrade, troubleshooting, verification, support, and recording-ready demo guidance without claiming an unpublished version. |
 
 ### Maintainability and supply chain
 
@@ -108,10 +110,12 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 |---|---|
 | NFR-MNT-001 | Scenario, event, and report schemas shall be versioned from their first committed release. |
 | NFR-MNT-002 | Dependency and generated-code changes shall be reproducible and reviewable. |
+| NFR-MNT-003 | CI shall compare a versioned third-party notice inventory with the union of modules linked into every declared release target. |
 | NFR-SUP-001 | Release artifacts shall include checksums, an SBOM, and build provenance by the M4 release. |
 | NFR-SUP-002 | CI workflows shall use minimum permissions and pin third-party actions to immutable revisions. |
 | NFR-SUP-003 | A tag release shall publish semantic-versioned CGO-free archives for the declared target matrix only after checksum verification and a native smoke test on each declared operating system, and shall attach an SPDX JSON SBOM plus signed build and SBOM attestations. |
 | NFR-SUP-004 | Any CI-container base image shall use an immutable digest; the final image shall exclude the source tree and build toolchain, declare no ports or volumes, and shall not be published or represented as a release artifact. |
+| NFR-SUP-005 | Every release archive shall include the project license/notice, changelog, third-party notice index, exact linked-module manifest, and copied license material for the Go runtime and linked dependencies. |
 
 ## Deferred requirements
 

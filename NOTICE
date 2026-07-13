@@ -1,0 +1,17 @@
+CloudAILab
+Copyright 2026 CloudAILab contributors
+
+This product includes software developed by Amazon.com, Inc. or its
+affiliates, including the AWS SDK for Go and AWS Smithy for Go.
+
+AWS SDK for Go
+Copyright 2015 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+Copyright 2014-2015 Stripe, Inc.
+
+Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+This product includes go-yaml material:
+Copyright 2011-2016 Canonical Ltd.
+
+Third-party license texts, copyright statements, and additional notices are
+listed in THIRD_PARTY_NOTICES.md and third_party/licenses/.

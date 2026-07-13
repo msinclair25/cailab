@@ -5,11 +5,16 @@ on:
     paths:
       - .github/workflows/release.yml
       - README.md
+      - CHANGELOG.md
+      - LICENSE
+      - NOTICE
+      - THIRD_PARTY_NOTICES.md
       - cmd/cailab/**
       - internal/**
       - go.mod
       - go.sum
       - scenarios/**
+      - third_party/**
   push:
     tags:
       - "v*"
@@ -36,7 +41,7 @@ jobs:
       version: ${{ steps.metadata.outputs.version }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
@@ -66,6 +71,12 @@ jobs:
           build_date="$(git show -s --format=%cI "$GITHUB_SHA")"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "build_date=$build_date" >> "$GITHUB_OUTPUT"
+
+      - name: Check linked dependency notices
+        shell: bash
+        run: |
+          go run ./internal/tools/release modules > "$RUNNER_TEMP/cailab-linked-modules.txt"
+          diff --unified third_party/modules.txt "$RUNNER_TEMP/cailab-linked-modules.txt"
 
       - name: Build deterministic archives
         run: >-
@@ -135,7 +146,11 @@ jobs:
           archive="cailab_${VERSION}_${target_os}_${target_arch}.tar.gz"
           mkdir smoke
           tar -xzf "$archive" -C smoke
-          binary="smoke/cailab_${VERSION}_${target_os}_${target_arch}/cailab"
+          root="smoke/cailab_${VERSION}_${target_os}_${target_arch}"
+          for required in LICENSE NOTICE THIRD_PARTY_NOTICES.md CHANGELOG.md third_party/licenses/go/LICENSE third_party/modules.txt; do
+            test -f "$root/$required"
+          done
+          binary="$root/cailab"
           "$binary" version | grep -F "cailab ${VERSION} (commit "
           "$binary" scenario list
 
@@ -165,7 +180,11 @@ jobs:
           }
           $archive = "cailab_${env:VERSION}_windows_amd64.zip"
           Expand-Archive -Path $archive -DestinationPath smoke
-          $binary = "smoke/cailab_${env:VERSION}_windows_amd64/cailab.exe"
+          $root = "smoke/cailab_${env:VERSION}_windows_amd64"
+          @("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "third_party/licenses/go/LICENSE", "third_party/modules.txt") | ForEach-Object {
+            if (-not (Test-Path (Join-Path $root $_) -PathType Leaf)) { throw "missing release document: $_" }
+          }
+          $binary = "$root/cailab.exe"
           $versionOutput = & $binary version
           if (-not $versionOutput.StartsWith("cailab $env:VERSION (commit ")) { throw "unexpected version output: $versionOutput" }
           & $binary scenario list

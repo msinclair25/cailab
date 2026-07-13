@@ -2,7 +2,7 @@
 title: CloudAILab Master Plan
 status: active
 plan_version: 0.1.0
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-13
 current_milestone: M4
 ---
 
@@ -32,7 +32,7 @@ CloudAILab will be a local-first enterprise identity and AI-agent security range
 - Provider compatibility is operation-specific, test-backed, and never implied globally.
 - The first useful release contains one deep scenario, not a broad collection of shallow mocks.
 - Services bind to loopback by default; credentials are synthetic; isolation claims require enforced isolation.
-- The supported default deployment requires only the `cailab` binary and Docker or Podman.
+- The supported default deployment requires only the `cailab` binary; container-backed scenarios additionally require the documented local Docker configuration. Podman remains planned and untested.
 - Documentation and tests change with behavior in the same pull request.
 
 ## Evidence behind the plan
@@ -108,7 +108,7 @@ flowchart TD
     Graph --> Verify["Path and invariant evaluator"]
     Audit --> Verify
     Verify --> Report["Markdown, JSON and JUnit"]
-    Report -. evidence only .-> Coach["Optional AI coach"]
+    Report -. evidence only .-> Coach["Planned optional AI coach"]
 ```
 
 ### Canonical domain model
@@ -325,11 +325,11 @@ Deliverables:
 
 - Linux, macOS, and Windows release artifacts with a working-directory-independent built-in scenario catalog for supported architectures (release pipeline implemented; first tag pending)
 - Digest-pinned CI-only clean-demo image with non-root, Docker `none` network, read-only execution (implemented; publication intentionally excluded)
-- Checksums, SBOM, and provenance/SBOM attestations (implemented); changelog and upgrade notes
-- Installation, quick start, architecture walkthrough, demo recording, and troubleshooting
-- SECURITY, SUPPORT, CONTRIBUTING, CODE_OF_CONDUCT, and license/notice files
-- Threat-model review and compatibility audit
-- Optional evidence-grounded AI coaching behind an explicit feature flag
+- Checksums, SBOM, and provenance/SBOM attestations, changelog, upgrade notes, and archive legal bundle (implemented)
+- Installation, quick start, architecture walkthrough, troubleshooting, and a recording-ready demo runbook (implemented); published demo recording pending
+- SECURITY, SUPPORT, CONTRIBUTING, CODE_OF_CONDUCT, Apache-2.0 license, project notice, and linked-component notices (implemented)
+- Threat-model review and [release-candidate security and compatibility audit](../05-engineering/release-readiness-audit.md) (implemented for a conditional candidate decision; final tag confirmation pending)
+- Optional evidence-grounded AI coaching behind an explicit feature flag (not implemented and excluded from the initial candidate gate)
 
 Exit gate:
 
@@ -449,5 +449,6 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Complete the public-release documentation set, licensing/notices, changelog, upgrade notes, and compatibility/security audit.
-2. Exercise a release candidate and then the first version tag only after the remaining M4 release decision is recorded.
+1. Merge the release-readiness change, exercise `0.1.0-rc.1` through the manual release workflow, and inspect the exact candidate archives, SBOM, checksums, legal bundle, and native smoke evidence.
+2. Record and link the portfolio demo from that verified candidate commit.
+3. Move the changelog entry to `0.1.0`, record the final tag decision, and create the first version tag only after the repository owner explicitly approves the Apache-2.0 license and residual-risk acceptances.
