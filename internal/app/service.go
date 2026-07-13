@@ -50,12 +50,25 @@ func (s *Service) Up(ctx context.Context, options UpOptions) (state.Run, error) 
 		_, _ = s.store.StopActiveRun(context.Background())
 		return state.Run{}, err
 	}
-	if err := s.store.SetRuntimes(ctx, run.ID, instances); err != nil {
+	baseline, err := s.provider.Snapshot(ctx, instances, compiled)
+	if err != nil {
+		_ = s.provider.Stop(context.Background(), run.ID, instances, compiled)
+		_, _ = s.store.StopActiveRun(context.Background())
+		return state.Run{}, fmt.Errorf("capture normalized provider baseline: %w", err)
+	}
+	baselineDigest, err := scenario.StateDigest(baseline)
+	if err != nil {
+		_ = s.provider.Stop(context.Background(), run.ID, instances, compiled)
+		_, _ = s.store.StopActiveRun(context.Background())
+		return state.Run{}, fmt.Errorf("digest normalized provider baseline: %w", err)
+	}
+	if err := s.store.SetRuntimeBaseline(ctx, run.ID, instances, baselineDigest); err != nil {
 		_ = s.provider.Stop(context.Background(), run.ID, instances, compiled)
 		_, _ = s.store.StopActiveRun(context.Background())
 		return state.Run{}, err
 	}
 	run.Runtimes = instances
+	run.BaselineDigest = baselineDigest
 	return run, nil
 }
 
@@ -186,7 +199,17 @@ func (s *Service) Reset(ctx context.Context) (state.Run, error) {
 	if err != nil {
 		return state.Run{}, err
 	}
-	if err := s.store.SetRuntimes(ctx, run.ID, instances); err != nil {
+	baseline, err := s.provider.Snapshot(ctx, instances, run.Compiled)
+	if err != nil {
+		_ = s.provider.Stop(context.Background(), run.ID, instances, run.Compiled)
+		return state.Run{}, fmt.Errorf("capture normalized provider baseline: %w", err)
+	}
+	baselineDigest, err := scenario.StateDigest(baseline)
+	if err != nil {
+		_ = s.provider.Stop(context.Background(), run.ID, instances, run.Compiled)
+		return state.Run{}, fmt.Errorf("digest normalized provider baseline: %w", err)
+	}
+	if err := s.store.SetRuntimeBaseline(ctx, run.ID, instances, baselineDigest); err != nil {
 		_ = s.provider.Stop(context.Background(), run.ID, instances, run.Compiled)
 		return state.Run{}, err
 	}
@@ -198,6 +221,7 @@ func (s *Service) Reset(ctx context.Context) (state.Run, error) {
 	}
 	run = resetRun
 	run.Runtimes = instances
+	run.BaselineDigest = baselineDigest
 	return run, nil
 }
 

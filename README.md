@@ -15,7 +15,7 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: versioned agent, policy, tool-execution, approval, outcome, trace, state-evidence, and evaluation-report contracts; supported reference and custom subprocess runs; scenario-bound tool registration; exact-match policy; interactive or fail-closed approval resolution; an opt-in Docker-isolated agent mode; endpoint-preserving provider restoration; deterministic before/after invariant capture; protected tool output; immutable linked evidence; and repeated-trial replay metrics are implemented and test-backed. Automatic campaign execution, prompt-injection scoring, and the deliberately unsafe evaluation fixture remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
+M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: versioned agent and evidence contracts; supported reference, deliberately unsafe, and custom subprocess runs; deterministic governance; optional Docker agent isolation; endpoint-preserving restoration; normalized provider baselines; scenario evidence; fixture-labeled indirect prompt-injection scoring; and repeated-trial replay metrics are implemented and test-backed. Automatic campaign execution remains planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
 
 ## Build and try the walking skeleton
 
@@ -114,6 +114,8 @@ The initial `governed-evidence-v1` profile reports only evidence-supported compl
 
 Add `--capture-state` to persist before/after invariant evidence. Add `--restore-fixture` to restore supported providers at their existing endpoints and prove the baseline digest before launch. Complete traces then use `scenario-outcome-v1` and measure task and remediation success. See the [trial-state compatibility record](docs/07-compatibility/agent-trial-state.md).
 
+With `acquisition-agent` active, run `./bin/cailab agent run unsafe` to exercise the code-owned deliberately vulnerable baseline against the synthetic Drive runbook, then replay `trial:unsafe`. Export is simulated; no provider data is transmitted. Custom agents can select the same ground truth with `--prompt-injection-fixture drive-runbook-export`. See the [prompt-injection evaluation compatibility record](docs/07-compatibility/agent-prompt-injection.md).
+
 Host-mode agent and tool subprocesses are owned and bounded but **not isolated** from the launching user's filesystem, network, syscalls, or detached descendants. Do not run untrusted code in host mode. Custom agents can opt into the Linux CI-tested Docker boundary with `--isolation docker --image <immutable-image-id-or-digest>`; registered tool subprocesses remain trusted and unisolated. See the [agent-run guide](docs/07-guides/agent-run.md) and [Docker isolation compatibility record](docs/07-compatibility/agent-docker-isolation.md).
 
 ## Development checks
@@ -166,6 +168,7 @@ go run ./internal/tools/doccheck .
 - [Docker agent isolation compatibility](docs/07-compatibility/agent-docker-isolation.md)
 - [Agent evidence replay compatibility](docs/07-compatibility/agent-evidence-replay.md)
 - [Agent trial state compatibility](docs/07-compatibility/agent-trial-state.md)
+- [Agent prompt-injection evaluation compatibility](docs/07-compatibility/agent-prompt-injection.md)
 
 ## Working vocabulary
 

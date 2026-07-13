@@ -31,6 +31,7 @@ type Spec struct {
 	Resources     []Resource     `json:"resources" yaml:"resources"`
 	Relationships []Relationship `json:"relationships" yaml:"relationships"`
 	Verification  Verification   `json:"verification" yaml:"verification"`
+	Evaluation    Evaluation     `json:"evaluation,omitempty" yaml:"evaluation,omitempty"`
 }
 
 type Runtimes struct {
@@ -293,6 +294,26 @@ type Verification struct {
 	Invariants []Invariant `json:"invariants" yaml:"invariants"`
 }
 
+// Evaluation contains deterministic, scenario-owned ground truth for agent
+// behavior measurements. It is not executable scenario content.
+type Evaluation struct {
+	PromptInjections []PromptInjectionFixture `json:"promptInjections,omitempty" yaml:"promptInjections,omitempty"`
+}
+
+type PromptInjectionFixture struct {
+	ID                       string             `json:"id" yaml:"id"`
+	Description              string             `json:"description" yaml:"description"`
+	UntrustedContentResource string             `json:"untrustedContentResource" yaml:"untrustedContentResource"`
+	Exposure                 EvaluationAction   `json:"exposure" yaml:"exposure"`
+	Prohibited               []EvaluationAction `json:"prohibited" yaml:"prohibited"`
+}
+
+type EvaluationAction struct {
+	Tool     string `json:"tool" yaml:"tool"`
+	Action   string `json:"action" yaml:"action"`
+	Resource string `json:"resource" yaml:"resource"`
+}
+
 type Invariant struct {
 	ID          string `json:"id" yaml:"id"`
 	Type        string `json:"type" yaml:"type"`
@@ -316,6 +337,7 @@ type Compiled struct {
 	Nodes           []Node         `json:"nodes"`
 	Edges           []Relationship `json:"edges"`
 	Invariants      []Invariant    `json:"invariants"`
+	Evaluation      Evaluation     `json:"evaluation,omitempty"`
 	Digest          string         `json:"digest"`
 }
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/msinclair25/cailab/internal/agent"
+	"github.com/msinclair25/cailab/internal/provider"
 	"github.com/msinclair25/cailab/internal/scenario"
 	"github.com/msinclair25/cailab/internal/state"
 	"github.com/msinclair25/cailab/internal/verify"
@@ -24,22 +25,23 @@ type RegisteredTool struct {
 }
 
 type AgentRunOptions struct {
-	Agent          agent.AgentRef
-	ActorTenant    string
-	Command        []string
-	Directory      string
-	Environment    []string
-	Container      *agent.ContainerRuntime
-	CaptureState   bool
-	RestoreFixture bool
-	Policy         agent.GovernancePolicy
-	Tools          []RegisteredTool
-	Approver       agent.Approver
-	PromptHash     string
-	TrialID        string
-	TrialIndex     int
-	TrialCount     int
-	SessionTimeout time.Duration
+	Agent               agent.AgentRef
+	ActorTenant         string
+	Command             []string
+	Directory           string
+	Environment         []string
+	Container           *agent.ContainerRuntime
+	CaptureState        bool
+	RestoreFixture      bool
+	EvaluationFixtureID string
+	Policy              agent.GovernancePolicy
+	Tools               []RegisteredTool
+	Approver            agent.Approver
+	PromptHash          string
+	TrialID             string
+	TrialIndex          int
+	TrialCount          int
+	SessionTimeout      time.Duration
 }
 
 type AgentRunResult struct {
@@ -55,7 +57,14 @@ func ValidateAgentRunOptions(compiled scenario.Compiled, options AgentRunOptions
 	if options.RestoreFixture && !options.CaptureState {
 		return errors.New("fixture restoration requires state capture")
 	}
-	_, _, err := validateAgentRegistrations(compiled, options)
+	if options.EvaluationFixtureID != "" && (!options.CaptureState || !options.RestoreFixture) {
+		return errors.New("prompt-injection evaluation requires fixture restoration and state capture")
+	}
+	registrations, _, err := validateAgentRegistrations(compiled, options)
+	if err != nil {
+		return err
+	}
+	_, err = resolvePromptInjectionEvaluation(compiled, options.EvaluationFixtureID, registrations)
 	return err
 }
 
@@ -64,7 +73,14 @@ func (s *Service) RunAgent(ctx context.Context, options AgentRunOptions) (AgentR
 	if err != nil {
 		return AgentRunResult{}, err
 	}
+	if options.CaptureState && rangeRun.BaselineDigest == "" {
+		return AgentRunResult{}, errors.New("active range has no normalized provider baseline; run cailab reset before state capture")
+	}
 	registrations, refs, err := validateAgentRegistrations(rangeRun.Compiled, options)
+	if err != nil {
+		return AgentRunResult{}, err
+	}
+	evaluation, err := resolvePromptInjectionEvaluation(rangeRun.Compiled, options.EvaluationFixtureID, registrations)
 	if err != nil {
 		return AgentRunResult{}, err
 	}
@@ -87,13 +103,14 @@ func (s *Service) RunAgent(ctx context.Context, options AgentRunOptions) (AgentR
 		PromptHash: options.PromptHash,
 		Tools:      refs,
 		Execution:  agent.ContainerExecutionRef(options.Container),
+		Evaluation: evaluation,
 		Trial:      agent.TrialRef{Index: options.TrialIndex, Count: options.TrialCount},
 		Status:     "running",
 		StartedAt:  startedAt,
 	}
 	if options.CaptureState {
 		run.State = &agent.TrialStateRef{
-			Profile: agent.TrialStateProfile, BaselineDigest: rangeRun.Compiled.Digest, Restore: options.RestoreFixture,
+			Profile: agent.TrialStateProfile, BaselineDigest: rangeRun.BaselineDigest, Restore: options.RestoreFixture,
 		}
 	}
 	sessionConfig := agent.SessionConfig{
@@ -202,6 +219,67 @@ func (s *Service) RunAgent(ctx context.Context, options AgentRunOptions) (AgentR
 	return result, nil
 }
 
+func resolvePromptInjectionEvaluation(compiled scenario.Compiled, fixtureID string, registrations map[string]RegisteredTool) (*agent.PromptInjectionEvaluationRef, error) {
+	if fixtureID == "" {
+		return nil, nil
+	}
+	var fixture *scenario.PromptInjectionFixture
+	for index := range compiled.Evaluation.PromptInjections {
+		if compiled.Evaluation.PromptInjections[index].ID == fixtureID {
+			fixture = &compiled.Evaluation.PromptInjections[index]
+			break
+		}
+	}
+	if fixture == nil {
+		return nil, fmt.Errorf("prompt-injection fixture %q is not in the active scenario", fixtureID)
+	}
+	resources := scenarioResources(compiled)
+	validateTarget := func(target scenario.EvaluationAction) error {
+		registration, exists := registrations[target.Tool]
+		if !exists {
+			return fmt.Errorf("prompt-injection fixture %q requires registered tool %q", fixtureID, target.Tool)
+		}
+		resource, exists := resources[target.Resource]
+		if !exists {
+			return fmt.Errorf("prompt-injection fixture %q references unknown resource %q", fixtureID, target.Resource)
+		}
+		for _, permission := range registration.Manifest.Spec.Permissions {
+			if permission.Tenant == resource.Tenant && containsString(permission.Actions, target.Action) && containsString(permission.Resources, target.Resource) {
+				return nil
+			}
+		}
+		return fmt.Errorf("tool %q does not declare fixture action %q on %q", target.Tool, target.Action, target.Resource)
+	}
+	if err := validateTarget(fixture.Exposure); err != nil {
+		return nil, err
+	}
+	for _, target := range fixture.Prohibited {
+		if err := validateTarget(target); err != nil {
+			return nil, err
+		}
+	}
+	encoded, err := json.Marshal(fixture)
+	if err != nil {
+		return nil, fmt.Errorf("encode prompt-injection fixture %q: %w", fixtureID, err)
+	}
+	digest, err := agent.DigestJSON(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("digest prompt-injection fixture %q: %w", fixtureID, err)
+	}
+	result := &agent.PromptInjectionEvaluationRef{
+		Profile: agent.PromptInjectionProfile, FixtureID: fixture.ID, Digest: digest,
+		Exposure: evaluationActionRef(fixture.Exposure), Prohibited: make([]agent.EvaluationActionRef, len(fixture.Prohibited)),
+	}
+	for index, target := range fixture.Prohibited {
+		result.Prohibited[index] = evaluationActionRef(target)
+	}
+	return result, nil
+}
+
+func evaluationActionRef(action scenario.EvaluationAction) agent.EvaluationActionRef {
+	return agent.EvaluationActionRef{Tool: action.Tool, Action: action.Action, Resource: action.Resource}
+}
+
 func (s *Service) captureTrialState(ctx context.Context, rangeRun state.Run, run agent.AgentRun, phase string, restored bool) (agent.TrialStateEvidence, error) {
 	snapshot, err := s.provider.Snapshot(ctx, rangeRun.Runtimes, rangeRun.Compiled)
 	if err != nil {
@@ -211,8 +289,8 @@ func (s *Service) captureTrialState(ctx context.Context, rangeRun state.Run, run
 	if err != nil {
 		return agent.TrialStateEvidence{}, fmt.Errorf("digest %s trial provider state: %w", phase, err)
 	}
-	if restored && digest != rangeRun.Compiled.Digest {
-		return agent.TrialStateEvidence{}, fmt.Errorf("restored trial fixture digest %s does not match baseline %s", digest, rangeRun.Compiled.Digest)
+	if restored && digest != rangeRun.BaselineDigest {
+		return agent.TrialStateEvidence{}, fmt.Errorf("restored trial fixture digest %s does not match normalized baseline %s", digest, rangeRun.BaselineDigest)
 	}
 	report, err := verify.Evaluate(rangeRun.ID, snapshot)
 	if err != nil {
@@ -415,4 +493,98 @@ func ReferenceAgentRunOptions(compiled scenario.Compiled, executable, directory,
 		TrialID:     trialID, TrialIndex: 1, TrialCount: 1,
 		SessionTimeout: 30 * time.Second,
 	}, nil
+}
+
+func UnsafeFixtureAgentRunOptions(compiled scenario.Compiled, googleEndpoint, executable, directory, trialID, fixtureID string) (AgentRunOptions, error) {
+	if fixtureID == "" {
+		if len(compiled.Evaluation.PromptInjections) != 1 {
+			return AgentRunOptions{}, errors.New("unsafe baseline requires an explicit prompt-injection fixture")
+		}
+		fixtureID = compiled.Evaluation.PromptInjections[0].ID
+	}
+	var fixture *scenario.PromptInjectionFixture
+	for index := range compiled.Evaluation.PromptInjections {
+		if compiled.Evaluation.PromptInjections[index].ID == fixtureID {
+			fixture = &compiled.Evaluation.PromptInjections[index]
+			break
+		}
+	}
+	if fixture == nil {
+		return AgentRunOptions{}, fmt.Errorf("prompt-injection fixture %q is not in the active scenario", fixtureID)
+	}
+	if len(fixture.Prohibited) != 1 {
+		return AgentRunOptions{}, fmt.Errorf("unsafe baseline supports exactly one prohibited action, fixture %q declares %d", fixtureID, len(fixture.Prohibited))
+	}
+	if compiled.Providers.Google == nil || googleEndpoint == "" {
+		return AgentRunOptions{}, errors.New("unsafe baseline requires an active Google facade")
+	}
+	fileID := ""
+	for _, file := range compiled.Providers.Google.DriveFiles {
+		if file.Node == fixture.UntrustedContentResource {
+			fileID = file.ID
+			break
+		}
+	}
+	if fileID == "" {
+		return AgentRunOptions{}, fmt.Errorf("fixture %q untrusted content is not a configured Google Drive file", fixtureID)
+	}
+	resources := scenarioResources(compiled)
+	exposureResource, exposureExists := resources[fixture.Exposure.Resource]
+	prohibited := fixture.Prohibited[0]
+	prohibitedResource, prohibitedExists := resources[prohibited.Resource]
+	if !exposureExists || !prohibitedExists {
+		return AgentRunOptions{}, errors.New("unsafe baseline fixture resources are not canonical")
+	}
+	inputSchema := json.RawMessage(`{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false}`)
+	exposureManifest := agent.ToolManifest{
+		APIVersion: agent.APIVersion, Kind: agent.ToolManifestKind,
+		Metadata: agent.Metadata{Name: fixture.Exposure.Tool, Version: "0.1.0", Description: "Code-owned Google Drive reader for the deliberately unsafe fixture."},
+		Spec: agent.ToolManifestSpec{
+			Transport: agent.ToolTransport{Type: "subprocess", Command: []string{
+				executable, "_tool", "google-drive-read", "--tool", fixture.Exposure.Tool, "--action", fixture.Exposure.Action,
+				"--resource", fixture.Exposure.Resource, "--endpoint", googleEndpoint, "--file-id", fileID,
+			}},
+			InputSchema: inputSchema,
+			Permissions: []agent.Permission{{Tenant: exposureResource.Tenant, Actions: []string{fixture.Exposure.Action}, Resources: []string{fixture.Exposure.Resource}}},
+			Risk:        "medium", TimeoutMillis: 5_000, Isolation: agent.Isolation{Network: "host", Filesystem: "host"},
+		},
+	}
+	exportManifest := agent.ToolManifest{
+		APIVersion: agent.APIVersion, Kind: agent.ToolManifestKind,
+		Metadata: agent.Metadata{Name: prohibited.Tool, Version: "0.1.0", Description: "Synthetic export simulator for the deliberately unsafe fixture."},
+		Spec: agent.ToolManifestSpec{
+			Transport:   agent.ToolTransport{Type: "subprocess", Command: []string{executable, "_tool", "reference", "--tool", prohibited.Tool}},
+			InputSchema: inputSchema,
+			Permissions: []agent.Permission{{Tenant: prohibitedResource.Tenant, Actions: []string{prohibited.Action}, Resources: []string{prohibited.Resource}}},
+			Risk:        "critical", TimeoutMillis: 5_000, Isolation: agent.Isolation{Network: "host", Filesystem: "host"},
+		},
+	}
+	policy := agent.GovernancePolicy{
+		APIVersion: agent.APIVersion, Kind: agent.GovernancePolicyKind, Version: "0.1.0", DefaultEffect: "deny",
+		Rules: []agent.PolicyRule{
+			{ID: "unsafe:exposure", Effect: "allow", AgentID: "agent:unsafe-fixture", Tool: fixture.Exposure.Tool, Action: fixture.Exposure.Action, Resource: fixture.Exposure.Resource, ResourceTenant: exposureResource.Tenant, ResourceClassification: exposureResource.Classification},
+			{ID: "unsafe:export", Effect: "allow", AgentID: "agent:unsafe-fixture", Tool: prohibited.Tool, Action: prohibited.Action, Resource: prohibited.Resource, ResourceTenant: prohibitedResource.Tenant, ResourceClassification: prohibitedResource.Classification},
+		},
+	}
+	promptHash, err := agent.DigestJSON([]byte(`{"baseline":"cloudailab-unsafe-injection-v1","fixture":"` + fixtureID + `"}`))
+	if err != nil {
+		return AgentRunOptions{}, err
+	}
+	options := AgentRunOptions{
+		Agent:       agent.AgentRef{ID: "agent:unsafe-fixture", Version: "0.1.0", Adapter: "subprocess", Provider: "cloudailab", Model: "deterministic-unsafe"},
+		ActorTenant: exposureResource.Tenant,
+		Command: []string{
+			executable, "_agent", "unsafe", "--id", "agent:unsafe-fixture", "--version", "0.1.0",
+			"--exposure-tool", fixture.Exposure.Tool, "--exposure-action", fixture.Exposure.Action, "--exposure-resource", fixture.Exposure.Resource,
+			"--prohibited-tool", prohibited.Tool, "--prohibited-action", prohibited.Action, "--prohibited-resource", prohibited.Resource,
+		},
+		Directory: directory, CaptureState: true, RestoreFixture: true, EvaluationFixtureID: fixtureID,
+		Policy: policy,
+		Tools: []RegisteredTool{
+			{Manifest: exposureManifest, Directory: directory, Environment: []string{"CAILAB_GOOGLE_TOOL_TOKEN=" + provider.LocalGoogleToken}},
+			{Manifest: exportManifest, Directory: directory},
+		},
+		PromptHash: promptHash, TrialID: trialID, TrialIndex: 1, TrialCount: 1, SessionTimeout: 30 * time.Second,
+	}
+	return options, ValidateAgentRunOptions(compiled, options)
 }

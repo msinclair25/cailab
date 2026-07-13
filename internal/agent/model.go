@@ -9,10 +9,11 @@ import (
 )
 
 const (
-	APIVersion        = "cloudailab.dev/agent/v1alpha1"
-	ProtocolVersion   = "1.1"
-	MaxFrameBytes     = 1 << 20
-	TrialStateProfile = "scenario-state-v1"
+	APIVersion             = "cloudailab.dev/agent/v1alpha1"
+	ProtocolVersion        = "1.1"
+	MaxFrameBytes          = 1 << 20
+	TrialStateProfile      = "scenario-state-v1"
+	PromptInjectionProfile = "prompt-injection-v1"
 
 	ToolManifestKind            = "ToolManifest"
 	AgentRunKind                = "AgentRun"
@@ -94,21 +95,22 @@ type PolicyRule struct {
 }
 
 type AgentRun struct {
-	APIVersion string             `json:"apiVersion"`
-	Kind       string             `json:"kind"`
-	RunID      string             `json:"runId"`
-	TrialID    string             `json:"trialId"`
-	Scenario   ScenarioRef        `json:"scenario"`
-	Agent      AgentRef           `json:"agent"`
-	Policy     PolicyRef          `json:"policy"`
-	PromptHash string             `json:"promptHash"`
-	Tools      []ToolRef          `json:"tools"`
-	Execution  *AgentExecutionRef `json:"execution,omitempty"`
-	State      *TrialStateRef     `json:"state,omitempty"`
-	Trial      TrialRef           `json:"trial"`
-	Status     string             `json:"status"`
-	StartedAt  time.Time          `json:"startedAt"`
-	EndedAt    *time.Time         `json:"endedAt,omitempty"`
+	APIVersion string                        `json:"apiVersion"`
+	Kind       string                        `json:"kind"`
+	RunID      string                        `json:"runId"`
+	TrialID    string                        `json:"trialId"`
+	Scenario   ScenarioRef                   `json:"scenario"`
+	Agent      AgentRef                      `json:"agent"`
+	Policy     PolicyRef                     `json:"policy"`
+	PromptHash string                        `json:"promptHash"`
+	Tools      []ToolRef                     `json:"tools"`
+	Execution  *AgentExecutionRef            `json:"execution,omitempty"`
+	State      *TrialStateRef                `json:"state,omitempty"`
+	Evaluation *PromptInjectionEvaluationRef `json:"evaluation,omitempty"`
+	Trial      TrialRef                      `json:"trial"`
+	Status     string                        `json:"status"`
+	StartedAt  time.Time                     `json:"startedAt"`
+	EndedAt    *time.Time                    `json:"endedAt,omitempty"`
 }
 
 type ScenarioRef struct {
@@ -160,6 +162,22 @@ type TrialStateRef struct {
 	Profile        string `json:"profile"`
 	BaselineDigest string `json:"baselineDigest"`
 	Restore        bool   `json:"restore"`
+}
+
+// PromptInjectionEvaluationRef is scenario-owned evaluation ground truth. It
+// is persisted for deterministic replay but is not included in session.start.
+type PromptInjectionEvaluationRef struct {
+	Profile    string                `json:"profile"`
+	FixtureID  string                `json:"fixtureId"`
+	Digest     string                `json:"digest"`
+	Exposure   EvaluationActionRef   `json:"exposure"`
+	Prohibited []EvaluationActionRef `json:"prohibited"`
+}
+
+type EvaluationActionRef struct {
+	Tool     string `json:"tool"`
+	Action   string `json:"action"`
+	Resource string `json:"resource"`
 }
 
 type TrialStateEvidence struct {

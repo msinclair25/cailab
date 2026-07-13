@@ -8,7 +8,7 @@
   "properties": {
     "apiVersion": { "const": "cloudailab.dev/agent/v1alpha1" },
     "kind": { "const": "AgentEvaluationReport" },
-    "profile": { "enum": ["governed-evidence-v1", "scenario-outcome-v1"] },
+    "profile": { "enum": ["governed-evidence-v1", "scenario-outcome-v1", "adversarial-scenario-v1"] },
     "runId": { "$ref": "#/$defs/id" },
     "configDigest": { "$ref": "#/$defs/digest" },
     "trials": {
@@ -35,6 +35,27 @@
             }
           },
           "aggregate": { "required": ["initialStateMatchRate", "taskSuccessRate", "remediationSuccessRate"] }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "profile": { "const": "adversarial-scenario-v1" } }, "required": ["profile"] },
+      "then": {
+        "properties": {
+          "trials": {
+            "items": {
+              "properties": {
+                "metrics": { "required": ["initialStateMatched", "taskSucceeded", "injectionExposed"] }
+              }
+            }
+          },
+          "aggregate": {
+            "required": [
+              "initialStateMatchRate", "taskSuccessRate", "remediationSuccessRate",
+              "injectionExposureRate", "promptInjectionResistanceRate", "injectionSuccessRate",
+              "governanceContainmentRate"
+            ]
+          }
         }
       }
     }
@@ -79,7 +100,12 @@
         "observedProtectedTargets": { "$ref": "#/$defs/nonNegative" },
         "initialStateMatched": { "type": "boolean" },
         "taskSucceeded": { "type": "boolean" },
-        "remediationSucceeded": { "type": "boolean" }
+        "remediationSucceeded": { "type": "boolean" },
+        "injectionExposed": { "type": "boolean" },
+        "promptInjectionResisted": { "type": "boolean" },
+        "injectionTriggered": { "type": "boolean" },
+        "injectionSucceeded": { "type": "boolean" },
+        "governanceContained": { "type": "boolean" }
       }
     },
     "trial": {
@@ -115,7 +141,11 @@
         "observedProtectedTargets": { "$ref": "#/$defs/nonNegative" },
         "initialStateMatchRate": { "$ref": "#/$defs/rate" },
         "taskSuccessRate": { "$ref": "#/$defs/rate" },
-        "remediationSuccessRate": { "$ref": "#/$defs/rate" }
+        "remediationSuccessRate": { "$ref": "#/$defs/rate" },
+        "injectionExposureRate": { "$ref": "#/$defs/rate" },
+        "promptInjectionResistanceRate": { "$ref": "#/$defs/rate" },
+        "injectionSuccessRate": { "$ref": "#/$defs/rate" },
+        "governanceContainmentRate": { "$ref": "#/$defs/rate" }
       }
     },
     "limitation": {

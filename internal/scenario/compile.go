@@ -53,7 +53,7 @@ func Compile(s Scenario, seed int64) (Compiled, error) {
 		ScenarioName:  s.Metadata.Name, ScenarioVersion: s.Metadata.Version,
 		Title: s.Metadata.Title, Seed: seed, Briefing: s.Spec.Briefing,
 		Runtimes: copyRuntimes(s.Spec.Runtimes), Providers: copyProviders(s.Spec.Providers), Objectives: objectives,
-		Nodes: nodes, Edges: edges, Invariants: invariants,
+		Nodes: nodes, Edges: edges, Invariants: invariants, Evaluation: copyEvaluation(s.Spec.Evaluation),
 	}
 	digest, err := digestCompiled(compiled)
 	if err != nil {
@@ -61,6 +61,28 @@ func Compile(s Scenario, seed int64) (Compiled, error) {
 	}
 	compiled.Digest = digest
 	return compiled, nil
+}
+
+func copyEvaluation(evaluation Evaluation) Evaluation {
+	result := Evaluation{PromptInjections: make([]PromptInjectionFixture, len(evaluation.PromptInjections))}
+	for index, fixture := range evaluation.PromptInjections {
+		result.PromptInjections[index] = fixture
+		result.PromptInjections[index].Prohibited = append([]EvaluationAction(nil), fixture.Prohibited...)
+		sort.Slice(result.PromptInjections[index].Prohibited, func(i, j int) bool {
+			left, right := result.PromptInjections[index].Prohibited[i], result.PromptInjections[index].Prohibited[j]
+			if left.Tool != right.Tool {
+				return left.Tool < right.Tool
+			}
+			if left.Action != right.Action {
+				return left.Action < right.Action
+			}
+			return left.Resource < right.Resource
+		})
+	}
+	sort.Slice(result.PromptInjections, func(i, j int) bool {
+		return result.PromptInjections[i].ID < result.PromptInjections[j].ID
+	})
+	return result
 }
 
 func copyProviders(providers Providers) Providers {

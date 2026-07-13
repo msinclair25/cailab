@@ -115,6 +115,33 @@ func ValidateAgentRun(run AgentRun) error {
 		}
 		validateDigest(&issues, "state.baselineDigest", run.State.BaselineDigest)
 	}
+	if run.Evaluation != nil {
+		if run.State == nil || !run.State.Restore {
+			issues = append(issues, "evaluation requires restored trial state")
+		}
+		if run.Evaluation.Profile != PromptInjectionProfile {
+			issues = append(issues, fmt.Sprintf("evaluation.profile has unsupported value %q", run.Evaluation.Profile))
+		}
+		validateID(&issues, "evaluation.fixtureId", run.Evaluation.FixtureID)
+		validateDigest(&issues, "evaluation.digest", run.Evaluation.Digest)
+		validateEvaluationActionRef(&issues, "evaluation.exposure", run.Evaluation.Exposure)
+		if len(run.Evaluation.Prohibited) == 0 {
+			issues = append(issues, "evaluation.prohibited must contain at least one action")
+		}
+		seen := make(map[string]struct{}, len(run.Evaluation.Prohibited))
+		for index, action := range run.Evaluation.Prohibited {
+			prefix := fmt.Sprintf("evaluation.prohibited[%d]", index)
+			validateEvaluationActionRef(&issues, prefix, action)
+			key := action.Tool + "\x00" + action.Action + "\x00" + action.Resource
+			if _, exists := seen[key]; exists {
+				issues = append(issues, prefix+" is duplicated")
+			}
+			seen[key] = struct{}{}
+			if action == run.Evaluation.Exposure {
+				issues = append(issues, prefix+" must differ from evaluation.exposure")
+			}
+		}
+	}
 	validateVersion(&issues, "policy.version", run.Policy.Version)
 	validateDigest(&issues, "policy.digest", run.Policy.Digest)
 	validateDigest(&issues, "promptHash", run.PromptHash)
@@ -128,6 +155,16 @@ func ValidateAgentRun(run AgentRun) error {
 			issues = append(issues, fmt.Sprintf("tools[%d].name duplicates %q", i, tool.Name))
 		}
 		seenTools[tool.Name] = struct{}{}
+	}
+	if run.Evaluation != nil {
+		if _, exists := seenTools[run.Evaluation.Exposure.Tool]; !exists {
+			issues = append(issues, "evaluation.exposure.tool must reference a run tool")
+		}
+		for index, action := range run.Evaluation.Prohibited {
+			if _, exists := seenTools[action.Tool]; !exists {
+				issues = append(issues, fmt.Sprintf("evaluation.prohibited[%d].tool must reference a run tool", index))
+			}
+		}
 	}
 	if run.Trial.Index < 1 || run.Trial.Count < 1 || run.Trial.Index > run.Trial.Count {
 		issues = append(issues, "trial index and count must satisfy 1 <= index <= count")
@@ -150,6 +187,12 @@ func ValidateAgentRun(run AgentRun) error {
 		}
 	}
 	return validationResult(issues)
+}
+
+func validateEvaluationActionRef(issues *[]string, prefix string, action EvaluationActionRef) {
+	validateID(issues, prefix+".tool", action.Tool)
+	requireSafeText(issues, prefix+".action", action.Action)
+	validateID(issues, prefix+".resource", action.Resource)
 }
 
 func ValidateDecision(decision Decision) error {

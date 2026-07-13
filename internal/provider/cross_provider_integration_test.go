@@ -13,6 +13,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/msinclair25/cailab/internal/scenario"
 )
 
 func TestCrossProviderFederationIntegration(t *testing.T) {
@@ -56,6 +57,10 @@ func TestCrossProviderFederationIntegration(t *testing.T) {
 	}
 	assertPath(t, snapshot, "google:contractor", "aws:acquisition-data", true)
 	assertPath(t, snapshot, "google:security-admin", "aws:acquisition-data", true)
+	baselineDigest, err := scenario.StateDigest(snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
 	oidcEndpoint := integrationEndpoint(t, instances, "oidc")
 	awsEndpoint := integrationEndpoint(t, instances, "aws")
 	microsoftEndpoint := integrationEndpoint(t, instances, "microsoft")
@@ -116,6 +121,21 @@ func TestCrossProviderFederationIntegration(t *testing.T) {
 	}
 	if _, err := AuthorizeAWSWebIdentity(snapshot, adminClaims, flagshipRoleNode); err != nil {
 		t.Fatalf("approved admin authorization after remediation: %v", err)
+	}
+	instances, err = manager.Restore(ctx, runID, instances, compiled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := manager.Snapshot(ctx, instances, compiled)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoredDigest, err := scenario.StateDigest(restored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restoredDigest != baselineDigest {
+		t.Fatalf("restored cross-provider digest = %s, want normalized baseline %s", restoredDigest, baselineDigest)
 	}
 
 	if err := manager.Stop(ctx, runID, instances, compiled); err != nil {

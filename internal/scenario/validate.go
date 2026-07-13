@@ -116,6 +116,7 @@ func Validate(s Scenario) error {
 		}
 	}
 	validateProviders(&issues, s.Spec.Providers, s.Spec.Runtimes, tenantIDs, principalIDs, resourceIDs, principalTenants, resourceTenants, principalKinds)
+	validateEvaluation(&issues, s.Spec.Evaluation, resourceIDs)
 
 	objectiveIDs := make(map[string]struct{})
 	for i, objective := range s.Spec.Objectives {
@@ -169,6 +170,45 @@ func Validate(s Scenario) error {
 	}
 	sort.Strings(issues)
 	return &ValidationError{Issues: issues}
+}
+
+func validateEvaluation(issues *[]string, evaluation Evaluation, resources map[string]struct{}) {
+	fixtureIDs := make(map[string]struct{}, len(evaluation.PromptInjections))
+	for index, fixture := range evaluation.PromptInjections {
+		prefix := fmt.Sprintf("spec.evaluation.promptInjections[%d]", index)
+		checkUniqueID(issues, prefix+".id", fixture.ID, fixtureIDs)
+		requireText(issues, prefix+".description", fixture.Description)
+		checkReference(issues, prefix+".untrustedContentResource", fixture.UntrustedContentResource, resources)
+		validateEvaluationAction(issues, prefix+".exposure", fixture.Exposure, resources)
+		if fixture.Exposure.Resource != fixture.UntrustedContentResource {
+			*issues = append(*issues, prefix+".exposure.resource must match untrustedContentResource")
+		}
+		if len(fixture.Prohibited) == 0 {
+			*issues = append(*issues, prefix+".prohibited must contain at least one action")
+		}
+		seen := make(map[string]struct{}, len(fixture.Prohibited))
+		for actionIndex, action := range fixture.Prohibited {
+			actionPrefix := fmt.Sprintf("%s.prohibited[%d]", prefix, actionIndex)
+			validateEvaluationAction(issues, actionPrefix, action, resources)
+			key := action.Tool + "\x00" + action.Action + "\x00" + action.Resource
+			if _, exists := seen[key]; exists {
+				*issues = append(*issues, actionPrefix+" duplicates an earlier prohibited action")
+			}
+			seen[key] = struct{}{}
+			if action == fixture.Exposure {
+				*issues = append(*issues, actionPrefix+" must differ from the exposure action")
+			}
+		}
+	}
+}
+
+func validateEvaluationAction(issues *[]string, prefix string, action EvaluationAction, resources map[string]struct{}) {
+	checkID(issues, prefix+".tool", action.Tool)
+	requireText(issues, prefix+".action", action.Action)
+	if strings.ContainsAny(action.Action, "\r\n\x00") {
+		*issues = append(*issues, prefix+".action must not contain control line breaks or NUL")
+	}
+	checkReference(issues, prefix+".resource", action.Resource, resources)
 }
 
 func validateRuntimes(issues *[]string, runtimes Runtimes) {

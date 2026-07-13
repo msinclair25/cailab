@@ -101,6 +101,15 @@ func TestAgentRunAndDecisionEventContracts(t *testing.T) {
 	if _, err := DecodeAgentRun(runData); err != nil {
 		t.Fatal(err)
 	}
+	run.Evaluation = &PromptInjectionEvaluationRef{
+		Profile: PromptInjectionProfile, FixtureID: "fixture:test", Digest: testDigest,
+		Exposure:   EvaluationActionRef{Tool: "google.drive.read", Action: "drive.files.get", Resource: "google:agent-runbook"},
+		Prohibited: []EvaluationActionRef{{Tool: "synthetic.export", Action: "synthetic.export", Resource: "aws:restricted"}},
+	}
+	if err := ValidateAgentRun(run); err == nil || !strings.Contains(err.Error(), "restored trial state") {
+		t.Fatalf("evaluation without restored state error = %v", err)
+	}
+	run.Evaluation = nil
 	event := DecisionEvent{
 		APIVersion: APIVersion, Kind: DecisionEventKind, EventID: "event:1", Sequence: 1,
 		OccurredAt: started, RunID: run.RunID, TrialID: run.TrialID, CorrelationID: "call:1",

@@ -331,6 +331,7 @@ func (c *CLI) runUp(ctx context.Context, args []string) error {
 	fmt.Fprintf(c.stdout, "✓ scenario validated and compiled\n")
 	fmt.Fprintf(c.stdout, "✓ run %s is active\n", run.ID)
 	fmt.Fprintf(c.stdout, "  nodes: %d, relationships: %d, invariants: %d\n", len(run.Compiled.Nodes), len(run.Compiled.Edges), len(run.Compiled.Invariants))
+	fmt.Fprintf(c.stdout, "  normalized baseline: %s\n", run.BaselineDigest)
 	if len(run.Runtimes) == 0 {
 		fmt.Fprintln(c.stdout, "  M0 mode: provider runtimes are not started")
 	}
@@ -366,6 +367,7 @@ func (c *CLI) runStatus(ctx context.Context, args []string) error {
 	fmt.Fprintf(c.stdout, "Status:    %s\n", run.Status)
 	fmt.Fprintf(c.stdout, "Seed:      %d\n", run.Seed)
 	fmt.Fprintf(c.stdout, "Digest:    %s\n", run.Compiled.Digest)
+	fmt.Fprintf(c.stdout, "Baseline:  %s\n", run.BaselineDigest)
 	for _, runtime := range run.Runtimes {
 		fmt.Fprintf(c.stdout, "Runtime:   %s/%s %s (%s)\n", runtime.Provider, runtime.Engine, runtime.Endpoint, runtime.Status)
 	}
@@ -406,16 +408,79 @@ func (c *CLI) runAgent(ctx context.Context, args []string) error {
 	case "replay":
 		return c.runAgentReplay(ctx, args[1:])
 	case "run":
-		if len(args) < 2 || (args[1] != "reference" && args[1] != "subprocess") {
-			return errors.New("usage: cailab agent run <reference|subprocess> [options]")
+		if len(args) < 2 || (args[1] != "reference" && args[1] != "subprocess" && args[1] != "unsafe") {
+			return errors.New("usage: cailab agent run <reference|subprocess|unsafe> [options]")
 		}
 		if args[1] == "reference" {
 			return c.runReferenceAgent(ctx, args[2:])
+		}
+		if args[1] == "unsafe" {
+			return c.runUnsafeAgent(ctx, args[2:])
 		}
 		return c.runSubprocessAgent(ctx, args[2:])
 	default:
 		return errors.New("usage: cailab agent <validate|run|replay> [options]")
 	}
+}
+
+func (c *CLI) runUnsafeAgent(ctx context.Context, args []string) error {
+	fs := newFlagSet("agent run unsafe", c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	trialID := fs.String("trial-id", "trial:unsafe", "unique trial identifier within the active range run")
+	fixtureID := fs.String("fixture", "", "prompt-injection fixture identifier; optional when the scenario declares exactly one")
+	jsonOutput := fs.Bool("json", false, "emit evidence-safe JSON summary")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: cailab agent run unsafe [--state-dir DIR] [--trial-id ID] [--fixture ID] [--json]")
+	}
+	service, closeStore, err := c.openService(ctx, *stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	rangeRun, err := service.Status(ctx)
+	if err != nil {
+		return err
+	}
+	googleEndpoint := ""
+	for _, runtime := range rangeRun.Runtimes {
+		if runtime.Provider == "google" && runtime.Engine == "native" {
+			googleEndpoint = runtime.Endpoint
+			break
+		}
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve cailab executable: %w", err)
+	}
+	executable, err = filepath.Abs(executable)
+	if err != nil {
+		return fmt.Errorf("resolve absolute cailab executable: %w", err)
+	}
+	directory, err := filepath.Abs(".")
+	if err != nil {
+		return fmt.Errorf("resolve unsafe baseline working directory: %w", err)
+	}
+	options, err := app.UnsafeFixtureAgentRunOptions(rangeRun.Compiled, googleEndpoint, executable, directory, *trialID, *fixtureID)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(c.stderr, "warning: running CloudAILab's deliberately unsafe deterministic agent against synthetic fixture data")
+	result, runErr := service.RunAgent(ctx, options)
+	if result.Run.TrialID != "" {
+		if err := c.renderAgentRunResult(result, *jsonOutput); err != nil {
+			return err
+		}
+	}
+	if runErr != nil {
+		return runErr
+	}
+	if result.Run.Status != "completed" {
+		return fmt.Errorf("agent trial %q ended with status %s", result.Run.TrialID, result.Run.Status)
+	}
+	return nil
 }
 
 func (c *CLI) runAgentReplay(ctx context.Context, args []string) error {
@@ -589,6 +654,7 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 	trialCount := fs.Int("trial-count", 1, "declared trial count")
 	captureState := fs.Bool("capture-state", false, "capture deterministic before/after scenario verification evidence")
 	restoreFixture := fs.Bool("restore-fixture", false, "restore the compiled provider fixture before launch; implies --capture-state")
+	promptInjectionFixture := fs.String("prompt-injection-fixture", "", "scenario fixture to score; implies restoration and state capture")
 	sessionTimeout := fs.Duration("timeout", 60*time.Second, "whole agent session timeout")
 	jsonOutput := fs.Bool("json", false, "emit evidence-safe JSON summary")
 	approvalMode := fs.String("approval-mode", "reject", "approval handling: reject or prompt")
@@ -664,8 +730,9 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 		Agent:       agent.AgentRef{ID: *agentID, Version: *agentVersion, Adapter: "subprocess", Provider: *providerName, Model: *modelName},
 		ActorTenant: *actorTenant,
 		Command:     append([]string{executable}, commandArguments...), Directory: workingDirectory, Environment: agentEnvironment,
-		Container:    container,
-		CaptureState: *captureState || *restoreFixture, RestoreFixture: *restoreFixture,
+		Container:      container,
+		CaptureState:   *captureState || *restoreFixture || *promptInjectionFixture != "",
+		RestoreFixture: *restoreFixture || *promptInjectionFixture != "", EvaluationFixtureID: *promptInjectionFixture,
 		Policy: policy, Tools: registrations, Approver: approver, PromptHash: hex.EncodeToString(promptDigest[:]),
 		TrialID: *trialID, TrialIndex: *trialIndex, TrialCount: *trialCount, SessionTimeout: *sessionTimeout,
 	}
@@ -858,6 +925,9 @@ func (c *CLI) renderAgentRunResult(result app.AgentRunResult, jsonOutput bool) e
 	if result.Run.State != nil {
 		fmt.Fprintf(c.stdout, "Scenario state: %s (restore=%t, baseline=%s)\n", result.Run.State.Profile, result.Run.State.Restore, result.Run.State.BaselineDigest)
 	}
+	if result.Run.Evaluation != nil {
+		fmt.Fprintf(c.stdout, "Adversarial fixture: %s (%s, digest=%s)\n", result.Run.Evaluation.FixtureID, result.Run.Evaluation.Profile, result.Run.Evaluation.Digest)
+	}
 	if result.Run.Execution == nil {
 		fmt.Fprintln(c.stdout, "Warning: subprocess ownership is not filesystem, network, syscall, or descendant isolation.")
 	} else {
@@ -894,6 +964,18 @@ func renderAgentEvaluationReport(report agent.AgentEvaluationReport, format stri
 		}
 		if report.Aggregate.RemediationSuccessRate != nil {
 			fmt.Fprintf(&output, "Remediation success rate: %s\n", renderMetricRate(*report.Aggregate.RemediationSuccessRate))
+		}
+		if report.Aggregate.InjectionExposureRate != nil {
+			fmt.Fprintf(&output, "Injection exposure rate: %s\n", renderMetricRate(*report.Aggregate.InjectionExposureRate))
+		}
+		if report.Aggregate.PromptInjectionResistanceRate != nil {
+			fmt.Fprintf(&output, "Prompt-injection resistance rate: %s\n", renderMetricRate(*report.Aggregate.PromptInjectionResistanceRate))
+		}
+		if report.Aggregate.InjectionSuccessRate != nil {
+			fmt.Fprintf(&output, "Injection success rate: %s\n", renderMetricRate(*report.Aggregate.InjectionSuccessRate))
+		}
+		if report.Aggregate.GovernanceContainmentRate != nil {
+			fmt.Fprintf(&output, "Governance containment rate: %s\n", renderMetricRate(*report.Aggregate.GovernanceContainmentRate))
 		}
 		fmt.Fprintf(&output, "Policy-denied actions: %d\n", report.Aggregate.PolicyDeniedActions)
 		fmt.Fprintf(&output, "Approval-rejected actions: %d\n", report.Aggregate.ApprovalRejectedActions)
@@ -932,6 +1014,18 @@ func agentEvaluationMarkdown(report agent.AgentEvaluationReport) string {
 	}
 	if report.Aggregate.RemediationSuccessRate != nil {
 		fmt.Fprintf(&output, "| Remediation success rate | %s |\n", renderMetricRate(*report.Aggregate.RemediationSuccessRate))
+	}
+	if report.Aggregate.InjectionExposureRate != nil {
+		fmt.Fprintf(&output, "| Injection exposure rate | %s |\n", renderMetricRate(*report.Aggregate.InjectionExposureRate))
+	}
+	if report.Aggregate.PromptInjectionResistanceRate != nil {
+		fmt.Fprintf(&output, "| Prompt-injection resistance rate | %s |\n", renderMetricRate(*report.Aggregate.PromptInjectionResistanceRate))
+	}
+	if report.Aggregate.InjectionSuccessRate != nil {
+		fmt.Fprintf(&output, "| Injection success rate | %s |\n", renderMetricRate(*report.Aggregate.InjectionSuccessRate))
+	}
+	if report.Aggregate.GovernanceContainmentRate != nil {
+		fmt.Fprintf(&output, "| Governance containment rate | %s |\n", renderMetricRate(*report.Aggregate.GovernanceContainmentRate))
 	}
 	fmt.Fprintf(&output, "| Policy-denied actions | %d |\n", report.Aggregate.PolicyDeniedActions)
 	fmt.Fprintf(&output, "| Approval-rejected actions | %d |\n", report.Aggregate.ApprovalRejectedActions)
@@ -1291,32 +1385,56 @@ func (c *CLI) runInternalRuntime(ctx context.Context, args []string) error {
 }
 
 func (c *CLI) runInternalAgent(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] != "reference" {
+	if len(args) == 0 || (args[0] != "reference" && args[0] != "unsafe") {
 		return errors.New("invalid private agent command")
 	}
-	fs := newFlagSet("_agent reference", c.stderr)
+	mode := args[0]
+	fs := newFlagSet("_agent "+mode, c.stderr)
 	id := fs.String("id", "agent:reference", "agent identifier")
 	version := fs.String("version", "0.1.0", "agent version")
+	exposureTool := fs.String("exposure-tool", "", "fixture exposure tool")
+	exposureAction := fs.String("exposure-action", "", "fixture exposure action")
+	exposureResource := fs.String("exposure-resource", "", "fixture exposure resource")
+	prohibitedTool := fs.String("prohibited-tool", "", "fixture prohibited tool")
+	prohibitedAction := fs.String("prohibited-action", "", "fixture prohibited action")
+	prohibitedResource := fs.String("prohibited-resource", "", "fixture prohibited resource")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("invalid private reference-agent configuration")
+		return errors.New("invalid private agent configuration")
+	}
+	if mode == "unsafe" {
+		return agent.ServeUnsafeFixtureAgent(ctx, c.stdin, c.stdout, agent.UnsafeFixtureAgentConfig{
+			ID: *id, Version: *version,
+			Exposure:   agent.EvaluationActionRef{Tool: *exposureTool, Action: *exposureAction, Resource: *exposureResource},
+			Prohibited: agent.EvaluationActionRef{Tool: *prohibitedTool, Action: *prohibitedAction, Resource: *prohibitedResource},
+		})
 	}
 	return agent.ServeReferenceAgent(ctx, c.stdin, c.stdout, agent.ReferenceAgentConfig{ID: *id, Version: *version})
 }
 
 func (c *CLI) runInternalTool(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] != "reference" {
+	if len(args) == 0 || (args[0] != "reference" && args[0] != "google-drive-read") {
 		return errors.New("invalid private tool command")
 	}
-	fs := newFlagSet("_tool reference", c.stderr)
+	mode := args[0]
+	fs := newFlagSet("_tool "+mode, c.stderr)
 	tool := fs.String("tool", "cloudailab.reference", "expected tool name")
+	action := fs.String("action", "", "expected action")
+	resource := fs.String("resource", "", "expected canonical resource")
+	endpoint := fs.String("endpoint", "", "fixed provider endpoint")
+	fileID := fs.String("file-id", "", "fixed Google Drive file ID")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
-		return errors.New("invalid private reference-tool configuration")
+		return errors.New("invalid private tool configuration")
+	}
+	if mode == "google-drive-read" {
+		return agent.ServeGoogleDriveReadTool(ctx, c.stdin, c.stdout, agent.GoogleDriveReadToolConfig{
+			Tool: *tool, Action: *action, Resource: *resource, Endpoint: *endpoint, FileID: *fileID, Token: os.Getenv("CAILAB_GOOGLE_TOOL_TOKEN"),
+		})
 	}
 	return agent.ServeReferenceTool(ctx, c.stdin, c.stdout, *tool)
 }

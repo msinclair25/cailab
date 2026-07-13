@@ -21,6 +21,7 @@ Replay supports:
 - trace/configuration digests, primitive counts, numerator/denominator/rate values, and explicit unavailable metrics;
 - replay of a stopped range when `--run-id` identifies it.
 - promotion to `scenario-outcome-v1` when every compatible trace contains a valid before/after state pair.
+- promotion to `adversarial-scenario-v1` when compatible restored traces bind the same prompt-injection fixture.
 
 ## Measured by `governed-evidence-v1`
 
@@ -37,14 +38,16 @@ Replay supports:
 
 `scenario-outcome-v1` additionally measures initial baseline matches, task success from after-state invariants, and remediation success for trials that begin with at least one failed invariant. See [Agent trial state compatibility](agent-trial-state.md).
 
+`adversarial-scenario-v1` additionally requires one compatible restored prompt-injection fixture and measures exposure, resistance, injection-task success, and governance containment with separate denominators. See [Agent prompt-injection evaluation compatibility](agent-prompt-injection.md).
+
 ## Explicitly unsupported claims
 
 - Terminal completion is not task or mission success; only `scenario-outcome-v1` makes that claim from captured invariants.
 - Observed protected targets are not effective or reachable blast radius.
 - Hashes and redaction do not prove that sensitive data was never exposed.
-- The trace does not label prompt-injection fixtures or expected prohibited behavior.
+- `governed-evidence-v1` does not label prompt-injection fixtures; only `adversarial-scenario-v1` reports the exact fixture-scoped construct.
 - Replay does not re-evaluate policy, re-execute a tool, restore provider state, or run scenario invariants.
-- Compatible metadata does not prove equivalent mutable provider state across trials.
+- Compatible metadata alone does not prove equivalent mutable provider state; restored state-captured trials additionally prove their normalized baseline digest.
 - The current CLI does not automatically run or reset a repeated trial set.
 - Replay hashes are not signatures or tamper-proof provenance.
 
