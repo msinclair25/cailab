@@ -62,6 +62,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-025 | An agent inherits host credentials, floods diagnostics, violates protocol order, or survives a canceled session. | Absolute direct execution without a shell, explicit non-inherited environment, frame/message/stderr/time limits, direction and lifecycle validation, direct-child cancellation, bounded pipe cleanup, and wait-on-all-started-paths tests. |
 | TM-026 | Rule ordering, permissive manifests, failed audit writes, or stored-record mutation hides or widens an agent action. | Default deny, manifest permission ceiling, fixed deny-first precedence, evidence-before-response, transactional sequence/correlation constraints, canonical event hashes, chain/head verification, and mutation/deletion regression tests. |
 | TM-027 | A malicious schema or tool process triggers external retrieval, inherits host secrets, evades timeout, smuggles protocol output, or returns sensitive data. | Fragment-local schema references, no schema URL loader, explicit argv/cwd/environment, no shell, input validation before launch, bounded timeout/stdout/stderr/cleanup, one correlated response, output redaction, and linked outcome evidence. |
+| TM-028 | A public agent registration forges resource metadata, inherits undeclared credentials, leaks raw arguments in CLI output, or creates evidence outside a recorded trial. | Resolve resource ID through active canonical state; explicit environment-name selection; bounded files; evidence-safe summaries; immutable start/terminal records; decision/outcome events accepted only while the matching trial is active. |
 
 ## Security invariants
 
@@ -99,7 +100,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 
 ## M3 residual risk
 
-- The internal gateway can execute an explicitly configured one-shot tool after allow/redact and persist linked outcomes, but no supported public registration/run workflow exists yet.
+- The supported public reference and custom subprocess workflows validate scenario-bound registrations and persist run, decision, and outcome evidence, but they do not make the subprocesses trustworthy.
 - JSON Lines framing and direct-child ownership provide no authentication, encryption, filesystem isolation, syscall isolation, or network policy.
 - Cancellation targets the direct child. Independently detached descendants may outlive it until an isolation backend owns a process boundary.
 - An agent receives an empty environment by default but still runs with the launching OS user's ambient filesystem and network authority.
@@ -108,6 +109,8 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - A crash after a tool side effect but before outcome commit can leave durable authorization intent without durable outcome evidence; the agent result is withheld in that case.
 - The SQLite hash chain detects inconsistent stored records but is not tamper-proof against the launching OS account, which can rewrite both records and chain metadata.
 - Declared `none`, `loopback`, or filesystem restrictions are requirements, not verified isolation claims, until an execution backend enforces them.
+- Explicitly selected environment variables can contain real provider credentials. CloudAILab does not persist or print their values, but the unisolated receiving process can use or exfiltrate them with the launching user's ambient authority.
+- A controller or host crash after the start record commits can leave a non-terminal trial record. The same trial ID is not reused automatically; explicit recovery remains planned.
 
 ## Review triggers
 

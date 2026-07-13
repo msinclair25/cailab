@@ -52,6 +52,9 @@ func TestGovernedToolCallPersistsEvidenceInActiveRunStore(t *testing.T) {
 		Tools: []agent.ToolRef{{Name: manifest.Metadata.Name, Version: manifest.Metadata.Version, Digest: manifestDigest}},
 		Trial: agent.TrialRef{Index: 1, Count: 1}, Status: "running", StartedAt: time.Date(2026, 7, 12, 22, 0, 0, 0, time.UTC),
 	}
+	if err := store.BeginAgentRun(ctx, agentRun); err != nil {
+		t.Fatal(err)
+	}
 	gateway := &agent.Gateway{
 		Run: agentRun, Actor: agent.ActorRef{ID: agentRun.Agent.ID, Tenant: "tenant:northstar", Type: "agent"}, Policy: policy,
 		Resolver: agent.ToolCallResolverFunc(func(context.Context, agent.Message, agent.ToolCallPayload) (agent.ToolCallResolution, error) {
@@ -64,7 +67,7 @@ func TestGovernedToolCallPersistsEvidenceInActiveRunStore(t *testing.T) {
 	}
 	arguments := json.RawMessage(`{"fileId":"google:agent-runbook","token":"synthetic-secret"}`)
 	call := integrationMessage(t, "call:1", manifest.Metadata.Name, arguments)
-	response, err := gateway.HandleToolCall(ctx, call, agent.ToolCallPayload{Tool: manifest.Metadata.Name, Arguments: arguments})
+	response, err := gateway.HandleToolCall(ctx, call, agent.ToolCallPayload{Tool: manifest.Metadata.Name, Action: "drive.files.get", Resource: "google:agent-runbook", Arguments: arguments})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +99,7 @@ func TestGovernedToolCallPersistsEvidenceInActiveRunStore(t *testing.T) {
 
 type integrationExecutor struct{}
 
-func (integrationExecutor) Execute(context.Context, agent.ToolManifest, string, json.RawMessage) (agent.ToolExecutionResult, error) {
+func (integrationExecutor) Execute(context.Context, agent.ToolManifest, agent.ToolExecutionRequest) (agent.ToolExecutionResult, error) {
 	return agent.ToolExecutionResult{Status: "succeeded", Content: json.RawMessage(`{"ok":true}`)}, nil
 }
 
@@ -116,7 +119,7 @@ func integrationToolManifest() agent.ToolManifest {
 
 func integrationMessage(t *testing.T, id, tool string, arguments json.RawMessage) agent.Message {
 	t.Helper()
-	payload, err := json.Marshal(agent.ToolCallPayload{Tool: tool, Arguments: arguments})
+	payload, err := json.Marshal(agent.ToolCallPayload{Tool: tool, Action: "drive.files.get", Resource: "google:agent-runbook", Arguments: arguments})
 	if err != nil {
 		t.Fatal(err)
 	}

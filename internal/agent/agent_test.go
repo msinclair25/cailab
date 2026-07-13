@@ -124,6 +124,19 @@ func TestAgentRunAndDecisionEventContracts(t *testing.T) {
 	}
 }
 
+func TestProtocolVersionOnePointZeroIsRejectedAfterTargetBindingUpgrade(t *testing.T) {
+	payload, err := json.Marshal(ToolCallPayload{
+		Tool: "google.drive.read", Action: "drive.files.get", Resource: "google:file", Arguments: json.RawMessage(`{"fileId":"google:file"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := Message{ProtocolVersion: "1.0", ID: "call:legacy", Type: MessageToolCall, Payload: payload}
+	if err := ValidateMessage(message); err == nil || !strings.Contains(err.Error(), "protocolVersion") {
+		t.Fatalf("legacy protocol error = %v", err)
+	}
+}
+
 func TestDecisionEffectsAreStructurallyDistinct(t *testing.T) {
 	tests := []Decision{
 		{Effect: "allow", ReasonCode: "policy:allow", PolicyVersion: "0.1.0"},
@@ -147,7 +160,7 @@ func TestJSONLinesCodecAndCorrelation(t *testing.T) {
 		RunID: "run:flagship", TrialID: "trial:1", ScenarioDigest: testDigest, PolicyVersion: "0.1.0",
 		Tools: []ToolRef{{Name: "google.drive.read", Version: "0.1.0", Digest: testDigest}},
 	})
-	call := message(t, MessageToolCall, "call:1", "", ToolCallPayload{Tool: "google.drive.read", Arguments: json.RawMessage(`{"fileId":"drive_file_agent_runbook"}`)})
+	call := message(t, MessageToolCall, "call:1", "", ToolCallPayload{Tool: "google.drive.read", Action: "drive.files.get", Resource: "google:agent-runbook", Arguments: json.RawMessage(`{"fileId":"drive_file_agent_runbook"}`)})
 	var stream bytes.Buffer
 	encoder := NewEncoder(&stream)
 	if err := encoder.Write(start); err != nil {

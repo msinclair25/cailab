@@ -36,8 +36,8 @@ type ToolEvidenceAppender interface {
 	AppendToolOutcomeEvent(context.Context, ToolOutcomeEventDraft) (ToolOutcomeEvent, error)
 }
 
-// Gateway evaluates and records tool calls but intentionally does not execute
-// them. It implements ToolCallHandler for direct Session controller use.
+// Gateway evaluates, records, and conditionally executes tool calls. It
+// implements ToolCallHandler for direct Session controller use.
 type Gateway struct {
 	Run      AgentRun
 	Actor    ActorRef
@@ -101,7 +101,14 @@ func (g *Gateway) HandleToolCall(ctx context.Context, call Message, payload Tool
 			Tool: payload.Tool, Status: "not_executed", Decision: evaluation.Decision,
 		}), nil
 	}
-	result, executionErr := g.Executor.Execute(ctx, resolution.Manifest, call.ID, evaluation.Arguments)
+	result, executionErr := g.Executor.Execute(ctx, resolution.Manifest, ToolExecutionRequest{
+		ProtocolVersion: ProtocolVersion,
+		CallID:          call.ID,
+		Tool:            payload.Tool,
+		Action:          resolution.Action,
+		Resource:        resolution.Resource,
+		Arguments:       evaluation.Arguments,
+	})
 	outcome := Outcome{Status: "failed"}
 	var content json.RawMessage
 	var outputHash string

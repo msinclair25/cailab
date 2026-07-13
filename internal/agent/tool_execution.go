@@ -45,7 +45,7 @@ func (e *ToolExecutionError) Error() string {
 func (e *ToolExecutionError) Unwrap() error { return e.Err }
 
 type ToolExecutor interface {
-	Execute(context.Context, ToolManifest, string, json.RawMessage) (ToolExecutionResult, error)
+	Execute(context.Context, ToolManifest, ToolExecutionRequest) (ToolExecutionResult, error)
 }
 
 type SubprocessToolExecutor struct {
@@ -55,26 +55,18 @@ type SubprocessToolExecutor struct {
 	MaxStderrBytes int
 }
 
-func (e SubprocessToolExecutor) Execute(ctx context.Context, manifest ToolManifest, callID string, arguments json.RawMessage) (ToolExecutionResult, error) {
+func (e SubprocessToolExecutor) Execute(ctx context.Context, manifest ToolManifest, request ToolExecutionRequest) (ToolExecutionResult, error) {
 	if err := ValidateToolManifest(manifest); err != nil {
 		return ToolExecutionResult{}, executionError("executor:invalid_manifest", err, nil)
 	}
-	if err := ValidateToolInput(manifest.Spec.InputSchema, arguments); err != nil {
+	if request.Tool != manifest.Metadata.Name {
+		return ToolExecutionResult{}, executionError("executor:invalid_request", fmt.Errorf("request tool %q does not match manifest %q", request.Tool, manifest.Metadata.Name), nil)
+	}
+	if err := ValidateToolInput(manifest.Spec.InputSchema, request.Arguments); err != nil {
 		return ToolExecutionResult{}, executionError("executor:invalid_input", err, nil)
 	}
-	if !filepath.IsAbs(manifest.Spec.Transport.Command[0]) {
-		return ToolExecutionResult{}, executionError("executor:invalid_command", errors.New("tool executable must be an absolute path"), nil)
-	}
-	if !filepath.IsAbs(e.Directory) {
-		return ToolExecutionResult{}, executionError("executor:invalid_directory", errors.New("tool working directory must be an absolute path"), nil)
-	}
-	for i, value := range manifest.Spec.Transport.Command {
-		if value == "" || strings.ContainsRune(value, 0) || strings.ContainsAny(value, "\r\n") {
-			return ToolExecutionResult{}, executionError("executor:invalid_command", fmt.Errorf("command[%d] is unsafe", i), nil)
-		}
-	}
-	if err := validateExplicitEnvironment(e.Environment); err != nil {
-		return ToolExecutionResult{}, executionError("executor:invalid_environment", err, nil)
+	if err := validateToolLaunch(manifest, e.Directory, e.Environment); err != nil {
+		return ToolExecutionResult{}, executionError("executor:invalid_runtime", err, nil)
 	}
 	cleanupTimeout := e.CleanupTimeout
 	if cleanupTimeout == 0 {
@@ -91,7 +83,6 @@ func (e SubprocessToolExecutor) Execute(ctx context.Context, manifest ToolManife
 		return ToolExecutionResult{}, executionError("executor:invalid_stderr_limit", fmt.Errorf("stderr limit must be between 1 and %d", MaxFrameBytes), nil)
 	}
 
-	request := ToolExecutionRequest{ProtocolVersion: ProtocolVersion, CallID: callID, Tool: manifest.Metadata.Name, Arguments: arguments}
 	if err := ValidateToolExecutionRequest(request); err != nil {
 		return ToolExecutionResult{}, executionError("executor:invalid_request", err, nil)
 	}
@@ -131,8 +122,8 @@ func (e SubprocessToolExecutor) Execute(ctx context.Context, manifest ToolManife
 	if err != nil {
 		return ToolExecutionResult{}, executionError("executor:invalid_response", fmt.Errorf("%w: %v", ErrToolExecution, err), diagnostics)
 	}
-	if response.CallID != callID {
-		return ToolExecutionResult{}, executionError("executor:correlation_mismatch", fmt.Errorf("%w: response callId %q does not match %q", ErrToolExecution, response.CallID, callID), diagnostics)
+	if response.CallID != request.CallID {
+		return ToolExecutionResult{}, executionError("executor:correlation_mismatch", fmt.Errorf("%w: response callId %q does not match %q", ErrToolExecution, response.CallID, request.CallID), diagnostics)
 	}
 	return ToolExecutionResult{
 		Status: response.Status, Content: response.Content, ErrorCode: response.ErrorCode,
@@ -140,11 +131,44 @@ func (e SubprocessToolExecutor) Execute(ctx context.Context, manifest ToolManife
 	}, nil
 }
 
+// ValidateToolRuntime validates the host launch configuration associated with a
+// registered manifest without starting its subprocess.
+func ValidateToolRuntime(manifest ToolManifest, directory string, environment []string) error {
+	if err := ValidateToolManifest(manifest); err != nil {
+		return err
+	}
+	return validateToolLaunch(manifest, directory, environment)
+}
+
+func validateToolLaunch(manifest ToolManifest, directory string, environment []string) error {
+	if !filepath.IsAbs(manifest.Spec.Transport.Command[0]) {
+		return errors.New("tool executable must be an absolute path")
+	}
+	if !filepath.IsAbs(directory) {
+		return errors.New("tool working directory must be an absolute path")
+	}
+	for i, value := range manifest.Spec.Transport.Command {
+		if value == "" || strings.ContainsRune(value, 0) || strings.ContainsAny(value, "\r\n") {
+			return fmt.Errorf("tool command[%d] is unsafe", i)
+		}
+	}
+	if err := validateExplicitEnvironment(environment); err != nil {
+		return fmt.Errorf("tool environment: %w", err)
+	}
+	return nil
+}
+
 func ValidateToolExecutionRequest(request ToolExecutionRequest) error {
 	var issues []string
 	requireEqual(&issues, "protocolVersion", request.ProtocolVersion, ProtocolVersion)
 	validateID(&issues, "callId", request.CallID)
 	validateID(&issues, "tool", request.Tool)
+	requireText(&issues, "action", request.Action)
+	validateID(&issues, "resource.id", request.Resource.ID)
+	validateID(&issues, "resource.tenant", request.Resource.Tenant)
+	if !contains([]string{"public", "internal", "confidential", "restricted"}, request.Resource.Classification) {
+		issues = append(issues, fmt.Sprintf("resource.classification has unsupported value %q", request.Resource.Classification))
+	}
 	validateJSONObject(&issues, "arguments", request.Arguments)
 	return validationResult(issues)
 }

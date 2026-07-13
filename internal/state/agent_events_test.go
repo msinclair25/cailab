@@ -124,6 +124,17 @@ func TestDecisionEventStoreRejectsInvalidDraft(t *testing.T) {
 
 func eventTestStore(t *testing.T, ctx context.Context, path string) (*Store, string) {
 	t.Helper()
+	store, runID := eventTestStoreWithoutAgent(t, ctx, path)
+	agentRun := stateTestAgentRun(runID)
+	if err := store.BeginAgentRun(ctx, agentRun); err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	return store, runID
+}
+
+func eventTestStoreWithoutAgent(t *testing.T, ctx context.Context, path string) (*Store, string) {
+	t.Helper()
 	store, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)

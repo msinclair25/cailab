@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": ["protocolVersion", "id", "type", "payload"],
   "properties": {
-    "protocolVersion": { "const": "1.0" },
+    "protocolVersion": { "const": "1.1" },
     "id": { "$ref": "#/$defs/id" },
     "type": { "enum": ["session.start", "agent.ready", "tool.call", "tool.result", "approval.required", "approval.resolved", "session.complete", "protocol.error"] },
     "correlationId": { "$ref": "#/$defs/id" },
@@ -77,9 +77,11 @@
     "toolCall": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["tool", "arguments"],
+      "required": ["tool", "action", "resource", "arguments"],
       "properties": {
         "tool": { "$ref": "#/$defs/id" },
+        "action": { "type": "string", "minLength": 1 },
+        "resource": { "$ref": "#/$defs/id" },
         "arguments": { "type": "object" }
       }
     },

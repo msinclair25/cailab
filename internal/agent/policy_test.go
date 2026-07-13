@@ -193,7 +193,7 @@ func TestGatewayPersistsBeforeReturningNonExecutingResult(t *testing.T) {
 	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:allow", "allow")})
 	store := &memoryEventAppender{}
 	gateway := testGateway(policy, request, store)
-	call := testMessage(MessageToolCall, "call:gateway", "", ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments})
+	call := testMessage(MessageToolCall, "call:gateway", "", gatewayToolCall(request, request.Arguments))
 	var payload ToolCallPayload
 	if err := json.Unmarshal(call.Payload, &payload); err != nil {
 		t.Fatal(err)
@@ -225,7 +225,7 @@ func TestGatewayReturnsApprovalOnlyAfterEvidenceCommit(t *testing.T) {
 	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:approval", "require_approval")})
 	store := &memoryEventAppender{}
 	gateway := testGateway(policy, request, store)
-	call := testMessage(MessageToolCall, "call:approval", "", ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments})
+	call := testMessage(MessageToolCall, "call:approval", "", gatewayToolCall(request, request.Arguments))
 	var payload ToolCallPayload
 	_ = json.Unmarshal(call.Payload, &payload)
 	response, err := gateway.HandleToolCall(context.Background(), call, payload)
@@ -250,7 +250,7 @@ func TestGatewayRedactsDeclaredSensitiveOutputBeforeResponseAndHash(t *testing.T
 	gateway.Executor = fakeToolExecutor{result: ToolExecutionResult{
 		Status: "succeeded", Content: json.RawMessage(`{"ok":true,"token":"raw-secret"}`),
 	}}
-	call := testMessage(MessageToolCall, "call:output", "", ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments})
+	call := testMessage(MessageToolCall, "call:output", "", gatewayToolCall(request, request.Arguments))
 	var payload ToolCallPayload
 	_ = json.Unmarshal(call.Payload, &payload)
 	response, err := gateway.HandleToolCall(context.Background(), call, payload)
@@ -273,7 +273,7 @@ func TestGatewayFailsClosedWhenEvidenceCannotCommit(t *testing.T) {
 	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:allow", "allow")})
 	store := &memoryEventAppender{err: errors.New("disk unavailable")}
 	gateway := testGateway(policy, request, store)
-	call := testMessage(MessageToolCall, "call:failure", "", ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments})
+	call := testMessage(MessageToolCall, "call:failure", "", gatewayToolCall(request, request.Arguments))
 	var payload ToolCallPayload
 	_ = json.Unmarshal(call.Payload, &payload)
 	if _, err := gateway.HandleToolCall(context.Background(), call, payload); err == nil || !strings.Contains(err.Error(), "persist decision evidence") {
@@ -287,8 +287,8 @@ func TestGatewayDoesNotExecuteInvalidInput(t *testing.T) {
 	gateway := testGateway(policy, request, store)
 	gateway.Executor = panicToolExecutor{}
 	invalid := json.RawMessage(`{"fileId":"google:agent-runbook","unexpected":true}`)
-	call := testMessage(MessageToolCall, "call:invalid", "", ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: invalid})
-	response, err := gateway.HandleToolCall(context.Background(), call, ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: invalid})
+	call := testMessage(MessageToolCall, "call:invalid", "", gatewayToolCall(request, invalid))
+	response, err := gateway.HandleToolCall(context.Background(), call, gatewayToolCall(request, invalid))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,8 +306,8 @@ func TestGatewayRecordsExecutorFailureAsOutcome(t *testing.T) {
 	store := &memoryEventAppender{}
 	gateway := testGateway(policy, request, store)
 	gateway.Executor = fakeToolExecutor{err: &ToolExecutionError{Code: "executor:timeout", Err: context.DeadlineExceeded}}
-	call := testMessage(MessageToolCall, "call:timeout", "", ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments})
-	response, err := gateway.HandleToolCall(context.Background(), call, ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments})
+	call := testMessage(MessageToolCall, "call:timeout", "", gatewayToolCall(request, request.Arguments))
+	response, err := gateway.HandleToolCall(context.Background(), call, gatewayToolCall(request, request.Arguments))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,8 +324,8 @@ func TestGatewayWithholdsResultWhenOutcomeCannotCommit(t *testing.T) {
 	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:allow", "allow")})
 	store := &memoryEventAppender{outcomeErr: errors.New("disk full")}
 	gateway := testGateway(policy, request, store)
-	call := testMessage(MessageToolCall, "call:outcome-failure", "", ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments})
-	if _, err := gateway.HandleToolCall(context.Background(), call, ToolCallPayload{Tool: request.Manifest.Metadata.Name, Arguments: request.Arguments}); err == nil || !strings.Contains(err.Error(), "persist tool outcome") {
+	call := testMessage(MessageToolCall, "call:outcome-failure", "", gatewayToolCall(request, request.Arguments))
+	if _, err := gateway.HandleToolCall(context.Background(), call, gatewayToolCall(request, request.Arguments)); err == nil || !strings.Contains(err.Error(), "persist tool outcome") {
 		t.Fatalf("error = %v", err)
 	}
 	if len(store.events) != 1 || len(store.outcomes) != 0 {
@@ -415,7 +415,7 @@ func (s *memoryEventAppender) AppendToolOutcomeEvent(_ context.Context, draft To
 
 type panicToolExecutor struct{}
 
-func (panicToolExecutor) Execute(context.Context, ToolManifest, string, json.RawMessage) (ToolExecutionResult, error) {
+func (panicToolExecutor) Execute(context.Context, ToolManifest, ToolExecutionRequest) (ToolExecutionResult, error) {
 	panic("executor must not be called")
 }
 
@@ -424,7 +424,7 @@ type fakeToolExecutor struct {
 	err    error
 }
 
-func (e fakeToolExecutor) Execute(context.Context, ToolManifest, string, json.RawMessage) (ToolExecutionResult, error) {
+func (e fakeToolExecutor) Execute(context.Context, ToolManifest, ToolExecutionRequest) (ToolExecutionResult, error) {
 	if e.err != nil {
 		return ToolExecutionResult{}, e.err
 	}
@@ -442,6 +442,10 @@ func testGateway(policy GovernancePolicy, request AuthorizationRequest, store To
 		}),
 		Executor: fakeToolExecutor{}, Events: store, Clock: func() time.Time { return time.Date(2026, 7, 12, 22, 0, 0, 0, time.UTC) },
 	}
+}
+
+func gatewayToolCall(request AuthorizationRequest, arguments json.RawMessage) ToolCallPayload {
+	return ToolCallPayload{Tool: request.Manifest.Metadata.Name, Action: request.Action, Resource: request.Resource.ID, Arguments: arguments}
 }
 
 func policyRequest(t *testing.T, rules []PolicyRule) (GovernancePolicy, AuthorizationRequest) {

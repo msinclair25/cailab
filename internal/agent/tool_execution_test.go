@@ -17,7 +17,7 @@ const toolHelperMode = "CAILAB_TEST_TOOL_MODE"
 func TestSubprocessToolExecutorRunsReferenceTool(t *testing.T) {
 	t.Setenv("CAILAB_PARENT_TOOL_SECRET", "must-not-reach-child")
 	manifest, executor := toolExecutionFixture(t, "success")
-	result, err := executor.Execute(context.Background(), manifest, "call:1", json.RawMessage(`{"fileId":"google:file"}`))
+	result, err := executor.Execute(context.Background(), manifest, toolExecutionRequest(json.RawMessage(`{"fileId":"google:file"}`)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestSubprocessToolExecutorRunsReferenceTool(t *testing.T) {
 
 func TestSubprocessToolExecutorReturnsDeclaredFailure(t *testing.T) {
 	manifest, executor := toolExecutionFixture(t, "failed")
-	result, err := executor.Execute(context.Background(), manifest, "call:1", json.RawMessage(`{"fileId":"google:file"}`))
+	result, err := executor.Execute(context.Background(), manifest, toolExecutionRequest(json.RawMessage(`{"fileId":"google:file"}`)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,17 +40,38 @@ func TestSubprocessToolExecutorReturnsDeclaredFailure(t *testing.T) {
 func TestSubprocessToolExecutorRejectsInvalidInputBeforeLaunch(t *testing.T) {
 	manifest, executor := toolExecutionFixture(t, "success")
 	manifest.Spec.Transport.Command[0] = "/path/that/does/not/exist"
-	_, err := executor.Execute(context.Background(), manifest, "call:1", json.RawMessage(`{"unexpected":true}`))
+	_, err := executor.Execute(context.Background(), manifest, toolExecutionRequest(json.RawMessage(`{"unexpected":true}`)))
 	var execution *ToolExecutionError
 	if !errors.As(err, &execution) || execution.Code != "executor:invalid_input" || !errors.Is(err, ErrToolInput) {
 		t.Fatalf("error = %v", err)
 	}
 }
 
+func TestSubprocessToolExecutorPreservesPreLaunchFailureCodes(t *testing.T) {
+	t.Run("manifest", func(t *testing.T) {
+		manifest, executor := toolExecutionFixture(t, "success")
+		manifest.APIVersion = "invalid"
+		_, err := executor.Execute(context.Background(), manifest, toolExecutionRequest(json.RawMessage(`{"fileId":"google:file"}`)))
+		var execution *ToolExecutionError
+		if !errors.As(err, &execution) || execution.Code != "executor:invalid_manifest" {
+			t.Fatalf("error = %v", err)
+		}
+	})
+	t.Run("runtime", func(t *testing.T) {
+		manifest, executor := toolExecutionFixture(t, "success")
+		manifest.Spec.Transport.Command[0] = "relative-tool"
+		_, err := executor.Execute(context.Background(), manifest, toolExecutionRequest(json.RawMessage(`{"fileId":"google:file"}`)))
+		var execution *ToolExecutionError
+		if !errors.As(err, &execution) || execution.Code != "executor:invalid_runtime" {
+			t.Fatalf("error = %v", err)
+		}
+	})
+}
+
 func TestSubprocessToolExecutorBoundsDiagnostics(t *testing.T) {
 	manifest, executor := toolExecutionFixture(t, "stderr")
 	executor.MaxStderrBytes = 32
-	result, err := executor.Execute(context.Background(), manifest, "call:1", json.RawMessage(`{"fileId":"google:file"}`))
+	result, err := executor.Execute(context.Background(), manifest, toolExecutionRequest(json.RawMessage(`{"fileId":"google:file"}`)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +96,7 @@ func TestSubprocessToolExecutorRejectsProtocolAndLifecycleFailures(t *testing.T)
 			if mode == "timeout" {
 				manifest.Spec.TimeoutMillis = 100
 			}
-			_, err := executor.Execute(context.Background(), manifest, "call:1", json.RawMessage(`{"fileId":"google:file"}`))
+			_, err := executor.Execute(context.Background(), manifest, toolExecutionRequest(json.RawMessage(`{"fileId":"google:file"}`)))
 			var execution *ToolExecutionError
 			if !errors.As(err, &execution) || execution.Code != "executor:"+codeSuffix {
 				t.Fatalf("error = %v", err)
@@ -222,5 +243,12 @@ func toolExecutionFixture(t *testing.T, mode string) (ToolManifest, SubprocessTo
 	return manifest, SubprocessToolExecutor{
 		Directory: directory, Environment: []string{toolHelperMode + "=" + mode, "CAILAB_EXPECTED_TOOL_DIRECTORY=" + directory},
 		CleanupTimeout: 250 * time.Millisecond, MaxStderrBytes: 1 << 10,
+	}
+}
+
+func toolExecutionRequest(arguments json.RawMessage) ToolExecutionRequest {
+	return ToolExecutionRequest{
+		ProtocolVersion: ProtocolVersion, CallID: "call:1", Tool: "google.drive.read", Action: "drive.files.get",
+		Resource: ResourceRef{ID: "google:file", Tenant: "tenant:northstar", Classification: "restricted"}, Arguments: arguments,
 	}
 }

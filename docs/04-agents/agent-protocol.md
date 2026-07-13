@@ -8,7 +8,7 @@ last_reviewed: 2026-07-12
 
 ## Current scope
 
-CloudAILab now defines typed and schema-backed contracts for M3 agent runs, tool registration, governance policy, agent messages, tool execution, decisions, redaction, decision events, and tool outcomes. The internal harness owns agent and one-shot tool subprocesses, applies exact-match policy and manifest ceilings, validates Draft 2020-12 input offline, protects successful output, and commits linked decision/outcome evidence. Supported public registration/run commands, enforced isolation, full trace replay, interactive approval resolution, and aggregate metrics remain later M3 work.
+CloudAILab defines typed and schema-backed contracts for M3 agent runs, tool registration, governance policy, agent messages, tool execution, decisions, redaction, decision events, and tool outcomes. The supported CLI validates scenario-bound registrations and runs either the deterministic reference agent or a protocol-compatible custom subprocess. The harness applies exact-match policy and manifest ceilings, validates Draft 2020-12 input offline, protects successful output, and commits immutable run plus linked decision/outcome evidence. Enforced isolation, full trace replay, interactive approval resolution, and aggregate metrics remain later M3 work.
 
 The normative schemas are:
 
@@ -20,7 +20,7 @@ The normative schemas are:
 - [Tool execution message](../../schemas/agent/v1alpha1/tool-execution-message.json)
 - [Tool outcome event](../../schemas/agent/v1alpha1/tool-outcome-event.json)
 
-The executable validation, policy, gateway, and session contracts are in [`internal/agent`](../../internal/agent). [ADR-0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) defines the wire contract; [ADR-0012](../02-architecture/decisions/0012-owned-agent-subprocess-sessions.md) defines the owned-process lifecycle; [ADR-0013](../02-architecture/decisions/0013-deterministic-tool-policy-and-evidence.md) defines policy and evidence semantics.
+The executable validation, policy, gateway, and session contracts are in [`internal/agent`](../../internal/agent). [ADR-0011](../02-architecture/decisions/0011-versioned-agent-json-lines-protocol.md) defines the original wire contract; [ADR-0012](../02-architecture/decisions/0012-owned-agent-subprocess-sessions.md) defines the owned-process lifecycle; [ADR-0013](../02-architecture/decisions/0013-deterministic-tool-policy-and-evidence.md) defines policy/evidence semantics; and [ADR-0015](../02-architecture/decisions/0015-scenario-bound-public-agent-runs.md) defines protocol 1.1 and the public workflow.
 
 ## Framing
 
@@ -34,13 +34,15 @@ The executable validation, policy, gateway, and session contracts are in [`inter
 
 JSON Lines defines each line as a valid JSON value and recommends a line terminator after the final value. CloudAILab narrows that format to one object per line so every frame has a version, identifier, type, and payload.
 
+The current wire version is `1.1`. The internal-only `1.0` draft did not carry action/resource targets and is not accepted by this workflow.
+
 ## Message flow
 
 | Message | Sender | Purpose |
 |---|---|---|
 | `session.start` | Controller | Binds run, trial, scenario digest, policy version, and allowed tool versions. |
 | `agent.ready` | Agent | Confirms the expected agent identity and version. |
-| `tool.call` | Agent | Requests one declared tool with JSON-object arguments. |
+| `tool.call` | Agent | Requests one declared tool, action, canonical resource ID, and JSON-object arguments. |
 | `tool.result` | Controller | Returns the deterministic decision, execution status, and optional content. |
 | `approval.required` | Controller | States that the correlated call was not executed and needs a decision. |
 | `approval.resolved` | Controller | Records the approval identity and outcome. It is not itself a tool result. |
@@ -53,7 +55,7 @@ JSON Lines defines each line as a valid JSON value and recommends a line termina
 
 The internal controller requires an absolute executable path, an absolute working directory, and an explicit complete environment. It never invokes a shell and does not inherit the controller's environment by default. It sends `session.start`, requires a matching `agent.ready` before tool activity, bounds handshake and whole-session time, caps both frame count and retained transcript bytes, continuously drains bounded standard error, and waits for every direct child it starts. Captured standard error remains an explicit untrusted field and is not automatically copied into formatted errors.
 
-The deterministic reference agent emits `agent.ready` followed by `session.complete` and makes no tool calls. Package tests use it as a reproducible protocol and cleanup baseline. There is not yet a supported public `cailab agent run` workflow.
+The deterministic reference agent emits `agent.ready` followed by `session.complete` and makes no tool calls. `cailab agent run reference` exposes it as the reproducible public harness baseline. `cailab agent run subprocess` launches a user-selected implementation with explicit argv, directory, selected environment, identity, model labels, prompt hash, and trial metadata.
 
 ## Tool manifest
 
@@ -69,7 +71,7 @@ Each explicitly registered tool declares:
 - expected filesystem authority: `none`, `read_only`, `workspace_write`, or `host`;
 - sensitive successful-output fields as non-root RFC 6901 JSON Pointers.
 
-A valid manifest is inert data. Registration and later execution require explicit user action; scenario files cannot cause these command vectors to run.
+A valid manifest is inert data. `cailab agent validate` and `cailab agent run subprocess` explicitly select it; scenario files cannot cause these command vectors to run. The public workflow uses the manifest file's directory as the tool working directory and forwards only variables selected with `--tool-env`.
 
 ## Decision semantics
 
@@ -82,21 +84,21 @@ A valid manifest is inert data. Registration and later execution require explici
 
 Every decision carries a stable reason code and policy version. `redact` requires pointers; `require_approval` requires an approval ID; `allow` and `deny` cannot carry either. Denied and approval-pending events must record `not_executed`.
 
-Governance policies default only to deny and match exact agent, tool, action, resource, tenant, and classification values. A manifest permission is a mandatory ceiling: policy cannot add undeclared authority. Multiple matching rules are independent of document order and use fixed precedence: `deny`, then `require_approval`, then `redact`, then `allow`. Redaction pointers are merged and sorted; a missing pointer becomes a stable deny.
+Governance policies default only to deny and match exact agent, tool, action, resource, tenant, and classification values. A protocol 1.1 agent declares the action and canonical resource ID; the controller resolves tenant/classification from active canonical scenario state. A manifest permission is a mandatory ceiling: policy cannot add undeclared authority. Multiple matching rules are independent of document order and use fixed precedence: `deny`, then `require_approval`, then `redact`, then `allow`. Redaction pointers are merged and sorted; a missing pointer becomes a stable deny.
 
 Policy redaction pointers apply to input arguments before execution. Input instances must satisfy the manifest's closed Draft 2020-12 schema; `$ref` and `$dynamicRef` are fragment-local and schema compilation has no external loader. Only allow and redact launch a tool. Deny and approval-required remain `not_executed`.
 
 ## Tool execution
 
-The one-shot subprocess receives exactly one `ToolExecutionRequest` JSON line and returns exactly one correlated `ToolExecutionResponse` line. The executor requires an absolute command and working directory, a complete explicit environment, the manifest timeout, bounded output and diagnostics, and no shell. A response is either `succeeded` with JSON content or `failed` with a stable error code; the correlated agent-facing `tool.result` preserves that failure code.
+The one-shot subprocess receives exactly one `ToolExecutionRequest` JSON line containing the resolved action/resource plus protected arguments and returns exactly one correlated `ToolExecutionResponse` line. The executor requires an absolute command and working directory, a complete explicit environment, the manifest timeout, bounded output and diagnostics, and no shell. A response is either `succeeded` with JSON content or `failed` with a stable error code; the correlated agent-facing `tool.result` preserves that failure code.
 
 Successful content is canonicalized and applies every manifest `sensitiveFields` pointer before it can be returned or hashed. Missing output pointers fail the call closed. Tool subprocess ownership is lifecycle management, not isolation.
 
 ## Reproducibility and evidence
 
-An agent run records the exact scenario digest and seed, agent/provider/model version, policy digest, prompt hash, tool digests, trial index/count, status, and UTC timestamps. A decision event adds a monotonic sequence, correlation ID, actor and tenant, tool, action, resource classification, decision, outcome, and canonical input/output hashes.
+An agent run records the exact scenario digest and seed, agent/provider/model version, policy digest, prompt hash, tool digests, trial index/count, status, and UTC timestamps. The store writes an immutable running record before launch and appends exactly one terminal record without changing configuration. A decision event adds a monotonic sequence, correlation ID, actor and tenant, tool, action, resource classification, decision, outcome, and canonical input/output hashes; decisions are accepted only while that trial is active.
 
-Sequence is authoritative for decision order. Wall-clock time is diagnostic context and does not determine policy or score. The gateway hashes canonical original arguments and does not persist them. It commits the immutable decision with `not_executed` before an allowed/redacted launch, then appends a separate `ToolOutcomeEvent` linked to that decision and stored record hash. Successful outcomes hash the exact protected content returned to the agent; failed outcomes carry a stable error code. Reads validate schema and hashes. This detects accidental inconsistency but is not protection from a local user who can rewrite the database. Full transcript persistence and replay remain planned.
+Sequence is authoritative for decision order. Wall-clock time is diagnostic context and does not determine policy or score. The gateway hashes canonical original arguments and does not persist them. It commits the immutable decision with `not_executed` before an allowed/redacted launch, then appends a separate `ToolOutcomeEvent` linked to that decision and stored record hash. Successful outcomes hash the exact protected content returned to the agent; failed outcomes carry a stable error code. Reads validate schema and hashes. Human and `--json` summaries omit raw arguments, transcripts, and child diagnostic text. This detects accidental inconsistency but is not protection from a local user who can rewrite the database. Full transcript persistence and replay remain planned.
 
 ## Security boundary
 

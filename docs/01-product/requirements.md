@@ -35,6 +35,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | FR-022 | The system should support replaying a captured agent trace against compatible verification rules. | Should |
 | FR-023 | The system shall allow users to register versioned custom tool adapters with declared schemas, permissions, risk classification, timeout, transport, and isolation requirements. | Must |
 | FR-024 | The system shall authorize each supported local federation exchange from a validated signed token, current provider state, and typed trust contract before invoking a permissive emulator. | Must |
+| FR-025 | The CLI shall validate scenario-bound policy and tool registrations and run a reference or protocol-compatible subprocess agent against an active scenario. | Must |
 
 ## Non-functional requirements
 
@@ -59,6 +60,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SEC-015 | A governed tool response shall not be emitted unless manifest and policy evaluation succeed and its decision event commits; persistence failure shall prevent execution and response. |
 | NFR-SEC-016 | Tool schemas shall validate Draft 2020-12 input instances without external reference loading; only allow or redact decisions may launch a tool subprocess. |
 | NFR-SEC-017 | Successful tool output shall apply declared sensitive-field redaction before return and hashing, and a result shall not be emitted until linked outcome evidence commits. |
+| NFR-SEC-018 | A public agent run shall resolve declared resource identifiers from active canonical scenario state, forward only explicitly selected environment variables, and omit raw protocol transcripts and child diagnostics from its default and JSON summaries. |
 
 ### Reliability and reproducibility
 
@@ -71,6 +73,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-REL-005 | Persistent state changes shall use versioned, tested migrations. |
 | NFR-REL-006 | Agent decision events shall use monotonic sequence numbers and stable correlation identifiers; timestamps shall not determine authorization or score. |
 | NFR-REL-007 | Persisted agent decision events shall be append-only through the application API and shall verify contiguous order, canonical record hashes, and the stored chain head when read. |
+| NFR-REL-008 | An agent trial shall persist a canonical immutable start record before launch and append exactly one terminal record without changing its run configuration. |
 
 ### Usability and portability
 

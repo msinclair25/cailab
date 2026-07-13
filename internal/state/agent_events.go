@@ -33,6 +33,13 @@ func (s *Store) AppendDecisionEvent(ctx context.Context, draft agent.DecisionEve
 	} else if err != nil {
 		return agent.DecisionEvent{}, fmt.Errorf("verify decision event run %q: %w", draft.RunID, err)
 	}
+	if err := tx.QueryRowContext(ctx, `
+SELECT 1 FROM agent_runs
+WHERE run_id = ? AND trial_id = ? AND terminal_json IS NULL`, draft.RunID, draft.TrialID).Scan(&active); errors.Is(err, sql.ErrNoRows) {
+		return agent.DecisionEvent{}, ErrNoActiveAgentRun
+	} else if err != nil {
+		return agent.DecisionEvent{}, fmt.Errorf("verify active agent trial %q: %w", draft.TrialID, err)
+	}
 	var duplicate int
 	if err := tx.QueryRowContext(ctx, `
 SELECT 1 FROM agent_decision_events WHERE run_id = ? AND trial_id = ? AND correlation_id = ?`,

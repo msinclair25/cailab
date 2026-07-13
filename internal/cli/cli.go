@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -37,14 +39,15 @@ var (
 )
 
 type CLI struct {
-	stdin  io.Reader
-	stdout io.Writer
-	stderr io.Writer
-	getenv func(string) string
+	stdin     io.Reader
+	stdout    io.Writer
+	stderr    io.Writer
+	getenv    func(string) string
+	lookupEnv func(string) (string, bool)
 }
 
 func New(stdout, stderr io.Writer) *CLI {
-	return &CLI{stdin: os.Stdin, stdout: stdout, stderr: stderr, getenv: os.Getenv}
+	return &CLI{stdin: os.Stdin, stdout: stdout, stderr: stderr, getenv: os.Getenv, lookupEnv: os.LookupEnv}
 }
 
 func (c *CLI) Run(ctx context.Context, args []string) int {
@@ -70,6 +73,8 @@ func (c *CLI) Run(ctx context.Context, args []string) int {
 		err = c.runStatus(ctx, args[1:])
 	case "mission":
 		err = c.runMission(ctx, args[1:])
+	case "agent":
+		err = c.runAgent(ctx, args[1:])
 	case "identity":
 		err = c.runIdentity(ctx, args[1:])
 	case "federation":
@@ -117,6 +122,7 @@ Commands:
   up                 Start and persist a scenario run
   status             Show the active run
   mission            Show the active mission
+  agent              Validate registrations or run an agent trial
   identity           Validate tokens or rotate the active local issuer key
   federation         Exchange an authorized local token for temporary credentials
   graph path         Explain a directed trust path
@@ -385,6 +391,340 @@ func (c *CLI) runMission(ctx context.Context, args []string) error {
 	for _, objective := range compiled.Objectives {
 		fmt.Fprintf(c.stdout, "[ ] %s — %s\n", objective.ID, objective.Description)
 	}
+	return nil
+}
+
+func (c *CLI) runAgent(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return errors.New("usage: cailab agent <validate|run> [options]")
+	}
+	switch args[0] {
+	case "validate":
+		return c.runAgentValidate(ctx, args[1:])
+	case "run":
+		if len(args) < 2 || (args[1] != "reference" && args[1] != "subprocess") {
+			return errors.New("usage: cailab agent run <reference|subprocess> [options]")
+		}
+		if args[1] == "reference" {
+			return c.runReferenceAgent(ctx, args[2:])
+		}
+		return c.runSubprocessAgent(ctx, args[2:])
+	default:
+		return errors.New("usage: cailab agent <validate|run> [options]")
+	}
+}
+
+func (c *CLI) runAgentValidate(ctx context.Context, args []string) error {
+	fs := newFlagSet("agent validate", c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	policyPath := fs.String("policy", "", "governance policy JSON file")
+	agentID := fs.String("agent-id", "", "agent identifier used to validate policy bindings")
+	actorTenant := fs.String("actor-tenant", "", "agent tenant in the active scenario")
+	var toolPaths, toolEnvironmentNames stringListFlag
+	fs.Var(&toolPaths, "tool", "tool manifest JSON file; repeat for multiple tools")
+	fs.Var(&toolEnvironmentNames, "tool-env", "environment variable explicitly forwarded to every registered tool")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 || *policyPath == "" || *agentID == "" || *actorTenant == "" || len(toolPaths) == 0 {
+		return errors.New("usage: cailab agent validate --policy FILE --tool FILE --agent-id ID --actor-tenant TENANT [options]")
+	}
+	policy, err := loadGovernancePolicy(*policyPath)
+	if err != nil {
+		return err
+	}
+	toolEnvironment, err := c.explicitEnvironment(toolEnvironmentNames)
+	if err != nil {
+		return err
+	}
+	registrations, err := loadRegisteredTools(toolPaths, toolEnvironment)
+	if err != nil {
+		return err
+	}
+	service, closeStore, err := c.openService(ctx, *stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	rangeRun, err := service.Status(ctx)
+	if err != nil {
+		return err
+	}
+	options := app.AgentRunOptions{
+		Agent: agent.AgentRef{ID: *agentID}, ActorTenant: *actorTenant,
+		Policy: policy, Tools: registrations,
+	}
+	if err := app.ValidateAgentRunOptions(rangeRun.Compiled, options); err != nil {
+		return err
+	}
+	policyDigest, err := agent.DigestGovernancePolicy(policy)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(c.stdout, "✓ policy %s validated (%s)\n", policy.Version, policyDigest)
+	for _, registration := range registrations {
+		digest, err := agent.DigestToolManifest(registration.Manifest)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(c.stdout, "✓ tool %s@%s registered (%s)\n", registration.Manifest.Metadata.Name, registration.Manifest.Metadata.Version, digest)
+	}
+	fmt.Fprintln(c.stdout, "warning: validation does not isolate the declared subprocesses")
+	return nil
+}
+
+func (c *CLI) runReferenceAgent(ctx context.Context, args []string) error {
+	fs := newFlagSet("agent run reference", c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	trialID := fs.String("trial-id", "trial:1", "unique trial identifier within the active range run")
+	jsonOutput := fs.Bool("json", false, "emit evidence-safe JSON summary")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("usage: cailab agent run reference [--state-dir DIR] [--trial-id ID] [--json]")
+	}
+	service, closeStore, err := c.openService(ctx, *stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	rangeRun, err := service.Status(ctx)
+	if err != nil {
+		return err
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve cailab executable: %w", err)
+	}
+	executable, err = filepath.Abs(executable)
+	if err != nil {
+		return fmt.Errorf("resolve absolute cailab executable: %w", err)
+	}
+	directory, err := filepath.Abs(".")
+	if err != nil {
+		return fmt.Errorf("resolve reference working directory: %w", err)
+	}
+	options, err := app.ReferenceAgentRunOptions(rangeRun.Compiled, executable, directory, *trialID)
+	if err != nil {
+		return err
+	}
+	result, runErr := service.RunAgent(ctx, options)
+	if result.Run.TrialID != "" {
+		if err := c.renderAgentRunResult(result, *jsonOutput); err != nil {
+			return err
+		}
+	}
+	if runErr != nil {
+		return runErr
+	}
+	if result.Run.Status != "completed" {
+		return fmt.Errorf("agent trial %q ended with status %s", result.Run.TrialID, result.Run.Status)
+	}
+	return nil
+}
+
+func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
+	fs := newFlagSet("agent run subprocess", c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	policyPath := fs.String("policy", "", "governance policy JSON file")
+	promptPath := fs.String("prompt-file", "", "prompt file hashed into run metadata; content is not sent by CloudAILab")
+	agentID := fs.String("agent-id", "", "agent identifier")
+	agentVersion := fs.String("agent-version", "", "agent semantic version")
+	providerName := fs.String("provider", "", "agent or model provider label")
+	modelName := fs.String("model", "", "agent model or implementation label")
+	actorTenant := fs.String("actor-tenant", "", "agent tenant in the active scenario")
+	command := fs.String("command", "", "absolute agent executable path")
+	directory := fs.String("directory", "", "absolute agent working directory; defaults to the current directory")
+	trialID := fs.String("trial-id", "trial:1", "unique trial identifier within the active range run")
+	trialIndex := fs.Int("trial-index", 1, "one-based trial index")
+	trialCount := fs.Int("trial-count", 1, "declared trial count")
+	sessionTimeout := fs.Duration("timeout", 60*time.Second, "whole agent session timeout")
+	jsonOutput := fs.Bool("json", false, "emit evidence-safe JSON summary")
+	var toolPaths, commandArguments, agentEnvironmentNames, toolEnvironmentNames stringListFlag
+	fs.Var(&toolPaths, "tool", "tool manifest JSON file; repeat for multiple tools")
+	fs.Var(&commandArguments, "arg", "agent argv value; repeat to preserve argument boundaries")
+	fs.Var(&agentEnvironmentNames, "agent-env", "environment variable explicitly forwarded to the agent")
+	fs.Var(&toolEnvironmentNames, "tool-env", "environment variable explicitly forwarded to every registered tool")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 || *policyPath == "" || *promptPath == "" || *agentID == "" || *agentVersion == "" ||
+		*providerName == "" || *modelName == "" || *actorTenant == "" || *command == "" || len(toolPaths) == 0 {
+		return errors.New("usage: cailab agent run subprocess --policy FILE --tool FILE --prompt-file FILE --agent-id ID --agent-version VERSION --provider NAME --model NAME --actor-tenant TENANT --command ABSOLUTE_PATH [options]")
+	}
+	policy, err := loadGovernancePolicy(*policyPath)
+	if err != nil {
+		return err
+	}
+	toolEnvironment, err := c.explicitEnvironment(toolEnvironmentNames)
+	if err != nil {
+		return err
+	}
+	registrations, err := loadRegisteredTools(toolPaths, toolEnvironment)
+	if err != nil {
+		return err
+	}
+	agentEnvironment, err := c.explicitEnvironment(agentEnvironmentNames)
+	if err != nil {
+		return err
+	}
+	prompt, err := readBoundedFile(*promptPath, agent.MaxFrameBytes)
+	if err != nil {
+		return fmt.Errorf("read prompt file: %w", err)
+	}
+	promptDigest := sha256.Sum256(prompt)
+	workingDirectory := *directory
+	if workingDirectory == "" {
+		workingDirectory = "."
+	}
+	workingDirectory, err = filepath.Abs(workingDirectory)
+	if err != nil {
+		return fmt.Errorf("resolve agent working directory: %w", err)
+	}
+	executable, err := filepath.Abs(*command)
+	if err != nil {
+		return fmt.Errorf("resolve agent executable: %w", err)
+	}
+	service, closeStore, err := c.openService(ctx, *stateDir)
+	if err != nil {
+		return err
+	}
+	defer closeStore()
+	options := app.AgentRunOptions{
+		Agent:       agent.AgentRef{ID: *agentID, Version: *agentVersion, Adapter: "subprocess", Provider: *providerName, Model: *modelName},
+		ActorTenant: *actorTenant,
+		Command:     append([]string{executable}, commandArguments...), Directory: workingDirectory, Environment: agentEnvironment,
+		Policy: policy, Tools: registrations, PromptHash: hex.EncodeToString(promptDigest[:]),
+		TrialID: *trialID, TrialIndex: *trialIndex, TrialCount: *trialCount, SessionTimeout: *sessionTimeout,
+	}
+	result, runErr := service.RunAgent(ctx, options)
+	if result.Run.TrialID != "" {
+		if err := c.renderAgentRunResult(result, *jsonOutput); err != nil {
+			return err
+		}
+	}
+	if runErr != nil {
+		return runErr
+	}
+	if result.Run.Status != "completed" {
+		return fmt.Errorf("agent trial %q ended with status %s", result.Run.TrialID, result.Run.Status)
+	}
+	return nil
+}
+
+func (c *CLI) explicitEnvironment(names []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(names))
+	result := make([]string, 0, len(names))
+	for _, name := range names {
+		key := strings.ToUpper(name)
+		if _, exists := seen[key]; exists {
+			return nil, fmt.Errorf("environment variable %q was selected more than once", name)
+		}
+		value, exists := c.lookupEnv(name)
+		if !exists {
+			return nil, fmt.Errorf("selected environment variable %q is not set", name)
+		}
+		seen[key] = struct{}{}
+		result = append(result, name+"="+value)
+	}
+	return result, nil
+}
+
+func loadGovernancePolicy(path string) (agent.GovernancePolicy, error) {
+	data, err := readBoundedFile(path, agent.MaxFrameBytes)
+	if err != nil {
+		return agent.GovernancePolicy{}, fmt.Errorf("read governance policy %q: %w", path, err)
+	}
+	policy, err := agent.DecodeGovernancePolicy(data)
+	if err != nil {
+		return agent.GovernancePolicy{}, fmt.Errorf("load governance policy %q: %w", path, err)
+	}
+	return policy, nil
+}
+
+func loadRegisteredTools(paths []string, environment []string) ([]app.RegisteredTool, error) {
+	registrations := make([]app.RegisteredTool, 0, len(paths))
+	for _, path := range paths {
+		data, err := readBoundedFile(path, agent.MaxFrameBytes)
+		if err != nil {
+			return nil, fmt.Errorf("read tool manifest %q: %w", path, err)
+		}
+		manifest, err := agent.DecodeToolManifest(data)
+		if err != nil {
+			return nil, fmt.Errorf("load tool manifest %q: %w", path, err)
+		}
+		absolutePath, err := filepath.Abs(path)
+		if err != nil {
+			return nil, fmt.Errorf("resolve tool manifest %q: %w", path, err)
+		}
+		registration := app.RegisteredTool{
+			Manifest: manifest, Directory: filepath.Dir(absolutePath), Environment: append([]string(nil), environment...),
+		}
+		if err := agent.ValidateToolRuntime(registration.Manifest, registration.Directory, registration.Environment); err != nil {
+			return nil, fmt.Errorf("validate tool manifest %q runtime: %w", path, err)
+		}
+		registrations = append(registrations, registration)
+	}
+	return registrations, nil
+}
+
+func readBoundedFile(path string, limit int) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, int64(limit)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > limit {
+		return nil, fmt.Errorf("file exceeds %d bytes", limit)
+	}
+	return data, nil
+}
+
+type agentRunSummary struct {
+	Run        agent.AgentRun                `json:"run"`
+	Completion *agent.SessionCompletePayload `json:"completion,omitempty"`
+	Decisions  []agent.DecisionEvent         `json:"decisions"`
+	Outcomes   []agent.ToolOutcomeEvent      `json:"outcomes"`
+}
+
+func (c *CLI) renderAgentRunResult(result app.AgentRunResult, jsonOutput bool) error {
+	if jsonOutput {
+		var completion *agent.SessionCompletePayload
+		if result.Session.Completion.Status != "" {
+			value := result.Session.Completion
+			completion = &value
+		}
+		encoded, err := json.MarshalIndent(agentRunSummary{
+			Run: result.Run, Completion: completion,
+			Decisions: result.Decisions, Outcomes: result.Outcomes,
+		}, "", "  ")
+		if err != nil {
+			return fmt.Errorf("encode agent run summary: %w", err)
+		}
+		fmt.Fprintln(c.stdout, string(encoded))
+		return nil
+	}
+	fmt.Fprintf(c.stdout, "✓ agent trial %s ended with status %s\n", result.Run.TrialID, result.Run.Status)
+	fmt.Fprintf(c.stdout, "Agent: %s@%s (%s / %s)\n", result.Run.Agent.ID, result.Run.Agent.Version, result.Run.Agent.Provider, result.Run.Agent.Model)
+	fmt.Fprintf(c.stdout, "Evidence: %d decision(s), %d tool outcome(s)\n", len(result.Decisions), len(result.Outcomes))
+	fmt.Fprintln(c.stdout, "Warning: subprocess ownership is not filesystem, network, syscall, or descendant isolation.")
+	return nil
+}
+
+type stringListFlag []string
+
+func (f *stringListFlag) String() string { return strings.Join(*f, ",") }
+
+func (f *stringListFlag) Set(value string) error {
+	if value == "" {
+		return errors.New("value must not be empty")
+	}
+	*f = append(*f, value)
 	return nil
 }
 

@@ -8,14 +8,26 @@
   ],
   "$defs": {
     "id": { "type": "string", "pattern": "^[a-z][a-z0-9._:-]{0,127}$" },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "tenant", "classification"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "tenant": { "$ref": "#/$defs/id" },
+        "classification": { "enum": ["public", "internal", "confidential", "restricted"] }
+      }
+    },
     "request": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["protocolVersion", "callId", "tool", "arguments"],
+      "required": ["protocolVersion", "callId", "tool", "action", "resource", "arguments"],
       "properties": {
-        "protocolVersion": { "const": "1.0" },
+        "protocolVersion": { "const": "1.1" },
         "callId": { "$ref": "#/$defs/id" },
         "tool": { "$ref": "#/$defs/id" },
+        "action": { "type": "string", "minLength": 1 },
+        "resource": { "$ref": "#/$defs/resource" },
         "arguments": { "type": "object" }
       }
     },
@@ -24,7 +36,7 @@
       "additionalProperties": false,
       "required": ["protocolVersion", "callId", "status"],
       "properties": {
-        "protocolVersion": { "const": "1.0" },
+        "protocolVersion": { "const": "1.1" },
         "callId": { "$ref": "#/$defs/id" },
         "status": { "enum": ["succeeded", "failed"] },
         "content": true,

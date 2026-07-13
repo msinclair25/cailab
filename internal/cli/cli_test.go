@@ -13,6 +13,11 @@ import (
 	"github.com/msinclair25/cailab/internal/agent"
 )
 
+const (
+	cliAgentHelperEnvironment = "CAILAB_CLI_AGENT_HELPER"
+	cliToolHelperEnvironment  = "CAILAB_CLI_TOOL_HELPER"
+)
+
 func TestWriteOwnerOnlyJSON(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "credentials.json")
 	value := map[string]string{"accessKeyId": "synthetic-access", "secretAccessKey": "synthetic-secret"}
@@ -169,6 +174,7 @@ func TestInternalReferenceAgentUsesProtocolStreams(t *testing.T) {
 func TestInternalReferenceToolUsesProtocolStreams(t *testing.T) {
 	request, err := json.Marshal(agent.ToolExecutionRequest{
 		ProtocolVersion: agent.ProtocolVersion, CallID: "call:1", Tool: "google.drive.read",
+		Action: "drive.files.get", Resource: agent.ResourceRef{ID: "google:file", Tenant: "tenant:northstar", Classification: "restricted"},
 		Arguments: json.RawMessage(`{"fileId":"google:file"}`),
 	})
 	if err != nil {
@@ -190,6 +196,136 @@ func TestInternalReferenceToolUsesProtocolStreams(t *testing.T) {
 	if response.Status != "succeeded" || response.CallID != "call:1" {
 		t.Fatalf("response = %+v", response)
 	}
+}
+
+func TestPublicAgentValidateAndSubprocessRun(t *testing.T) {
+	ctx := context.Background()
+	stateDir := t.TempDir()
+	scenarioPath := writeScenario(t)
+	var stdout, stderr bytes.Buffer
+	c := New(&stdout, &stderr)
+	if code := c.Run(ctx, []string{"up", "--state-dir", stateDir, scenarioPath}); code != ExitOK {
+		t.Fatalf("up code = %d; stderr=%s", code, stderr.String())
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := agent.ToolManifest{
+		APIVersion: agent.APIVersion, Kind: agent.ToolManifestKind,
+		Metadata: agent.Metadata{Name: "test.read", Version: "0.1.0", Description: "Read one synthetic test resource."},
+		Spec: agent.ToolManifestSpec{
+			Transport:   agent.ToolTransport{Type: "subprocess", Command: []string{executable, "-test.run=^TestCLIAgentSubprocessHelper$"}},
+			InputSchema: json.RawMessage(`{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"resource":{"type":"string"},"token":{"type":"string"}},"required":["resource","token"],"additionalProperties":false}`),
+			Permissions: []agent.Permission{{Tenant: "tenant-a", Actions: []string{"test.read"}, Resources: []string{"resource:a"}}},
+			Risk:        "low", TimeoutMillis: 2_000, Isolation: agent.Isolation{Network: "host", Filesystem: "host"},
+		},
+	}
+	policy := agent.GovernancePolicy{
+		APIVersion: agent.APIVersion, Kind: agent.GovernancePolicyKind, Version: "0.1.0", DefaultEffect: "deny",
+		Rules: []agent.PolicyRule{{
+			ID: "rule:allow", Effect: "allow", AgentID: "agent:cli-test", Tool: "test.read", Action: "test.read",
+			Resource: "resource:a", ResourceTenant: "tenant-a", ResourceClassification: "internal",
+		}},
+	}
+	manifestPath := writeAgentJSON(t, "tool.json", manifest)
+	policyPath := writeAgentJSON(t, "policy.json", policy)
+	promptPath := filepath.Join(t.TempDir(), "prompt.txt")
+	if err := os.WriteFile(promptPath, []byte("inspect the synthetic resource"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(cliAgentHelperEnvironment, "tool")
+	t.Setenv(cliToolHelperEnvironment, "reference")
+	t.Setenv("CAILAB_CLI_PARENT_SECRET", "must-not-reach-child")
+	stdout.Reset()
+	stderr.Reset()
+	if code := c.Run(ctx, []string{
+		"agent", "validate", "--state-dir", stateDir, "--policy", policyPath, "--tool", manifestPath,
+		"--agent-id", "agent:cli-test", "--actor-tenant", "tenant-a", "--tool-env", cliToolHelperEnvironment,
+	}); code != ExitOK {
+		t.Fatalf("validate code = %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "tool test.read@0.1.0 registered") {
+		t.Fatalf("validate output = %q", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if code := c.Run(ctx, []string{
+		"agent", "run", "subprocess", "--state-dir", stateDir, "--policy", policyPath, "--tool", manifestPath,
+		"--prompt-file", promptPath, "--agent-id", "agent:cli-test", "--agent-version", "0.1.0",
+		"--provider", "test", "--model", "deterministic", "--actor-tenant", "tenant-a",
+		"--command", executable, "--arg", "-test.run=^TestCLIAgentSubprocessHelper$", "--directory", stateDir,
+		"--agent-env", cliAgentHelperEnvironment, "--tool-env", cliToolHelperEnvironment, "--json",
+	}); code != ExitOK {
+		t.Fatalf("run code = %d; stderr=%s; stdout=%s", code, stderr.String(), stdout.String())
+	}
+	if !strings.Contains(stdout.String(), `"status": "completed"`) || !strings.Contains(stdout.String(), `"effect": "allow"`) {
+		t.Fatalf("run output = %q", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), `"outcome": {`) || !strings.Contains(stdout.String(), `"status": "succeeded"`) {
+		t.Fatalf("run output did not contain a successful tool outcome: %q", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "raw-cli-secret") {
+		t.Fatalf("evidence-safe output leaked raw arguments: %s", stdout.String())
+	}
+}
+
+func TestCLIAgentSubprocessHelper(t *testing.T) {
+	if os.Getenv("CAILAB_CLI_PARENT_SECRET") != "" {
+		os.Exit(19)
+	}
+	agentMode := os.Getenv(cliAgentHelperEnvironment)
+	toolMode := os.Getenv(cliToolHelperEnvironment)
+	if agentMode == "" && toolMode == "" {
+		return
+	}
+	if toolMode != "" {
+		if err := agent.ServeReferenceTool(context.Background(), os.Stdin, os.Stdout, "test.read"); err != nil {
+			os.Exit(20)
+		}
+		os.Exit(0)
+	}
+	decoder := agent.NewDecoder(os.Stdin)
+	if _, err := decoder.Next(); err != nil {
+		os.Exit(21)
+	}
+	encoder := agent.NewEncoder(os.Stdout)
+	if err := encoder.Write(cliAgentMessage(agent.MessageAgentReady, "message:ready", "", agent.AgentReadyPayload{AgentID: "agent:cli-test", AgentVersion: "0.1.0"})); err != nil {
+		os.Exit(22)
+	}
+	call := cliAgentMessage(agent.MessageToolCall, "call:1", "", agent.ToolCallPayload{
+		Tool: "test.read", Action: "test.read", Resource: "resource:a",
+		Arguments: json.RawMessage(`{"resource":"resource:a","token":"raw-cli-secret"}`),
+	})
+	if err := encoder.Write(call); err != nil {
+		os.Exit(23)
+	}
+	response, err := decoder.Next()
+	if err != nil || response.Type != agent.MessageToolResult || response.CorrelationID != call.ID {
+		os.Exit(24)
+	}
+	if err := encoder.Write(cliAgentMessage(agent.MessageSessionComplete, "message:complete", "", agent.SessionCompletePayload{Status: "completed"})); err != nil {
+		os.Exit(25)
+	}
+	os.Exit(0)
+}
+
+func cliAgentMessage(messageType, id, correlation string, payload any) agent.Message {
+	data, _ := json.Marshal(payload)
+	return agent.Message{ProtocolVersion: agent.ProtocolVersion, ID: id, Type: messageType, CorrelationID: correlation, Payload: data}
+}
+
+func writeAgentJSON(t *testing.T, name string, value any) string {
+	t.Helper()
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), name)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func TestDoctorUsesScenarioSpecificPrerequisites(t *testing.T) {

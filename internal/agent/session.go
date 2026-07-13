@@ -47,7 +47,7 @@ type SessionConfig struct {
 }
 
 // ToolCallHandler handles one structurally valid call after lifecycle and tool
-// membership checks. Later gateway work owns authorization and execution.
+// membership checks. The governed gateway owns authorization and execution.
 type ToolCallHandler interface {
 	HandleToolCall(context.Context, Message, ToolCallPayload) (Message, error)
 }
@@ -98,6 +98,13 @@ type normalizedSessionConfig struct {
 type decodedMessage struct {
 	message Message
 	err     error
+}
+
+// ValidateSessionConfig checks launch, lifecycle, and run constraints without
+// starting the configured agent process.
+func ValidateSessionConfig(config SessionConfig) error {
+	_, err := normalizeSessionConfig(config)
+	return err
 }
 
 // RunSession launches and owns one direct subprocess until it exits. It enforces

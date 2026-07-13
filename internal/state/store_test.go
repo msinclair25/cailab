@@ -150,6 +150,13 @@ VALUES(?, 'legacy', '0.1.0', 1, 'active', ?, '2026-07-11T00:00:00Z', '2026-07-11
 	if outcomeColumns != 8 {
 		t.Fatalf("agent_tool_outcomes columns = %d, want 8", outcomeColumns)
 	}
+	var agentRunColumns int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('agent_runs')`).Scan(&agentRunColumns); err != nil {
+		t.Fatal(err)
+	}
+	if agentRunColumns != 6 {
+		t.Fatalf("agent_runs columns = %d, want 6", agentRunColumns)
+	}
 	active, err := store.ActiveRun(ctx)
 	if err != nil {
 		t.Fatal(err)

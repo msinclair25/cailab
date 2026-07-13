@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/msinclair25/cailab/internal/graph"
 	"github.com/msinclair25/cailab/internal/provider"
@@ -15,6 +16,7 @@ import (
 type Service struct {
 	store    *state.Store
 	provider provider.Manager
+	clock    func() time.Time
 }
 
 type UpOptions struct {
@@ -23,7 +25,7 @@ type UpOptions struct {
 }
 
 func New(store *state.Store, providerManager provider.Manager) *Service {
-	return &Service{store: store, provider: providerManager}
+	return &Service{store: store, provider: providerManager, clock: time.Now}
 }
 
 func (s *Service) Up(ctx context.Context, options UpOptions) (state.Run, error) {
