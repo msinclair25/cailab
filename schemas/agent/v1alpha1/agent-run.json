@@ -15,6 +15,7 @@
     "policy": { "$ref": "#/$defs/policy" },
     "promptHash": { "$ref": "#/$defs/digest" },
     "tools": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/toolRef" } },
+    "execution": { "$ref": "#/$defs/execution" },
     "trial": { "$ref": "#/$defs/trial" },
     "status": { "enum": ["planned", "running", "completed", "failed", "canceled"] },
     "startedAt": { "type": "string", "format": "date-time" },
@@ -80,6 +81,22 @@
       "properties": {
         "index": { "type": "integer", "minimum": 1 },
         "count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "engine", "profile", "image", "network", "filesystem"],
+      "properties": {
+        "mode": { "const": "container" },
+        "engine": { "const": "docker" },
+        "profile": { "const": "docker-strict-v1" },
+        "image": {
+          "type": "string",
+          "pattern": "^(?:sha256:[a-f0-9]{64}|[^\\s@]+@sha256:[a-f0-9]{64})$"
+        },
+        "network": { "const": "none" },
+        "filesystem": { "const": "read_only" }
       }
     }
   }

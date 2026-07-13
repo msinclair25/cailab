@@ -8,7 +8,9 @@ last_reviewed: 2026-07-12
 
 ## Safety boundary
 
-The supported M3 runner owns and bounds direct agent and tool subprocesses, but it does **not** isolate their filesystem, network, syscalls, or independently detached descendants. Run only code you trust under your current OS account. `--agent-env` and `--tool-env` forward real values from your current environment to those unisolated processes.
+Host mode owns and bounds direct agent and tool subprocesses, but it does **not** isolate their filesystem, network, syscalls, or independently detached descendants. Run only code you trust under your current OS account. `--agent-env` and `--tool-env` forward real values from your current environment to those unisolated processes.
+
+The opt-in Docker mode isolates the agent process with no host mounts or forwarded host environment, no external network, a read-only root filesystem, bounded temporary storage and compute resources, and reduced privileges. It does not isolate registered tool subprocesses and is not a virtual-machine boundary.
 
 ## Verify the harness baseline
 
@@ -82,6 +84,38 @@ CloudAILab records a hash of `--prompt-file` for provenance. It does not send th
 ```
 
 Use repeated `--arg VALUE` flags to preserve argv boundaries. Use repeated `--agent-env NAME` and `--tool-env NAME` flags for explicitly selected variables; the rest of the parent environment is not inherited. `--json` emits run, completion, decision, approval, and outcome records without raw tool arguments, raw protocol transcripts, or child diagnostic text.
+
+## Run an agent with Docker isolation
+
+Build the agent into a Linux container image. Its protocol executable and working directory must already exist inside the image. Resolve the immutable local image ID:
+
+```bash
+docker build --tag my-cailab-agent:local /absolute/path/to/agent-image
+docker image inspect --format '{{.Id}}' my-cailab-agent:local
+```
+
+Then use that `sha256:...` value:
+
+```bash
+./bin/cailab agent run subprocess \
+  --policy /absolute/path/policy.json \
+  --tool /absolute/path/tool.json \
+  --prompt-file /absolute/path/prompt.txt \
+  --agent-id agent:my-agent \
+  --agent-version 0.1.0 \
+  --provider local \
+  --model my-agent-build \
+  --actor-tenant tenant:northstar \
+  --isolation docker \
+  --image sha256:REPLACE_WITH_64_HEX_CHARACTERS \
+  --command /app/my-agent \
+  --directory /workspace \
+  --timeout 60s
+```
+
+A repository reference is accepted only as `repository@sha256:<digest>` and must be pulled before the run; CloudAILab uses `--pull=never`. Mutable tags and images with Dockerfile `VOLUME` declarations are rejected. `--agent-env` is rejected in Docker mode. The active Docker context must use a local Unix socket and report a non-rootless Linux engine with an active cgroup driver; remote TCP/SSH, rootless, no-cgroup, and Windows-container contexts are rejected before the trial starts. The agent cannot directly reach provider loopback endpoints, hosted model APIs, or the public internet; package prompts and local model assets into the image and use protocol tool calls to cross the governed boundary.
+
+The run summary and immutable run record include the exact image and enforced network/filesystem profile. The Linux Docker integration is the compatibility gate; Docker Desktop may work but is not yet a release-tested platform claim. See the [compatibility record](../07-compatibility/agent-docker-isolation.md).
 
 ## Resolve approval-required calls
 

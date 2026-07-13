@@ -73,6 +73,32 @@ func TestAgentRunCompletionRejectsImmutableMetadataChange(t *testing.T) {
 	}
 }
 
+func TestAgentRunCompletionRejectsIsolationMetadataChange(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store, runID := eventTestStoreWithoutAgent(t, ctx, filepath.Join(t.TempDir(), "state.db"))
+	defer store.Close()
+	run := stateTestAgentRun(runID)
+	run.Execution = &agent.AgentExecutionRef{
+		Mode: "container", Engine: "docker", Profile: "docker-strict-v1", Image: "sha256:" + strings.Repeat("a", 64),
+		Network: "none", Filesystem: "read_only",
+	}
+	if err := store.BeginAgentRun(ctx, run); err != nil {
+		t.Fatal(err)
+	}
+	endedAt := run.StartedAt.Add(time.Second)
+	terminal := run
+	terminal.Execution = &agent.AgentExecutionRef{
+		Mode: "container", Engine: "docker", Profile: "docker-strict-v1", Image: "sha256:" + strings.Repeat("b", 64),
+		Network: "none", Filesystem: "read_only",
+	}
+	terminal.Status = "failed"
+	terminal.EndedAt = &endedAt
+	if err := store.CompleteAgentRun(ctx, terminal); !errors.Is(err, ErrAgentRunIntegrity) {
+		t.Fatalf("completion error = %v", err)
+	}
+}
+
 func TestAgentRunIntegrityDetectsStoredMutation(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

@@ -62,6 +62,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SEC-017 | Successful tool output shall apply declared sensitive-field redaction before return and hashing, and a result shall not be emitted until linked outcome evidence commits. |
 | NFR-SEC-018 | A public agent run shall resolve declared resource identifiers from active canonical scenario state, forward only explicitly selected environment variables, and omit raw protocol transcripts and child diagnostics from its default and JSON summaries. |
 | NFR-SEC-019 | An approval-required call shall remain unexecuted until an exact local resolution is re-evaluated and durably linked; unattended runs shall reject by default, and approval prompts and evidence shall omit raw tool arguments. |
+| NFR-SEC-020 | Docker-isolated agent execution shall require a present content-addressed image without declared volumes and an explicitly pinned local Unix-socket non-rootless Linux engine with active cgroups, reject remote contexts, forward no host environment or mounts, disable external networking, shared-memory IPC, and Docker log persistence, enforce a read-only root with bounded temporary storage, drop privileges and capabilities, select the built-in seccomp profile, apply CPU/memory/PID limits, and never fall back silently to host execution. |
 
 ### Reliability and reproducibility
 
@@ -76,6 +77,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-REL-007 | Persisted agent decision events shall be append-only through the application API and shall verify contiguous order, canonical record hashes, and the stored chain head when read. |
 | NFR-REL-008 | An agent trial shall persist a canonical immutable start record before launch and append exactly one terminal record without changing its run configuration. |
 | NFR-REL-009 | Approval resolutions shall be append-only, linked to the exact original decision and input hash, consumed once for live continuation, and required as an integrity-checked predecessor for approved tool outcomes. |
+| NFR-REL-010 | Agent-container cleanup shall verify run and trial ownership labels before forced removal and shall execute after success, failure, timeout, or cancellation using a bounded cleanup context. |
 
 ### Usability and portability
 

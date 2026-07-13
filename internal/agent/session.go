@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,13 +30,15 @@ var (
 	ErrAgentExit         = errors.New("agent process exited unexpectedly")
 )
 
-// SessionConfig describes one explicitly selected subprocess agent. Command is
-// an argv vector; it is never interpreted by a shell. Environment is the complete
-// child environment, not an addition to the controller's environment.
+// SessionConfig describes one explicitly selected agent. Command is an argv
+// vector and is never interpreted by a shell. In host mode, Environment is the
+// complete child environment. Container mode requires it to be empty and treats
+// Command and Directory as paths inside the image.
 type SessionConfig struct {
 	Command            []string
 	Directory          string
 	Environment        []string
+	Container          *ContainerRuntime
 	Run                AgentRun
 	HandshakeTimeout   time.Duration
 	SessionTimeout     time.Duration
@@ -113,9 +115,10 @@ func ValidateSessionConfig(config SessionConfig) error {
 	return err
 }
 
-// RunSession launches and owns one direct subprocess until it exits. It enforces
-// protocol direction, ordering, identity, correlation, duplicate-ID, timeout,
-// and message-count constraints. It does not isolate filesystem or network access.
+// RunSession launches and owns one direct subprocess or enforced container until
+// it exits. It enforces protocol direction, ordering, identity, correlation,
+// duplicate-ID, timeout, and message-count constraints. Host subprocess mode
+// does not isolate filesystem or network access.
 func RunSession(ctx context.Context, config SessionConfig, handler ToolCallHandler) (SessionResult, error) {
 	normalized, err := normalizeSessionConfig(config)
 	if err != nil {
@@ -125,9 +128,7 @@ func RunSession(ctx context.Context, config SessionConfig, handler ToolCallHandl
 	sessionCtx, cancel := context.WithTimeout(ctx, normalized.SessionTimeout)
 	defer cancel()
 
-	command := exec.CommandContext(sessionCtx, normalized.Command[0], normalized.Command[1:]...)
-	command.Dir = normalized.Directory
-	command.Env = append([]string{}, normalized.Environment...)
+	command, cleanupRuntime := prepareSessionCommand(sessionCtx, normalized)
 	command.WaitDelay = normalized.CleanupTimeout
 
 	stdin, err := command.StdinPipe()
@@ -142,7 +143,7 @@ func RunSession(ctx context.Context, config SessionConfig, handler ToolCallHandl
 	command.Stderr = diagnostics
 
 	if err := command.Start(); err != nil {
-		return SessionResult{}, &SessionError{Stage: "start", Err: err}
+		return SessionResult{}, &SessionError{Stage: "start", Err: errors.Join(err, cleanupRuntime())}
 	}
 
 	decoderResults := make(chan decodedMessage, 1)
@@ -155,6 +156,9 @@ func RunSession(ctx context.Context, config SessionConfig, handler ToolCallHandl
 		waitErr := command.Wait()
 		if waitErr != nil && errors.Is(cause, ErrAgentExit) {
 			cause = fmt.Errorf("%w: %v", cause, waitErr)
+		}
+		if cleanupErr := cleanupRuntime(); cleanupErr != nil {
+			cause = errors.Join(cause, fmt.Errorf("cleanup runtime: %w", cleanupErr))
 		}
 		result.Stderr = diagnostics.String()
 		result.StderrTruncated = diagnostics.Truncated()
@@ -284,13 +288,19 @@ func RunSession(ctx context.Context, config SessionConfig, handler ToolCallHandl
 			}
 			_ = stdin.Close()
 			if err := command.Wait(); err != nil {
+				cleanupErr := cleanupRuntime()
 				result.Stderr = diagnostics.String()
 				result.StderrTruncated = diagnostics.Truncated()
 				cause := error(fmt.Errorf("%w: %w", ErrAgentExit, err))
 				if sessionCtx.Err() != nil {
 					cause = classifySessionContext(sessionCtx, sessionCtx.Err())
 				}
-				return result, &SessionError{Stage: "wait", Err: cause, Stderr: result.Stderr, StderrTruncated: result.StderrTruncated}
+				return result, &SessionError{Stage: "wait", Err: errors.Join(cause, cleanupErr), Stderr: result.Stderr, StderrTruncated: result.StderrTruncated}
+			}
+			if err := cleanupRuntime(); err != nil {
+				result.Stderr = diagnostics.String()
+				result.StderrTruncated = diagnostics.Truncated()
+				return result, &SessionError{Stage: "cleanup", Err: err, Stderr: result.Stderr, StderrTruncated: result.StderrTruncated}
 			}
 			result.Stderr = diagnostics.String()
 			result.StderrTruncated = diagnostics.Truncated()
@@ -307,16 +317,40 @@ func normalizeSessionConfig(config SessionConfig) (normalizedSessionConfig, erro
 	if len(config.Command) == 0 {
 		return normalizedSessionConfig{}, fmt.Errorf("%w: command must contain an executable", ErrInvalidSession)
 	}
-	if !filepath.IsAbs(config.Command[0]) {
-		return normalizedSessionConfig{}, fmt.Errorf("%w: executable must be an absolute path", ErrInvalidSession)
-	}
 	for i, value := range config.Command {
 		if value == "" || strings.ContainsRune(value, 0) || strings.ContainsAny(value, "\r\n") {
 			return normalizedSessionConfig{}, fmt.Errorf("%w: command[%d] must be nonempty and contain no NUL or line breaks", ErrInvalidSession, i)
 		}
 	}
-	if !filepath.IsAbs(config.Directory) {
-		return normalizedSessionConfig{}, fmt.Errorf("%w: directory must be an absolute path", ErrInvalidSession)
+	if config.Container == nil {
+		if !filepath.IsAbs(config.Command[0]) {
+			return normalizedSessionConfig{}, fmt.Errorf("%w: executable must be an absolute path", ErrInvalidSession)
+		}
+		if !filepath.IsAbs(config.Directory) {
+			return normalizedSessionConfig{}, fmt.Errorf("%w: directory must be an absolute path", ErrInvalidSession)
+		}
+		if config.Run.Execution != nil {
+			return normalizedSessionConfig{}, fmt.Errorf("%w: host subprocess must not claim enforced execution metadata", ErrInvalidSession)
+		}
+	} else {
+		if !path.IsAbs(config.Command[0]) || !path.IsAbs(config.Directory) {
+			return normalizedSessionConfig{}, fmt.Errorf("%w: container executable and directory must be absolute POSIX paths", ErrInvalidSession)
+		}
+		if !filepath.IsAbs(config.Container.enginePath) {
+			return normalizedSessionConfig{}, fmt.Errorf("%w: container engine must be an absolute host path", ErrInvalidSession)
+		}
+		if err := ValidateContainerImageReference(config.Container.image); err != nil {
+			return normalizedSessionConfig{}, fmt.Errorf("%w: %v", ErrInvalidSession, err)
+		}
+		if err := ValidateContainerHostEndpoint(config.Container.host); err != nil {
+			return normalizedSessionConfig{}, fmt.Errorf("%w: %v", ErrInvalidSession, err)
+		}
+		if len(config.Environment) != 0 {
+			return normalizedSessionConfig{}, fmt.Errorf("%w: container mode does not forward host environment variables", ErrInvalidSession)
+		}
+		if !sameExecutionRef(config.Run.Execution, ContainerExecutionRef(config.Container)) {
+			return normalizedSessionConfig{}, fmt.Errorf("%w: run execution metadata does not match container runtime", ErrInvalidSession)
+		}
 	}
 	seenEnvironment := make(map[string]struct{}, len(config.Environment))
 	for i, entry := range config.Environment {

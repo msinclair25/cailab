@@ -293,7 +293,7 @@ Exit gate:
 
 ### M3 — Agent governance harness
 
-**Status:** in development. Versioned agent/policy/tool/approval/outcome contracts, supported reference and custom subprocess runs, scenario-bound registration, exact-match policy, fail-closed or interactive approval resolution, Draft 2020-12 validation, protected tool execution, immutable run metadata, and append-only linked evidence are implemented. Isolation, full trace replay, and scoring remain.
+**Status:** in development. Versioned agent/policy/tool/approval/outcome contracts, supported reference and custom subprocess runs, scenario-bound registration, exact-match policy, fail-closed or interactive approval resolution, an opt-in Docker-isolated agent mode, Draft 2020-12 validation, protected tool execution, immutable run metadata, and append-only linked evidence are implemented. Full trace replay and scoring remain; tool subprocess isolation is deferred.
 
 **Goal:** make an external agent a measurable principal in the range.
 
@@ -433,7 +433,7 @@ The following questions must be resolved through spikes and ADRs before dependen
 4. Canonical policy condition representation — before M1 compatibility claims.
 5. Microsoft and Google pagination/error subset — before M2 facade implementation.
 6. Agent subprocess trace protocol and approval handshake — resolved by ADR-0011, ADR-0012, and ADR-0016.
-7. Isolation implementation and supported host platforms — before claiming safe agent execution.
+7. Isolation implementation and supported host platforms — resolved for the opt-in Linux CI-tested Docker agent boundary by ADR-0017; host mode and tool subprocesses remain unisolated.
 
 ## Change control
 
@@ -445,6 +445,6 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Add enforced isolation modes before making any agent-containment claim.
-2. Build trace replay and repeated-trial scoring.
-3. Add the unsafe prompt-injection evaluation fixture and evidence-linked report.
+1. Build trace replay and repeated-trial scoring.
+2. Add the unsafe prompt-injection evaluation fixture and evidence-linked report.
+3. Evaluate isolated tool execution only when a scenario requires an untrusted tool adapter.

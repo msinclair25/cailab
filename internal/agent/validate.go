@@ -89,6 +89,26 @@ func ValidateAgentRun(run AgentRun) error {
 	}
 	requireText(&issues, "agent.provider", run.Agent.Provider)
 	requireText(&issues, "agent.model", run.Agent.Model)
+	if run.Execution != nil {
+		if run.Execution.Mode != "container" {
+			issues = append(issues, fmt.Sprintf("execution.mode has unsupported value %q", run.Execution.Mode))
+		}
+		if run.Execution.Engine != "docker" {
+			issues = append(issues, fmt.Sprintf("execution.engine has unsupported value %q", run.Execution.Engine))
+		}
+		if run.Execution.Profile != containerProfile {
+			issues = append(issues, fmt.Sprintf("execution.profile has unsupported value %q", run.Execution.Profile))
+		}
+		if err := ValidateContainerImageReference(run.Execution.Image); err != nil {
+			issues = append(issues, "execution.image must be an immutable local image ID or repository digest")
+		}
+		if run.Execution.Network != "none" {
+			issues = append(issues, "execution.network must be none")
+		}
+		if run.Execution.Filesystem != "read_only" {
+			issues = append(issues, "execution.filesystem must be read_only")
+		}
+	}
 	validateVersion(&issues, "policy.version", run.Policy.Version)
 	validateDigest(&issues, "policy.digest", run.Policy.Digest)
 	validateDigest(&issues, "promptHash", run.PromptHash)

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/msinclair25/cailab/internal/agent"
+	"github.com/msinclair25/cailab/internal/app"
 )
 
 const (
@@ -324,6 +326,56 @@ func TestPromptApproverRequiresExactCorrelatedConfirmationWithoutRawArguments(t 
 				t.Fatalf("approval prompt leaked protected input data: %q", output.String())
 			}
 		})
+	}
+}
+
+func TestAgentContainerRuntimeRejectsUnsafePublicConfiguration(t *testing.T) {
+	c := New(io.Discard, io.Discard)
+	digest := "sha256:" + strings.Repeat("a", 64)
+	if _, err := c.agentContainerRuntime(context.Background(), "host", digest, nil); err == nil || !strings.Contains(err.Error(), "--image") {
+		t.Fatalf("host image error = %v", err)
+	}
+	if _, err := c.agentContainerRuntime(context.Background(), "docker", "agent:latest", nil); err == nil || !strings.Contains(err.Error(), "sha256") {
+		t.Fatalf("mutable image error = %v", err)
+	}
+	if _, err := c.agentContainerRuntime(context.Background(), "docker", digest, []string{"TOKEN"}); err == nil || !strings.Contains(err.Error(), "--agent-env") {
+		t.Fatalf("Docker environment error = %v", err)
+	}
+	if _, err := c.agentContainerRuntime(context.Background(), "unknown", "", nil); err == nil || !strings.Contains(err.Error(), "host or docker") {
+		t.Fatalf("unknown isolation error = %v", err)
+	}
+}
+
+func TestDockerAgentIsolationCLIConfigurationIntegration(t *testing.T) {
+	if os.Getenv("CAILAB_AGENT_ISOLATION_INTEGRATION") != "1" {
+		t.Skip("set CAILAB_AGENT_ISOLATION_INTEGRATION=1 to inspect the local Docker isolation context")
+	}
+	c := New(io.Discard, io.Discard)
+	runtime, err := c.agentContainerRuntime(context.Background(), "docker", "sha256:"+strings.Repeat("a", 64), nil)
+	if runtime != nil || err == nil || !strings.Contains(err.Error(), "pull or build it first") {
+		t.Fatalf("container runtime = %+v, error = %v", runtime, err)
+	}
+}
+
+func TestAgentRunSummaryDescribesOnlyEnforcedIsolation(t *testing.T) {
+	result := app.AgentRunResult{Run: agent.AgentRun{
+		TrialID: "trial:isolated", Status: "completed",
+		Agent: agent.AgentRef{ID: "agent:test", Version: "0.1.0", Provider: "local", Model: "fixture"},
+		Execution: &agent.AgentExecutionRef{
+			Mode: "container", Engine: "docker", Profile: "docker-strict-v1", Image: "sha256:" + strings.Repeat("a", 64),
+			Network: "none", Filesystem: "read_only",
+		},
+	}}
+	var output, diagnostics bytes.Buffer
+	c := New(&output, &diagnostics)
+	if err := c.renderAgentRunResult(result, false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(output.String(), "Docker network none") || !strings.Contains(output.String(), result.Run.Execution.Image) || !strings.Contains(output.String(), "tool subprocesses remain trusted and unisolated") {
+		t.Fatalf("isolated summary = %q", output.String())
+	}
+	if strings.Contains(output.String(), "subprocess ownership is not filesystem") {
+		t.Fatalf("isolated summary used host warning: %q", output.String())
 	}
 }
 

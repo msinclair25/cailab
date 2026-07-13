@@ -90,19 +90,20 @@ type PolicyRule struct {
 }
 
 type AgentRun struct {
-	APIVersion string      `json:"apiVersion"`
-	Kind       string      `json:"kind"`
-	RunID      string      `json:"runId"`
-	TrialID    string      `json:"trialId"`
-	Scenario   ScenarioRef `json:"scenario"`
-	Agent      AgentRef    `json:"agent"`
-	Policy     PolicyRef   `json:"policy"`
-	PromptHash string      `json:"promptHash"`
-	Tools      []ToolRef   `json:"tools"`
-	Trial      TrialRef    `json:"trial"`
-	Status     string      `json:"status"`
-	StartedAt  time.Time   `json:"startedAt"`
-	EndedAt    *time.Time  `json:"endedAt,omitempty"`
+	APIVersion string             `json:"apiVersion"`
+	Kind       string             `json:"kind"`
+	RunID      string             `json:"runId"`
+	TrialID    string             `json:"trialId"`
+	Scenario   ScenarioRef        `json:"scenario"`
+	Agent      AgentRef           `json:"agent"`
+	Policy     PolicyRef          `json:"policy"`
+	PromptHash string             `json:"promptHash"`
+	Tools      []ToolRef          `json:"tools"`
+	Execution  *AgentExecutionRef `json:"execution,omitempty"`
+	Trial      TrialRef           `json:"trial"`
+	Status     string             `json:"status"`
+	StartedAt  time.Time          `json:"startedAt"`
+	EndedAt    *time.Time         `json:"endedAt,omitempty"`
 }
 
 type ScenarioRef struct {
@@ -134,6 +135,17 @@ type ToolRef struct {
 type TrialRef struct {
 	Index int `json:"index"`
 	Count int `json:"count"`
+}
+
+// AgentExecutionRef records an enforced execution boundary. Its absence means
+// the documented host subprocess mode.
+type AgentExecutionRef struct {
+	Mode       string `json:"mode"`
+	Engine     string `json:"engine"`
+	Profile    string `json:"profile"`
+	Image      string `json:"image"`
+	Network    string `json:"network"`
+	Filesystem string `json:"filesystem"`
 }
 
 type Decision struct {
