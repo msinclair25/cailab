@@ -63,6 +63,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-026 | Rule ordering, permissive manifests, failed audit writes, or stored-record mutation hides or widens an agent action. | Default deny, manifest permission ceiling, fixed deny-first precedence, evidence-before-response, transactional sequence/correlation constraints, canonical event hashes, chain/head verification, and mutation/deletion regression tests. |
 | TM-027 | A malicious schema or tool process triggers external retrieval, inherits host secrets, evades timeout, smuggles protocol output, or returns sensitive data. | Fragment-local schema references, no schema URL loader, explicit argv/cwd/environment, no shell, input validation before launch, bounded timeout/stdout/stderr/cleanup, one correlated response, output redaction, and linked outcome evidence. |
 | TM-028 | A public agent registration forges resource metadata, inherits undeclared credentials, leaks raw arguments in CLI output, or creates evidence outside a recorded trial. | Resolve resource ID through active canonical state; explicit environment-name selection; bounded files; evidence-safe summaries; immutable start/terminal records; decision/outcome events accepted only while the matching trial is active. |
+| TM-029 | A stale, forged, replayed, implicit, or unrecorded approval authorizes a sensitive tool call, or a reviewer prompt discloses model-controlled arguments. | Default rejection; exact correlated confirmation; canonical metadata without raw arguments; current-policy re-evaluation; immutable resolution evidence before response; decision/approval/outcome hash linkage; one-use continuation and duplicate rejection. |
 
 ## Security invariants
 
@@ -107,6 +108,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - Draft 2020-12 input instances are validated with a pinned library; custom formats are annotations unless a later contract enables format assertion explicitly.
 - Agent and tool subprocesses remain unisolated and retain the launching OS user's ambient filesystem, network, and syscall authority.
 - A crash after a tool side effect but before outcome commit can leave durable authorization intent without durable outcome evidence; the agent result is withheld in that case.
+- Interactive approvals are local terminal decisions by the launching user, not authenticated remote identity, multi-party authorization, or separation of duties.
 - The SQLite hash chain detects inconsistent stored records but is not tamper-proof against the launching OS account, which can rewrite both records and chain metadata.
 - Declared `none`, `loopback`, or filesystem restrictions are requirements, not verified isolation claims, until an execution backend enforces them.
 - Explicitly selected environment variables can contain real provider credentials. CloudAILab does not persist or print their values, but the unisolated receiving process can use or exfiltrate them with the launching user's ambient authority.

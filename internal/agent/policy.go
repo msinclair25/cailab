@@ -201,10 +201,67 @@ func EvaluatePolicy(policy GovernancePolicy, request AuthorizationRequest) (Eval
 		decision.Redactions = pointers
 		evaluation.Arguments = redacted
 	case "require_approval":
-		decision.ApprovalID = deterministicIdentifier("approval", request.Run.RunID, request.Run.TrialID, request.CorrelationID, selected[0].ID)
+		parts := []string{request.Run.RunID, request.Run.TrialID, request.CorrelationID}
+		for _, rule := range selected {
+			parts = append(parts, rule.ID)
+		}
+		decision.ApprovalID = deterministicIdentifier("approval", parts...)
 	}
 	evaluation.Decision = decision
 	return evaluation, nil
+}
+
+// ReevaluateApprovedPolicy verifies that the current request still produces the
+// expected approval requirement, then applies an explicit resolution without
+// allowing it to override deny or redact rules.
+func ReevaluateApprovedPolicy(policy GovernancePolicy, request AuthorizationRequest, approvalID string, approved bool) (Evaluation, error) {
+	initial, err := EvaluatePolicy(policy, request)
+	if err != nil {
+		return Evaluation{}, err
+	}
+	if initial.Decision.Effect != "require_approval" || initial.Decision.ApprovalID != approvalID {
+		return Evaluation{}, fmt.Errorf("%w: approval no longer matches current policy evaluation", ErrInvalidAuthorization)
+	}
+	if !approved {
+		initial.Decision = Decision{Effect: "deny", ReasonCode: "approval:rejected", PolicyVersion: policy.Version}
+		return initial, nil
+	}
+
+	canonicalArguments, err := CanonicalJSON(request.Arguments)
+	if err != nil {
+		return Evaluation{}, fmt.Errorf("%w: canonicalize approved arguments: %v", ErrInvalidAuthorization, err)
+	}
+	matches := make([]PolicyRule, 0, len(policy.Rules))
+	for _, rule := range policy.Rules {
+		if policyRuleMatches(rule, request) && rule.Effect != "require_approval" {
+			matches = append(matches, rule)
+		}
+	}
+	sort.Slice(matches, func(i, j int) bool { return matches[i].ID < matches[j].ID })
+	decision := Decision{Effect: "allow", ReasonCode: initial.Decision.ReasonCode, PolicyVersion: policy.Version}
+	arguments := canonicalArguments
+	if len(matches) > 0 {
+		selectedEffect := highestPrecedenceEffect(matches)
+		selected := matchingEffect(matches, selectedEffect)
+		decision = Decision{Effect: selectedEffect, ReasonCode: selected[0].ID, PolicyVersion: policy.Version}
+		switch selectedEffect {
+		case "deny":
+			arguments = nil
+		case "redact":
+			pointers := uniqueSortedPointers(selected)
+			redacted, err := RedactJSON(canonicalArguments, pointers)
+			if err != nil {
+				decision = Decision{Effect: "deny", ReasonCode: "policy:redaction_failed", PolicyVersion: policy.Version}
+				arguments = nil
+			} else {
+				decision.Redactions = pointers
+				arguments = redacted
+			}
+		}
+	}
+	initial.Decision = decision
+	initial.Arguments = arguments
+	return initial, nil
 }
 
 func findRunTool(tools []ToolRef, name string) (ToolRef, bool) {

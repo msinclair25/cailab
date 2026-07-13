@@ -147,8 +147,15 @@ VALUES(?, 'legacy', '0.1.0', 1, 'active', ?, '2026-07-11T00:00:00Z', '2026-07-11
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('agent_tool_outcomes')`).Scan(&outcomeColumns); err != nil {
 		t.Fatal(err)
 	}
-	if outcomeColumns != 8 {
-		t.Fatalf("agent_tool_outcomes columns = %d, want 8", outcomeColumns)
+	if outcomeColumns != 10 {
+		t.Fatalf("agent_tool_outcomes columns = %d, want 10", outcomeColumns)
+	}
+	var approvalColumns int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('agent_approval_resolutions')`).Scan(&approvalColumns); err != nil {
+		t.Fatal(err)
+	}
+	if approvalColumns != 9 {
+		t.Fatalf("agent_approval_resolutions columns = %d, want 9", approvalColumns)
 	}
 	var agentRunColumns int
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info('agent_runs')`).Scan(&agentRunColumns); err != nil {

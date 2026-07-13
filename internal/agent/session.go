@@ -52,6 +52,12 @@ type ToolCallHandler interface {
 	HandleToolCall(context.Context, Message, ToolCallPayload) (Message, error)
 }
 
+type ApprovalContinuationHandler interface {
+	ToolCallHandler
+	ResolveApproval(context.Context, Message, ToolCallPayload, Message) (Message, error)
+	ContinueApprovedToolCall(context.Context, Message, ToolCallPayload, Message) (Message, error)
+}
+
 // ToolCallHandlerFunc adapts a function to ToolCallHandler.
 type ToolCallHandlerFunc func(context.Context, Message, ToolCallPayload) (Message, error)
 
@@ -177,6 +183,16 @@ func RunSession(ctx context.Context, config SessionConfig, handler ToolCallHandl
 		return fail("handshake", fmt.Errorf("%w: transcript exceeds %d bytes", ErrProtocolViolation, normalized.MaxTranscriptBytes))
 	}
 	seenIDs := map[string]struct{}{start.ID: {}, first.ID: {}}
+	sendControllerResponse := func(response, call Message) error {
+		if err := validateControllerResponse(response, call); err != nil {
+			return err
+		}
+		if _, exists := seenIDs[response.ID]; exists {
+			return fmt.Errorf("%w: duplicate message id %q", ErrProtocolViolation, response.ID)
+		}
+		seenIDs[response.ID] = struct{}{}
+		return writeMessage(sessionCtx, NewEncoder(stdin), response)
+	}
 	if first.Type == MessageProtocolError {
 		return fail("handshake", remoteProtocolError(first))
 	}
@@ -229,15 +245,38 @@ func RunSession(ctx context.Context, config SessionConfig, handler ToolCallHandl
 				}
 				return fail("tool call", fmt.Errorf("handle %s: %w", call.Tool, err))
 			}
-			if err := validateControllerResponse(response, message); err != nil {
-				return fail("tool response", err)
-			}
-			if _, exists := seenIDs[response.ID]; exists {
-				return fail("tool response", fmt.Errorf("%w: duplicate message id %q", ErrProtocolViolation, response.ID))
-			}
-			seenIDs[response.ID] = struct{}{}
-			if err := writeMessage(sessionCtx, NewEncoder(stdin), response); err != nil {
+			if err := sendControllerResponse(response, message); err != nil {
 				return fail("tool response", classifySessionContext(sessionCtx, err))
+			}
+			if response.Type == MessageApprovalRequired {
+				continuation, ok := handler.(ApprovalContinuationHandler)
+				if !ok {
+					continue
+				}
+				resolved, err := resolveApproval(sessionCtx, continuation, message, call, response)
+				if err != nil {
+					return fail("approval resolution", classifySessionContext(sessionCtx, err))
+				}
+				if err := validateApprovalResolutionResponse(resolved, message, response); err != nil {
+					return fail("approval resolution", err)
+				}
+				if _, exists := seenIDs[resolved.ID]; exists {
+					return fail("approval resolution", fmt.Errorf("%w: duplicate message id %q", ErrProtocolViolation, resolved.ID))
+				}
+				seenIDs[resolved.ID] = struct{}{}
+				if err := writeMessage(sessionCtx, NewEncoder(stdin), resolved); err != nil {
+					return fail("approval resolution", classifySessionContext(sessionCtx, err))
+				}
+				final, err := continueApprovedToolCall(sessionCtx, continuation, message, call, resolved)
+				if err != nil {
+					return fail("approved tool call", classifySessionContext(sessionCtx, err))
+				}
+				if final.Type != MessageToolResult {
+					return fail("approved tool call", fmt.Errorf("%w: approval continuation returned %s, want %s", ErrProtocolViolation, final.Type, MessageToolResult))
+				}
+				if err := sendControllerResponse(final, message); err != nil {
+					return fail("approved tool call", classifySessionContext(sessionCtx, err))
+				}
 			}
 		case MessageSessionComplete:
 			if err := json.Unmarshal(message.Payload, &result.Completion); err != nil {
@@ -411,6 +450,34 @@ func handleToolCall(ctx context.Context, handler ToolCallHandler, call Message, 
 	}
 }
 
+func resolveApproval(ctx context.Context, handler ApprovalContinuationHandler, call Message, payload ToolCallPayload, required Message) (Message, error) {
+	result := make(chan toolCallResult, 1)
+	go func() {
+		message, err := handler.ResolveApproval(ctx, call, payload, required)
+		result <- toolCallResult{message: message, err: err}
+	}()
+	select {
+	case handled := <-result:
+		return handled.message, handled.err
+	case <-ctx.Done():
+		return Message{}, ctx.Err()
+	}
+}
+
+func continueApprovedToolCall(ctx context.Context, handler ApprovalContinuationHandler, call Message, payload ToolCallPayload, resolved Message) (Message, error) {
+	result := make(chan toolCallResult, 1)
+	go func() {
+		message, err := handler.ContinueApprovedToolCall(ctx, call, payload, resolved)
+		result <- toolCallResult{message: message, err: err}
+	}()
+	select {
+	case handled := <-result:
+		return handled.message, handled.err
+	case <-ctx.Done():
+		return Message{}, ctx.Err()
+	}
+}
+
 func sessionStartMessage(run AgentRun) Message {
 	payload, _ := json.Marshal(SessionStartPayload{
 		RunID: run.RunID, TrialID: run.TrialID, ScenarioDigest: run.Scenario.Digest,
@@ -444,6 +511,24 @@ func validateControllerResponse(response, call Message) error {
 		if err := json.Unmarshal(response.Payload, &payload); err != nil || payload.ToolCallID != call.ID {
 			return fmt.Errorf("%w: approval toolCallId must match call %q", ErrProtocolViolation, call.ID)
 		}
+	}
+	return nil
+}
+
+func validateApprovalResolutionResponse(resolved, call, required Message) error {
+	if err := ValidateMessage(resolved); err != nil {
+		return fmt.Errorf("%w: invalid approval resolution: %v", ErrProtocolViolation, err)
+	}
+	if resolved.Type != MessageApprovalResolved || resolved.CorrelationID != call.ID {
+		return fmt.Errorf("%w: approval resolution must correlate to call %q", ErrProtocolViolation, call.ID)
+	}
+	var requiredPayload ApprovalRequiredPayload
+	var resolvedPayload ApprovalResolvedPayload
+	if err := json.Unmarshal(required.Payload, &requiredPayload); err != nil {
+		return fmt.Errorf("%w: decode approval requirement: %v", ErrProtocolViolation, err)
+	}
+	if err := json.Unmarshal(resolved.Payload, &resolvedPayload); err != nil || resolvedPayload.ApprovalID != requiredPayload.ApprovalID {
+		return fmt.Errorf("%w: approval resolution id must match requirement %q", ErrProtocolViolation, requiredPayload.ApprovalID)
 	}
 	return nil
 }

@@ -14,6 +14,7 @@
     "trialId": { "$ref": "#/$defs/id" },
     "correlationId": { "$ref": "#/$defs/id" },
     "decisionEventId": { "$ref": "#/$defs/id" },
+    "approvalEventId": { "$ref": "#/$defs/id" },
     "tool": { "$ref": "#/$defs/toolRef" },
     "outcome": { "$ref": "#/$defs/outcome" },
     "outputHash": { "$ref": "#/$defs/digest" }

@@ -61,6 +61,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-SEC-016 | Tool schemas shall validate Draft 2020-12 input instances without external reference loading; only allow or redact decisions may launch a tool subprocess. |
 | NFR-SEC-017 | Successful tool output shall apply declared sensitive-field redaction before return and hashing, and a result shall not be emitted until linked outcome evidence commits. |
 | NFR-SEC-018 | A public agent run shall resolve declared resource identifiers from active canonical scenario state, forward only explicitly selected environment variables, and omit raw protocol transcripts and child diagnostics from its default and JSON summaries. |
+| NFR-SEC-019 | An approval-required call shall remain unexecuted until an exact local resolution is re-evaluated and durably linked; unattended runs shall reject by default, and approval prompts and evidence shall omit raw tool arguments. |
 
 ### Reliability and reproducibility
 
@@ -74,6 +75,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-REL-006 | Agent decision events shall use monotonic sequence numbers and stable correlation identifiers; timestamps shall not determine authorization or score. |
 | NFR-REL-007 | Persisted agent decision events shall be append-only through the application API and shall verify contiguous order, canonical record hashes, and the stored chain head when read. |
 | NFR-REL-008 | An agent trial shall persist a canonical immutable start record before launch and append exactly one terminal record without changing its run configuration. |
+| NFR-REL-009 | Approval resolutions shall be append-only, linked to the exact original decision and input hash, consumed once for live continuation, and required as an integrity-checked predecessor for approved tool outcomes. |
 
 ### Usability and portability
 

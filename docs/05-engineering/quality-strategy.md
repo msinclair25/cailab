@@ -70,10 +70,10 @@ Use only public CLI commands and documented workflows. The flagship scenario is 
 
 - A deterministic reference agent establishes harness correctness.
 - Subprocess tests cover ordering, direction, correlation, malformed output, bounded diagnostics, timeouts, cancellation, unexpected exit, and cleanup.
-- Policy tests cover manifest ceilings, default deny, fixed precedence, rule-order independence, redaction failure, stable approvals, evidence-before-response, and persistence failure.
-- Decision-store tests cover migrations, monotonic sequences, duplicate correlations, reopen, inactive runs, and mutation/deletion integrity failures.
+- Policy and approval tests cover manifest ceilings, default deny, fixed precedence, rule-order independence, redaction failure, stable multi-rule approval IDs, approve/reject outcomes, policy drift, exact correlation, one-use continuation, evidence-before-response, and persistence failure.
+- Decision-store tests cover migrations, monotonic sequences, duplicate correlations, approval linkage and duplicates, rejected-outcome refusal, reopen, inactive runs, and mutation/deletion integrity failures.
 - Tool-execution tests cover Draft 2020-12 instances, offline references, invalid-input non-execution, success/failure, correlation, malformed/extra output, timeout, exit status, bounded diagnostics, output redaction, and linked outcome persistence.
-- Public-run tests cover scenario-bound registration, canonical target resolution, explicit agent/tool environments, immutable start/terminal records, real nested subprocess execution, protocol failure, duplicate trials, and evidence-safe CLI rendering.
+- Public-run tests cover scenario-bound registration, canonical target resolution, explicit agent/tool environments, immutable start/terminal records, real nested subprocess execution, fail-closed and interactive approval behavior, protocol failure, duplicate trials, and evidence-safe CLI rendering.
 - Deliberately unsafe fixtures establish that findings trigger.
 - Nondeterministic models run multiple trials.
 - Reports include denominators, configuration, errors, and incomplete trials.

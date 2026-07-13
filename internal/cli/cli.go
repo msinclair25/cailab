@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -541,6 +542,8 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 	trialCount := fs.Int("trial-count", 1, "declared trial count")
 	sessionTimeout := fs.Duration("timeout", 60*time.Second, "whole agent session timeout")
 	jsonOutput := fs.Bool("json", false, "emit evidence-safe JSON summary")
+	approvalMode := fs.String("approval-mode", "reject", "approval handling: reject or prompt")
+	approverID := fs.String("approver", "user:local", "recorded approver identifier for prompt mode")
 	var toolPaths, commandArguments, agentEnvironmentNames, toolEnvironmentNames stringListFlag
 	fs.Var(&toolPaths, "tool", "tool manifest JSON file; repeat for multiple tools")
 	fs.Var(&commandArguments, "arg", "agent argv value; repeat to preserve argument boundaries")
@@ -552,6 +555,10 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 || *policyPath == "" || *promptPath == "" || *agentID == "" || *agentVersion == "" ||
 		*providerName == "" || *modelName == "" || *actorTenant == "" || *command == "" || len(toolPaths) == 0 {
 		return errors.New("usage: cailab agent run subprocess --policy FILE --tool FILE --prompt-file FILE --agent-id ID --agent-version VERSION --provider NAME --model NAME --actor-tenant TENANT --command ABSOLUTE_PATH [options]")
+	}
+	approver, err := c.approver(*approvalMode, *approverID)
+	if err != nil {
+		return err
 	}
 	policy, err := loadGovernancePolicy(*policyPath)
 	if err != nil {
@@ -595,7 +602,7 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 		Agent:       agent.AgentRef{ID: *agentID, Version: *agentVersion, Adapter: "subprocess", Provider: *providerName, Model: *modelName},
 		ActorTenant: *actorTenant,
 		Command:     append([]string{executable}, commandArguments...), Directory: workingDirectory, Environment: agentEnvironment,
-		Policy: policy, Tools: registrations, PromptHash: hex.EncodeToString(promptDigest[:]),
+		Policy: policy, Tools: registrations, Approver: approver, PromptHash: hex.EncodeToString(promptDigest[:]),
 		TrialID: *trialID, TrialIndex: *trialIndex, TrialCount: *trialCount, SessionTimeout: *sessionTimeout,
 	}
 	result, runErr := service.RunAgent(ctx, options)
@@ -611,6 +618,44 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 		return fmt.Errorf("agent trial %q ended with status %s", result.Run.TrialID, result.Run.Status)
 	}
 	return nil
+}
+
+func (c *CLI) approver(mode, resolvedBy string) (agent.Approver, error) {
+	switch mode {
+	case "reject":
+		return agent.ApproverFunc(func(context.Context, agent.ApprovalRequest) (agent.ApprovalResolution, error) {
+			return agent.ApprovalResolution{Approved: false, ResolvedBy: "system:default-deny"}, nil
+		}), nil
+	case "prompt":
+		if resolvedBy == "" {
+			return nil, errors.New("--approver is required for prompt approval mode")
+		}
+		return &promptApprover{input: bufio.NewReader(c.stdin), output: c.stderr, resolvedBy: resolvedBy}, nil
+	default:
+		return nil, fmt.Errorf("approval mode must be reject or prompt, got %q", mode)
+	}
+}
+
+type promptApprover struct {
+	input      *bufio.Reader
+	output     io.Writer
+	resolvedBy string
+}
+
+func (a *promptApprover) ResolveApproval(ctx context.Context, request agent.ApprovalRequest) (agent.ApprovalResolution, error) {
+	if err := ctx.Err(); err != nil {
+		return agent.ApprovalResolution{}, err
+	}
+	fmt.Fprintf(a.output, "Approval required\n  ID: %s\n  Agent: %s\n  Tool: %s\n  Action: %s\n  Resource: %s (%s, tenant %s)\n  Rule: %s\n",
+		request.ApprovalID, request.Actor.ID, request.Tool.Name, request.Action,
+		request.Resource.ID, request.Resource.Classification, request.Resource.Tenant, request.ReasonCode)
+	fmt.Fprintf(a.output, "Type `approve %s` to approve; any other input rejects: ", request.ApprovalID)
+	line, err := a.input.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return agent.ApprovalResolution{}, fmt.Errorf("read approval response: %w", err)
+	}
+	approved := strings.TrimSpace(line) == "approve "+request.ApprovalID
+	return agent.ApprovalResolution{Approved: approved, ResolvedBy: a.resolvedBy}, nil
 }
 
 func (c *CLI) explicitEnvironment(names []string) ([]string, error) {
@@ -686,10 +731,11 @@ func readBoundedFile(path string, limit int) ([]byte, error) {
 }
 
 type agentRunSummary struct {
-	Run        agent.AgentRun                `json:"run"`
-	Completion *agent.SessionCompletePayload `json:"completion,omitempty"`
-	Decisions  []agent.DecisionEvent         `json:"decisions"`
-	Outcomes   []agent.ToolOutcomeEvent      `json:"outcomes"`
+	Run        agent.AgentRun                  `json:"run"`
+	Completion *agent.SessionCompletePayload   `json:"completion,omitempty"`
+	Decisions  []agent.DecisionEvent           `json:"decisions"`
+	Approvals  []agent.ApprovalResolutionEvent `json:"approvals"`
+	Outcomes   []agent.ToolOutcomeEvent        `json:"outcomes"`
 }
 
 func (c *CLI) renderAgentRunResult(result app.AgentRunResult, jsonOutput bool) error {
@@ -701,7 +747,7 @@ func (c *CLI) renderAgentRunResult(result app.AgentRunResult, jsonOutput bool) e
 		}
 		encoded, err := json.MarshalIndent(agentRunSummary{
 			Run: result.Run, Completion: completion,
-			Decisions: result.Decisions, Outcomes: result.Outcomes,
+			Decisions: result.Decisions, Approvals: result.Approvals, Outcomes: result.Outcomes,
 		}, "", "  ")
 		if err != nil {
 			return fmt.Errorf("encode agent run summary: %w", err)
@@ -711,7 +757,7 @@ func (c *CLI) renderAgentRunResult(result app.AgentRunResult, jsonOutput bool) e
 	}
 	fmt.Fprintf(c.stdout, "✓ agent trial %s ended with status %s\n", result.Run.TrialID, result.Run.Status)
 	fmt.Fprintf(c.stdout, "Agent: %s@%s (%s / %s)\n", result.Run.Agent.ID, result.Run.Agent.Version, result.Run.Agent.Provider, result.Run.Agent.Model)
-	fmt.Fprintf(c.stdout, "Evidence: %d decision(s), %d tool outcome(s)\n", len(result.Decisions), len(result.Outcomes))
+	fmt.Fprintf(c.stdout, "Evidence: %d decision(s), %d approval(s), %d tool outcome(s)\n", len(result.Decisions), len(result.Approvals), len(result.Outcomes))
 	fmt.Fprintln(c.stdout, "Warning: subprocess ownership is not filesystem, network, syscall, or descendant isolation.")
 	return nil
 }

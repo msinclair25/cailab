@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 )
@@ -10,11 +11,12 @@ const (
 	ProtocolVersion = "1.1"
 	MaxFrameBytes   = 1 << 20
 
-	ToolManifestKind     = "ToolManifest"
-	AgentRunKind         = "AgentRun"
-	DecisionEventKind    = "DecisionEvent"
-	GovernancePolicyKind = "GovernancePolicy"
-	ToolOutcomeEventKind = "ToolOutcomeEvent"
+	ToolManifestKind            = "ToolManifest"
+	AgentRunKind                = "AgentRun"
+	DecisionEventKind           = "DecisionEvent"
+	GovernancePolicyKind        = "GovernancePolicy"
+	ToolOutcomeEventKind        = "ToolOutcomeEvent"
+	ApprovalResolutionEventKind = "ApprovalResolutionEvent"
 )
 
 const (
@@ -187,6 +189,7 @@ type ToolOutcomeEvent struct {
 	TrialID         string    `json:"trialId"`
 	CorrelationID   string    `json:"correlationId"`
 	DecisionEventID string    `json:"decisionEventId"`
+	ApprovalEventID string    `json:"approvalEventId,omitempty"`
 	Tool            ToolRef   `json:"tool"`
 	Outcome         Outcome   `json:"outcome"`
 	OutputHash      string    `json:"outputHash,omitempty"`
@@ -198,9 +201,74 @@ type ToolOutcomeEventDraft struct {
 	TrialID         string
 	CorrelationID   string
 	DecisionEventID string
+	ApprovalEventID string
 	Tool            ToolRef
 	Outcome         Outcome
 	OutputHash      string
+}
+
+type ApprovalRequest struct {
+	ApprovalID      string
+	DecisionEventID string
+	RunID           string
+	TrialID         string
+	CorrelationID   string
+	Actor           ActorRef
+	Tool            ToolRef
+	Action          string
+	Resource        ResourceRef
+	ReasonCode      string
+	InputHash       string
+}
+
+type ApprovalResolution struct {
+	Approved   bool
+	ResolvedBy string
+}
+
+type Approver interface {
+	ResolveApproval(context.Context, ApprovalRequest) (ApprovalResolution, error)
+}
+
+type ApproverFunc func(context.Context, ApprovalRequest) (ApprovalResolution, error)
+
+func (f ApproverFunc) ResolveApproval(ctx context.Context, request ApprovalRequest) (ApprovalResolution, error) {
+	return f(ctx, request)
+}
+
+type ApprovalResolutionEvent struct {
+	APIVersion      string      `json:"apiVersion"`
+	Kind            string      `json:"kind"`
+	EventID         string      `json:"eventId"`
+	OccurredAt      time.Time   `json:"occurredAt"`
+	RunID           string      `json:"runId"`
+	TrialID         string      `json:"trialId"`
+	CorrelationID   string      `json:"correlationId"`
+	ApprovalID      string      `json:"approvalId"`
+	DecisionEventID string      `json:"decisionEventId"`
+	ResolvedBy      string      `json:"resolvedBy"`
+	Approved        bool        `json:"approved"`
+	Tool            ToolRef     `json:"tool"`
+	Action          string      `json:"action"`
+	Resource        ResourceRef `json:"resource"`
+	Decision        Decision    `json:"decision"`
+	InputHash       string      `json:"inputHash"`
+}
+
+type ApprovalResolutionEventDraft struct {
+	OccurredAt      time.Time
+	RunID           string
+	TrialID         string
+	CorrelationID   string
+	ApprovalID      string
+	DecisionEventID string
+	ResolvedBy      string
+	Approved        bool
+	Tool            ToolRef
+	Action          string
+	Resource        ResourceRef
+	Decision        Decision
+	InputHash       string
 }
 
 type ToolExecutionRequest struct {

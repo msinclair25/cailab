@@ -81,6 +81,16 @@ CloudAILab records a hash of `--prompt-file` for provenance. It does not send th
   --timeout 60s
 ```
 
-Use repeated `--arg VALUE` flags to preserve argv boundaries. Use repeated `--agent-env NAME` and `--tool-env NAME` flags for explicitly selected variables; the rest of the parent environment is not inherited. `--json` emits run, completion, decision, and outcome records without raw tool arguments, raw protocol transcripts, or child diagnostic text.
+Use repeated `--arg VALUE` flags to preserve argv boundaries. Use repeated `--agent-env NAME` and `--tool-env NAME` flags for explicitly selected variables; the rest of the parent environment is not inherited. `--json` emits run, completion, decision, approval, and outcome records without raw tool arguments, raw protocol transcripts, or child diagnostic text.
 
-An approval-required decision remains `not_executed` in this slice. Interactive approval resolution is the next M3 phase.
+## Resolve approval-required calls
+
+Approval-required calls reject safely by default. The agent receives `approval.required`, then a rejected `approval.resolved` and correlated `tool.result`; the tool is not launched.
+
+To make a local reviewer part of the run, add:
+
+```bash
+--approval-mode prompt --approver user:alice
+```
+
+CloudAILab displays canonical target metadata and the approval ID on standard error. It does not display raw tool arguments. Type the exact prompted `approve <approval-id>` value to approve; blank, malformed, or different input rejects. The gateway then re-evaluates current policy, records the resolution, and only continues if the resulting decision is allow or redact. The whole interaction remains subject to the agent session timeout.

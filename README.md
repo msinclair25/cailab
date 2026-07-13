@@ -15,7 +15,7 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 ## Project status
 
-M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: versioned agent, policy, tool-execution, and outcome contracts; supported reference and custom subprocess runs; scenario-bound tool registration; exact-match policy; Draft 2020-12 input validation; protected tool output; immutable run metadata; and append-only decision/outcome evidence are implemented and test-backed. Enforced isolation, full trace replay, interactive approval resolution, and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
+M0, the M1 AWS identity slice, and the M2 cross-provider identity milestone are complete. M3 is in development: versioned agent, policy, tool-execution, approval, and outcome contracts; supported reference and custom subprocess runs; scenario-bound tool registration; exact-match policy; interactive or fail-closed approval resolution; Draft 2020-12 input validation; protected tool output; immutable run metadata; and append-only linked evidence are implemented and test-backed. Enforced isolation, full trace replay, and repeated-trial scoring remain planned. Provider and protocol compatibility is limited to the tested matrices and schemas.
 
 ## Build and try the walking skeleton
 
@@ -91,7 +91,7 @@ The `acquisition-agent` scenario begins with both a contractor and an approved a
 ./bin/cailab verify
 ```
 
-External tools and AI agents can call the documented loopback APIs and invoke the `cailab federation` command. The supported M3 runner can launch a protocol-compatible agent, validate scenario-bound registrations, govern resolved tool calls, execute allowed or redacted one-shot tools, protect successful output, and persist run/decision/outcome evidence.
+External tools and AI agents can call the documented loopback APIs and invoke the `cailab federation` command. The supported M3 runner can launch a protocol-compatible agent, validate scenario-bound registrations, govern resolved tool calls, pause selected calls for local approval, execute allowed or redacted one-shot tools, protect successful output, and persist linked run/decision/approval/outcome evidence.
 
 ## Run the deterministic agent baseline
 

@@ -28,6 +28,7 @@ type AgentRunOptions struct {
 	Environment    []string
 	Policy         agent.GovernancePolicy
 	Tools          []RegisteredTool
+	Approver       agent.Approver
 	PromptHash     string
 	TrialID        string
 	TrialIndex     int
@@ -39,6 +40,7 @@ type AgentRunResult struct {
 	Run       agent.AgentRun
 	Session   agent.SessionResult
 	Decisions []agent.DecisionEvent
+	Approvals []agent.ApprovalResolutionEvent
 	Outcomes  []agent.ToolOutcomeEvent
 }
 
@@ -96,6 +98,7 @@ func (s *Service) RunAgent(ctx context.Context, options AgentRunOptions) (AgentR
 		Policy:   options.Policy,
 		Resolver: resolver,
 		Executor: registeredToolExecutor{tools: registrations},
+		Approver: options.Approver,
 		Events:   s.store,
 		Clock:    s.clock,
 	}
@@ -119,11 +122,15 @@ func (s *Service) RunAgent(ctx context.Context, options AgentRunOptions) (AgentR
 	if err != nil {
 		return AgentRunResult{Run: terminal, Session: session}, fmt.Errorf("read agent trial decisions: %w", err)
 	}
+	approvals, err := s.store.ApprovalResolutionEvents(persistCtx, run.RunID, run.TrialID)
+	if err != nil {
+		return AgentRunResult{Run: terminal, Session: session, Decisions: decisions}, fmt.Errorf("read agent trial approvals: %w", err)
+	}
 	outcomes, err := s.store.ToolOutcomeEvents(persistCtx, run.RunID, run.TrialID)
 	if err != nil {
-		return AgentRunResult{Run: terminal, Session: session, Decisions: decisions}, fmt.Errorf("read agent trial outcomes: %w", err)
+		return AgentRunResult{Run: terminal, Session: session, Decisions: decisions, Approvals: approvals}, fmt.Errorf("read agent trial outcomes: %w", err)
 	}
-	result := AgentRunResult{Run: terminal, Session: session, Decisions: decisions, Outcomes: outcomes}
+	result := AgentRunResult{Run: terminal, Session: session, Decisions: decisions, Approvals: approvals, Outcomes: outcomes}
 	if sessionErr != nil {
 		return result, sessionErr
 	}

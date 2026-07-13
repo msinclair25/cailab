@@ -114,6 +114,81 @@ func TestPolicyApprovalIsStableAndPrecedesRedaction(t *testing.T) {
 	}
 }
 
+func TestApprovalReevaluationAllowsRejectsAndPreservesRedaction(t *testing.T) {
+	t.Run("approved", func(t *testing.T) {
+		policy, request := policyRequest(t, []PolicyRule{policyRule("rule:approval", "require_approval")})
+		initial, err := EvaluatePolicy(policy, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resolved, err := ReevaluateApprovedPolicy(policy, request, initial.Decision.ApprovalID, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resolved.Decision.Effect != "allow" || resolved.Decision.ReasonCode != "rule:approval" || len(resolved.Arguments) == 0 {
+			t.Fatalf("resolved evaluation = %+v", resolved)
+		}
+	})
+	t.Run("rejected", func(t *testing.T) {
+		policy, request := policyRequest(t, []PolicyRule{policyRule("rule:approval", "require_approval")})
+		initial, err := EvaluatePolicy(policy, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resolved, err := ReevaluateApprovedPolicy(policy, request, initial.Decision.ApprovalID, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resolved.Decision.Effect != "deny" || resolved.Decision.ReasonCode != "approval:rejected" || len(resolved.Arguments) != 0 {
+			t.Fatalf("resolved evaluation = %+v", resolved)
+		}
+	})
+	t.Run("redaction", func(t *testing.T) {
+		policy, request := policyRequest(t, []PolicyRule{
+			policyRule("rule:approval", "require_approval"),
+			policyRule("rule:redact", "redact", "/token"),
+		})
+		initial, err := EvaluatePolicy(policy, request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resolved, err := ReevaluateApprovedPolicy(policy, request, initial.Decision.ApprovalID, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resolved.Decision.Effect != "redact" || !bytes.Contains(resolved.Arguments, []byte("[REDACTED]")) || bytes.Contains(resolved.Arguments, []byte("synthetic-secret")) {
+			t.Fatalf("resolved evaluation = %+v", resolved)
+		}
+	})
+	t.Run("mismatch", func(t *testing.T) {
+		policy, request := policyRequest(t, []PolicyRule{policyRule("rule:approval", "require_approval")})
+		if _, err := ReevaluateApprovedPolicy(policy, request, "approval:wrong", true); !errors.Is(err, ErrInvalidAuthorization) {
+			t.Fatalf("mismatch error = %v", err)
+		}
+	})
+}
+
+func TestApprovalIdentifierCoversAllMatchingApprovalRules(t *testing.T) {
+	rules := []PolicyRule{
+		policyRule("rule:approval-b", "require_approval"),
+		policyRule("rule:approval-a", "require_approval"),
+	}
+	policy, request := policyRequest(t, rules)
+	first, err := EvaluatePolicy(policy, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules[0], rules[1] = rules[1], rules[0]
+	policy, request = policyRequest(t, rules)
+	second, err := EvaluatePolicy(policy, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Decision.ApprovalID == "" || first.Decision.ApprovalID != second.Decision.ApprovalID {
+		t.Fatalf("approval identifiers = %q and %q", first.Decision.ApprovalID, second.Decision.ApprovalID)
+	}
+}
+
 func TestPolicyRedactsCanonicalArgumentsWithoutMutatingInput(t *testing.T) {
 	policy, request := policyRequest(t, []PolicyRule{
 		policyRule("rule:z", "redact", "/nested/password"),
@@ -234,6 +309,125 @@ func TestGatewayReturnsApprovalOnlyAfterEvidenceCommit(t *testing.T) {
 	}
 	if response.Type != MessageApprovalRequired || len(store.events) != 1 || store.events[0].Decision.Effect != "require_approval" {
 		t.Fatalf("response=%+v events=%+v", response, store.events)
+	}
+}
+
+func TestGatewayApprovalResolutionExecutesOnlyAfterPersistedReevaluation(t *testing.T) {
+	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:approval", "require_approval")})
+	store := &memoryEventAppender{}
+	gateway := testGateway(policy, request, store)
+	gateway.Approver = ApproverFunc(func(_ context.Context, approval ApprovalRequest) (ApprovalResolution, error) {
+		if approval.InputHash == "" || approval.Resource.ID != request.Resource.ID || approval.DecisionEventID == "" {
+			t.Fatalf("approval request = %+v", approval)
+		}
+		return ApprovalResolution{Approved: true, ResolvedBy: "user:reviewer"}, nil
+	})
+	call := testMessage(MessageToolCall, "call:approved", "", gatewayToolCall(request, request.Arguments))
+	var payload ToolCallPayload
+	_ = json.Unmarshal(call.Payload, &payload)
+	required, err := gateway.HandleToolCall(context.Background(), call, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := gateway.ResolveApproval(context.Background(), call, payload, required)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := gateway.ContinueApprovedToolCall(context.Background(), call, payload, resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resultPayload ToolResultPayload
+	if err := json.Unmarshal(result.Payload, &resultPayload); err != nil {
+		t.Fatal(err)
+	}
+	if resultPayload.Status != "succeeded" || resultPayload.Decision.Effect != "allow" || len(store.approvals) != 1 || len(store.outcomes) != 1 {
+		t.Fatalf("result=%+v approvals=%+v outcomes=%+v", resultPayload, store.approvals, store.outcomes)
+	}
+	if !store.approvals[0].Approved || store.outcomes[0].ApprovalEventID != store.approvals[0].EventID {
+		t.Fatalf("approval linkage = %+v / %+v", store.approvals[0], store.outcomes[0])
+	}
+	if _, err := gateway.ContinueApprovedToolCall(context.Background(), call, payload, resolved); err == nil {
+		t.Fatal("replayed approval continuation was accepted")
+	}
+}
+
+func TestGatewayRejectedApprovalDoesNotExecute(t *testing.T) {
+	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:approval", "require_approval")})
+	store := &memoryEventAppender{}
+	gateway := testGateway(policy, request, store)
+	gateway.Executor = panicToolExecutor{}
+	gateway.Approver = ApproverFunc(func(context.Context, ApprovalRequest) (ApprovalResolution, error) {
+		return ApprovalResolution{Approved: false, ResolvedBy: "user:reviewer"}, nil
+	})
+	call := testMessage(MessageToolCall, "call:rejected", "", gatewayToolCall(request, request.Arguments))
+	var payload ToolCallPayload
+	_ = json.Unmarshal(call.Payload, &payload)
+	required, err := gateway.HandleToolCall(context.Background(), call, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := gateway.ResolveApproval(context.Background(), call, payload, required)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := gateway.ContinueApprovedToolCall(context.Background(), call, payload, resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resultPayload ToolResultPayload
+	if err := json.Unmarshal(result.Payload, &resultPayload); err != nil {
+		t.Fatal(err)
+	}
+	if resultPayload.Status != "not_executed" || resultPayload.Decision.ReasonCode != "approval:rejected" || len(store.approvals) != 1 || len(store.outcomes) != 0 {
+		t.Fatalf("result=%+v approvals=%+v outcomes=%+v", resultPayload, store.approvals, store.outcomes)
+	}
+}
+
+func TestGatewayApprovalPersistenceFailureWithholdsResolutionAndExecution(t *testing.T) {
+	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:approval", "require_approval")})
+	store := &memoryEventAppender{approvalErr: errors.New("approval disk unavailable")}
+	gateway := testGateway(policy, request, store)
+	gateway.Executor = panicToolExecutor{}
+	gateway.Approver = ApproverFunc(func(context.Context, ApprovalRequest) (ApprovalResolution, error) {
+		return ApprovalResolution{Approved: true, ResolvedBy: "user:reviewer"}, nil
+	})
+	call := testMessage(MessageToolCall, "call:approval-failure", "", gatewayToolCall(request, request.Arguments))
+	var payload ToolCallPayload
+	_ = json.Unmarshal(call.Payload, &payload)
+	required, err := gateway.HandleToolCall(context.Background(), call, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gateway.ResolveApproval(context.Background(), call, payload, required); err == nil || !strings.Contains(err.Error(), "persist approval evidence") {
+		t.Fatalf("resolution error = %v", err)
+	}
+	if len(store.events) != 1 || len(store.approvals) != 0 || len(store.outcomes) != 0 {
+		t.Fatalf("events=%+v approvals=%+v outcomes=%+v", store.events, store.approvals, store.outcomes)
+	}
+}
+
+func TestGatewayApprovalResolutionFailsClosedOnPolicyDrift(t *testing.T) {
+	policy, request := policyRequest(t, []PolicyRule{policyRule("rule:approval", "require_approval")})
+	store := &memoryEventAppender{}
+	gateway := testGateway(policy, request, store)
+	gateway.Executor = panicToolExecutor{}
+	gateway.Approver = ApproverFunc(func(context.Context, ApprovalRequest) (ApprovalResolution, error) {
+		return ApprovalResolution{Approved: true, ResolvedBy: "user:reviewer"}, nil
+	})
+	call := testMessage(MessageToolCall, "call:policy-drift", "", gatewayToolCall(request, request.Arguments))
+	var payload ToolCallPayload
+	_ = json.Unmarshal(call.Payload, &payload)
+	required, err := gateway.HandleToolCall(context.Background(), call, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gateway.Policy.Rules[0].Effect = "allow"
+	if _, err := gateway.ResolveApproval(context.Background(), call, payload, required); !errors.Is(err, ErrInvalidAuthorization) {
+		t.Fatalf("resolution error = %v, want invalid authorization", err)
+	}
+	if len(store.events) != 1 || len(store.approvals) != 0 || len(store.outcomes) != 0 {
+		t.Fatalf("events=%+v approvals=%+v outcomes=%+v", store.events, store.approvals, store.outcomes)
 	}
 }
 
@@ -380,10 +574,27 @@ func TestSessionUsesGovernedGatewayHandler(t *testing.T) {
 }
 
 type memoryEventAppender struct {
-	events     []DecisionEvent
-	outcomes   []ToolOutcomeEvent
-	err        error
-	outcomeErr error
+	events      []DecisionEvent
+	approvals   []ApprovalResolutionEvent
+	outcomes    []ToolOutcomeEvent
+	err         error
+	approvalErr error
+	outcomeErr  error
+}
+
+func (s *memoryEventAppender) AppendApprovalResolutionEvent(_ context.Context, draft ApprovalResolutionEventDraft) (ApprovalResolutionEvent, error) {
+	if s.approvalErr != nil {
+		return ApprovalResolutionEvent{}, s.approvalErr
+	}
+	if s.err != nil {
+		return ApprovalResolutionEvent{}, s.err
+	}
+	event, err := BuildApprovalResolutionEvent(draft, deterministicIdentifier("approval-event", draft.CorrelationID))
+	if err != nil {
+		return ApprovalResolutionEvent{}, err
+	}
+	s.approvals = append(s.approvals, event)
+	return event, nil
 }
 
 func (s *memoryEventAppender) AppendDecisionEvent(_ context.Context, draft DecisionEventDraft) (DecisionEvent, error) {

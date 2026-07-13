@@ -82,6 +82,20 @@ func DecodeToolOutcomeEvent(data []byte) (ToolOutcomeEvent, error) {
 	return event, nil
 }
 
+func DecodeApprovalResolutionEvent(data []byte) (ApprovalResolutionEvent, error) {
+	if len(data) > MaxFrameBytes {
+		return ApprovalResolutionEvent{}, fmt.Errorf("approval resolution event exceeds %d bytes", MaxFrameBytes)
+	}
+	var event ApprovalResolutionEvent
+	if err := decodeStrict(data, &event); err != nil {
+		return ApprovalResolutionEvent{}, fmt.Errorf("decode approval resolution event: %w", err)
+	}
+	if err := ValidateApprovalResolutionEvent(event); err != nil {
+		return ApprovalResolutionEvent{}, err
+	}
+	return event, nil
+}
+
 func DigestToolManifest(manifest ToolManifest) (string, error) {
 	if err := ValidateToolManifest(manifest); err != nil {
 		return "", err

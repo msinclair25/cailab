@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 const testDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -205,7 +207,7 @@ func TestProtocolRejectsOversizedAndInvalidUTF8Frames(t *testing.T) {
 }
 
 func TestCommittedAgentSchemasAreValidJSON(t *testing.T) {
-	for _, name := range []string{"tool-manifest.json", "agent-run.json", "protocol-message.json", "decision-event.json", "governance-policy.json", "tool-execution-message.json", "tool-outcome-event.json"} {
+	for _, name := range []string{"tool-manifest.json", "agent-run.json", "protocol-message.json", "decision-event.json", "governance-policy.json", "tool-execution-message.json", "tool-outcome-event.json", "approval-resolution-event.json"} {
 		data, err := os.ReadFile(filepath.Join("..", "..", "schemas", "agent", "v1alpha1", name))
 		if err != nil {
 			t.Fatal(err)
@@ -217,6 +219,40 @@ func TestCommittedAgentSchemasAreValidJSON(t *testing.T) {
 		if schema["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
 			t.Fatalf("%s has unexpected $schema", name)
 		}
+		if name == "approval-resolution-event.json" {
+			compiler := jsonschema.NewCompiler()
+			compiler.DefaultDraft(jsonschema.Draft2020)
+			location := "mem://cloudailab/" + name
+			if err := compiler.AddResource(location, schema); err != nil {
+				t.Fatalf("%s add resource: %v", name, err)
+			}
+			if _, err := compiler.Compile(location); err != nil {
+				t.Fatalf("%s compile: %v", name, err)
+			}
+		}
+	}
+}
+
+func TestApprovalResolutionEventRequiresResolutionConsistentDecision(t *testing.T) {
+	draft := ApprovalResolutionEventDraft{
+		OccurredAt: time.Date(2026, 7, 12, 20, 0, 0, 0, time.UTC),
+		RunID:      "run:1", TrialID: "trial:1", CorrelationID: "call:1", ApprovalID: "approval:1",
+		DecisionEventID: "event:1", ResolvedBy: "user:reviewer", Approved: true,
+		Tool: ToolRef{Name: "test.read", Version: "0.1.0", Digest: testDigest}, Action: "test.read",
+		Resource: ResourceRef{ID: "resource:a", Tenant: "tenant:a", Classification: "restricted"},
+		Decision: Decision{Effect: "allow", ReasonCode: "rule:approval", PolicyVersion: "0.1.0"}, InputHash: testDigest,
+	}
+	if _, err := BuildApprovalResolutionEvent(draft, "approval-event:1"); err != nil {
+		t.Fatal(err)
+	}
+	draft.Decision = Decision{Effect: "deny", ReasonCode: "policy:deny", PolicyVersion: "0.1.0"}
+	if _, err := BuildApprovalResolutionEvent(draft, "approval-event:1"); err == nil {
+		t.Fatal("approved resolution accepted deny decision")
+	}
+	draft.Approved = false
+	draft.Decision = Decision{Effect: "deny", ReasonCode: "approval:rejected", PolicyVersion: "0.1.0"}
+	if _, err := BuildApprovalResolutionEvent(draft, "approval-event:1"); err != nil {
+		t.Fatal(err)
 	}
 }
 
