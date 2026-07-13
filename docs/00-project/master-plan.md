@@ -323,9 +323,9 @@ Exit gate:
 
 Deliverables:
 
-- Linux, macOS, and Windows release artifacts for supported architectures
+- Linux, macOS, and Windows release artifacts with a working-directory-independent built-in scenario catalog for supported architectures (release pipeline implemented; first tag pending)
 - Container image for CI
-- Checksums, SBOM, provenance attestation, changelog, and upgrade notes
+- Checksums, SBOM, and provenance/SBOM attestations (implemented); changelog and upgrade notes
 - Installation, quick start, architecture walkthrough, demo recording, and troubleshooting
 - SECURITY, SUPPORT, CONTRIBUTING, CODE_OF_CONDUCT, and license/notice files
 - Threat-model review and compatibility audit
@@ -449,6 +449,6 @@ The following questions must be resolved through spikes and ADRs before dependen
 
 ## Immediate next actions
 
-1. Begin M4 release engineering with cross-platform artifacts, checksums, SBOMs, and provenance.
-2. Add clean-install smoke tests and a release-focused documentation audit.
-3. Evaluate isolated tool execution only when a scenario requires an untrusted tool adapter.
+1. Add the M4 CI container and prove the documented demo inside it.
+2. Complete the public-release documentation set, licensing/notices, changelog, upgrade notes, and compatibility/security audit.
+3. Exercise a release candidate and then the first version tag only after the remaining M4 release decision is recorded.

@@ -20,8 +20,9 @@ type Service struct {
 }
 
 type UpOptions struct {
-	ScenarioPath string
-	Seed         *int64
+	ScenarioReference string
+	ScenarioRoot      string
+	Seed              *int64
 }
 
 func New(store *state.Store, providerManager provider.Manager) *Service {
@@ -29,7 +30,7 @@ func New(store *state.Store, providerManager provider.Manager) *Service {
 }
 
 func (s *Service) Up(ctx context.Context, options UpOptions) (state.Run, error) {
-	definition, err := scenario.Load(options.ScenarioPath)
+	definition, err := scenario.LoadReference(options.ScenarioRoot, options.ScenarioReference)
 	if err != nil {
 		return state.Run{}, err
 	}

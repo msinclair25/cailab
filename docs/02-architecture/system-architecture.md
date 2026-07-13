@@ -50,7 +50,7 @@ flowchart TD
 
 ## Sources of truth
 
-- The **scenario manifest** is the source of initial topology and mission intent.
+- The selected **scenario manifest** is the source of initial topology and mission intent. Named built-ins come from the immutable catalog compiled into the executable; custom filesystem sources require explicit selection.
 - **Provider backends** are the source of mutable current state after startup.
 - The **normalized graph** is the source used for cross-provider reasoning.
 - **Deterministic invariants** are the source of pass/fail decisions.
@@ -74,6 +74,8 @@ Accepted choices and their constraints are recorded in ADRs.
 
 The target default is one `cailab` binary, with Docker or Podman required only for container-backed scenarios. The binary starts run-scoped native facade subprocesses and manages pinned external containers. Transparent HTTPS interception, host certificate installation, and hosted AI are optional advanced modes.
 
+The repository-owned scenario catalog is compiled into that binary. Default commands do not discover an ambient `./scenarios` directory; explicit paths and catalog flags preserve custom scenario workflows. Both sources enter the same strict validation and deterministic compilation boundary. Embedding establishes distribution and explicit source selection, not confidentiality from the launching OS account. See [ADR-0024](decisions/0024-embedded-built-in-scenario-catalog.md).
+
 M1 tests Docker only. Floci runs as an unprivileged user with dropped capabilities, resource limits, no Docker socket mount, and a random loopback-only API port. Podman remains a target rather than an implemented compatibility claim.
 
 M2's Microsoft and Google facades and local identity issuer run as detached private commands of the same binary through one provider-neutral lifecycle manager. Each binds to a random IPv4 loopback port and uses an owner-only run directory plus authenticated run-scoped control. A PID is diagnostic rather than cleanup authority. See [ADR-0008](decisions/0008-managed-native-facade-processes.md) and [ADR-0009](decisions/0009-local-development-oidc-profile.md).
@@ -81,6 +83,10 @@ M2's Microsoft and Google facades and local identity issuer run as detached priv
 The M2 federation command validates signed local identity, current Microsoft assignment state, and typed AWS web trust before invoking Floci for temporary credentials. The pinned Floci runtime remains directly reachable on loopback and does not enforce that gateway decision; direct access is outside the supported authorization contract. Enforced agent mediation and isolation are M3 work. See [ADR-0010](decisions/0010-authoritative-web-identity-gateway.md).
 
 M3's public agent workflows launch deterministic inert reference, fixture-specific safe, deliberately unsafe, or configured protocol subprocess agents behind the governed tool gateway. The controller binds canonical targets, policy, approvals, protected output, and immutable linked evidence. Startup captures a normalized provider-state baseline; evaluated trials can restore owned runtimes at stable loopback endpoints and append before/after invariant reports. Scenario-owned injection ground truth is persisted but omitted from `session.start`; replay derives exposure, later prohibited behavior, attack success, and gateway containment from exact linked action evidence without running a model. Paired safe/unsafe controls validate positive and negative fixture behavior without implying model-general resistance. Host agents and tools remain unisolated. Optional Docker agent mode enforces the documented content-addressed, network-none, read-only, non-root boundary; tools remain on the trusted host side. See [ADR-0011](decisions/0011-versioned-agent-json-lines-protocol.md) through [ADR-0022](decisions/0022-paired-fixture-specific-agent-controls.md).
+
+## Release pipeline
+
+M4 uses a repository-owned Go packager as the source of archive layout and checksum selection. It creates fixed CGO-free targets from explicit version, commit, and source-date inputs; Syft inventories the staged binaries in SPDX JSON; and Linux, macOS, and Windows jobs verify the full manifest before executing their native archive. Pull requests and manual runs stop at a short-lived release candidate. Tags alone enter separate GitHub/Sigstore attestation and publication jobs with narrowly scoped write permissions. See [ADR-0023](decisions/0023-release-artifact-provenance-pipeline.md) and the [release verification guide](../07-guides/release-verification.md).
 
 ## Compatibility policy
 

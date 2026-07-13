@@ -71,7 +71,7 @@ func TestServicePersistsAndStopsProviderRuntime(t *testing.T) {
 	defer store.Close()
 	manager := &fakeProviderManager{}
 	service := New(store, manager)
-	run, err := service.Up(ctx, UpOptions{ScenarioPath: writeAppScenario(t)})
+	run, err := service.Up(ctx, UpOptions{ScenarioReference: writeAppScenario(t)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestServiceRollsBackRunWhenProviderStartFails(t *testing.T) {
 	defer store.Close()
 	manager := &fakeProviderManager{startErr: errors.New("runtime unavailable")}
 	service := New(store, manager)
-	if _, err := service.Up(ctx, UpOptions{ScenarioPath: writeAppScenario(t)}); err == nil {
+	if _, err := service.Up(ctx, UpOptions{ScenarioReference: writeAppScenario(t)}); err == nil {
 		t.Fatal("Up() succeeded with provider start failure")
 	}
 	if _, err := service.Status(ctx); !errors.Is(err, state.ErrNoActiveRun) {

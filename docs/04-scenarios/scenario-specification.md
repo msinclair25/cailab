@@ -11,6 +11,14 @@ A scenario is a versioned, reproducible enterprise topology plus a mission, inte
 
 The normative schema is [schemas/scenario/v1alpha1.json](../../schemas/scenario/v1alpha1.json). Executable references are [scenarios/walking-skeleton/scenario.yaml](../../scenarios/walking-skeleton/scenario.yaml), [scenarios/aws-cross-account/scenario.yaml](../../scenarios/aws-cross-account/scenario.yaml), [scenarios/microsoft-consent/scenario.yaml](../../scenarios/microsoft-consent/scenario.yaml), [scenarios/google-drive-sharing/scenario.yaml](../../scenarios/google-drive-sharing/scenario.yaml), [scenarios/local-oidc/scenario.yaml](../../scenarios/local-oidc/scenario.yaml), and the [acquisition-agent flagship](../../scenarios/acquisition-agent/scenario.yaml). This document explains the authoring contract but does not override the schema or typed validator.
 
+## Catalog and distribution
+
+Repository-owned `*/scenario.yaml` files under `scenarios/` form the built-in catalog and are embedded into the `cailab` executable at build time. Named commands use this immutable catalog by default, so a binary does not depend on a repository checkout, adjacent data directory, or caller working directory.
+
+Custom development remains explicit. `cailab scenario list --root DIR` selects a filesystem catalog; `scenario show`, `doctor`, and `up` accept the corresponding `--root` or `--scenario-root` option, and an existing scenario file can be supplied directly where a scenario reference is accepted. External and built-in manifests use the same strict decoder, validation, compilation, and runtime allowlist. CloudAILab never merges an ambient directory into the built-in catalog.
+
+Embedding is not secrecy. Built-in manifests and verification rules are public repository content and are recoverable by the local account running the executable. Agent isolation and disclosure controls must not rely on embedded bytes being hidden.
+
 ## Required sections
 
 1. Metadata and schema version

@@ -2,7 +2,7 @@
 title: CloudAILab
 aliases:
   - CAL
-status: m3-complete
+status: m4-in-development
 ---
 
 # CloudAILab
@@ -34,6 +34,8 @@ go build -o ./bin/cailab ./cmd/cailab
 ```
 
 The default state database is `.cloudailab/cailab.db`. Override it with `--state-dir` on lifecycle commands or set `CAILAB_HOME`.
+
+Named built-in scenarios are compiled into the executable, so these commands work from any directory and release users do not need a repository checkout or separate scenario folder. Custom scenario files still work when supplied directly; custom catalogs require an explicit `--root` or `--scenario-root` path.
 
 ## Try the AWS vertical slice
 
@@ -149,6 +151,12 @@ go test -race ./...
 go run ./internal/tools/doccheck .
 ```
 
+## Release integrity
+
+The M4 release pipeline now builds CGO-free archives with an embedded built-in scenario catalog for Linux amd64/arm64, macOS amd64/arm64, and Windows amd64; generates a sorted SHA-256 manifest and SPDX JSON SBOM; runs native archive smoke tests on Linux, macOS, and Windows; and gates tag publication on GitHub/Sigstore build and SBOM attestations. No public version tag has been cut yet, so this is verified release infrastructure rather than a claim that a stable release exists.
+
+See the [release verification guide](docs/07-guides/release-verification.md) for archive selection, checksum validation, provenance verification, SBOM inspection, and the limits of each signal.
+
 ## Principles
 
 - Deterministic security decisions; optional AI explanations.
@@ -189,6 +197,7 @@ go run ./internal/tools/doccheck .
 - [Agent trial state compatibility](docs/07-compatibility/agent-trial-state.md)
 - [Agent prompt-injection evaluation compatibility](docs/07-compatibility/agent-prompt-injection.md)
 - [Agent campaign execution compatibility](docs/07-compatibility/agent-campaign-execution.md)
+- [Release verification](docs/07-guides/release-verification.md)
 
 ## Working vocabulary
 

@@ -63,7 +63,7 @@ Milestones are capability gates, not date commitments. This document is the conc
 
 **Status:** in development.
 
-- Cross-platform packaging and CI container.
+- Cross-platform binary packaging with an embedded built-in scenario catalog, checksums, SPDX SBOM generation, provenance/SBOM attestations, and native install smoke tests is implemented; the CI container remains planned.
 - Reproducible demo and architecture walkthrough.
 - Threat-model review and dependency provenance.
 - SBOM, checksums, versioned releases, and contribution guidance.

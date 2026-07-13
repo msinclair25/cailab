@@ -1,0 +1,230 @@
+name: Release
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - README.md
+      - cmd/cailab/**
+      - internal/**
+      - go.mod
+      - go.sum
+      - scenarios/**
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semantic version without the v prefix
+        required: true
+        default: 0.0.0-dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  build:
+    name: Package release assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Resolve release metadata
+        id: metadata
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          elif [[ -n "$REQUESTED_VERSION" ]]; then
+            version="$REQUESTED_VERSION"
+          else
+            version="0.0.0-dev.${GITHUB_RUN_NUMBER}"
+          fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([0-9A-Za-z.-]*[0-9A-Za-z])?)?$ ]]; then
+            echo "invalid semantic version: $version" >&2
+            exit 1
+          fi
+          build_date="$(git show -s --format=%cI "$GITHUB_SHA")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "build_date=$build_date" >> "$GITHUB_OUTPUT"
+
+      - name: Build deterministic archives
+        run: >-
+          go run ./internal/tools/release package
+          --version "${{ steps.metadata.outputs.version }}"
+          --commit "$GITHUB_SHA"
+          --date "${{ steps.metadata.outputs.build_date }}"
+          --output dist
+
+      - name: Generate SPDX JSON SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          path: dist/binaries
+          format: spdx-json
+          output-file: dist/packages/cailab_${{ steps.metadata.outputs.version }}_sbom.spdx.json
+          syft-version: v1.42.3
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Generate SHA-256 manifest
+        run: go run ./internal/tools/release checksums --directory dist/packages --output checksums.txt
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cailab-release-${{ steps.metadata.outputs.version }}
+          path: dist/packages
+          if-no-files-found: error
+          retention-days: 7
+
+  smoke-unix:
+    name: Smoke install (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    steps:
+      - name: Download release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cailab-release-${{ needs.build.outputs.version }}
+          path: dist/packages
+
+      - name: Verify checksums and execute archive
+        shell: bash
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          cd dist/packages
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sha256sum --check checksums.txt
+            target_os=linux
+          else
+            shasum --algorithm 256 --check checksums.txt
+            target_os=darwin
+          fi
+          case "$(uname -m)" in
+            x86_64) target_arch=amd64 ;;
+            arm64|aarch64) target_arch=arm64 ;;
+            *) echo "unsupported runner architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+          archive="cailab_${VERSION}_${target_os}_${target_arch}.tar.gz"
+          mkdir smoke
+          tar -xzf "$archive" -C smoke
+          binary="smoke/cailab_${VERSION}_${target_os}_${target_arch}/cailab"
+          "$binary" version | grep -F "cailab ${VERSION} (commit "
+          "$binary" scenario list
+
+  smoke-windows:
+    name: Smoke install (windows-latest)
+    needs: build
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download release candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cailab-release-${{ needs.build.outputs.version }}
+          path: dist/packages
+
+      - name: Verify checksums and execute archive
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          Set-Location dist/packages
+          Get-Content checksums.txt | ForEach-Object {
+            $parts = $_ -split '  ', 2
+            if ($parts.Count -ne 2) { throw "invalid checksum line: $_" }
+            $actual = (Get-FileHash -Algorithm SHA256 $parts[1]).Hash.ToLowerInvariant()
+            if ($actual -ne $parts[0]) { throw "checksum mismatch: $($parts[1])" }
+          }
+          $archive = "cailab_${env:VERSION}_windows_amd64.zip"
+          Expand-Archive -Path $archive -DestinationPath smoke
+          $binary = "smoke/cailab_${env:VERSION}_windows_amd64/cailab.exe"
+          $versionOutput = & $binary version
+          if (-not $versionOutput.StartsWith("cailab $env:VERSION (commit ")) { throw "unexpected version output: $versionOutput" }
+          & $binary scenario list
+
+  attest:
+    name: Attest release assets
+    if: github.ref_type == 'tag'
+    needs:
+      - build
+      - smoke-unix
+      - smoke-windows
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Download verified release assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cailab-release-${{ needs.build.outputs.version }}
+          path: dist/packages
+
+      - name: Attest build provenance
+        uses: actions/attest@c32b4b8b198b65d0bd9d63490e847ff7b53989d4 # v4.0.0
+        with:
+          subject-path: dist/packages/*
+
+      - name: Attest archive SBOM
+        uses: actions/attest@c32b4b8b198b65d0bd9d63490e847ff7b53989d4 # v4.0.0
+        with:
+          subject-path: |
+            dist/packages/*.tar.gz
+            dist/packages/*.zip
+          sbom-path: dist/packages/cailab_${{ needs.build.outputs.version }}_sbom.spdx.json
+
+  publish:
+    name: Publish GitHub release
+    if: github.ref_type == 'tag'
+    needs:
+      - build
+      - attest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Download attested release assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cailab-release-${{ needs.build.outputs.version }}
+          path: dist/packages
+
+      - name: Publish release assets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/packages/* --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes

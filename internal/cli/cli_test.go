@@ -95,6 +95,38 @@ func TestWalkingSkeletonLifecycle(t *testing.T) {
 	}
 }
 
+func TestBuiltInScenarioCommandsNeedNoRepositoryCatalog(t *testing.T) {
+	ctx := context.Background()
+	stateDir := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	c := New(&stdout, &stderr)
+
+	if code := c.Run(ctx, []string{"scenario", "list"}); code != ExitOK {
+		t.Fatalf("scenario list code = %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "walking-skeleton") {
+		t.Fatalf("scenario list output = %q", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := c.Run(ctx, []string{"scenario", "show", "walking-skeleton"}); code != ExitOK {
+		t.Fatalf("scenario show code = %d; stderr=%s", code, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Cross-Provider Path") {
+		t.Fatalf("scenario show output = %q", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := c.Run(ctx, []string{"up", "--state-dir", stateDir, "walking-skeleton"}); code != ExitOK {
+		t.Fatalf("up built-in scenario code = %d; stderr=%s", code, stderr.String())
+	}
+	if code := c.Run(ctx, []string{"down", "--state-dir", stateDir}); code != ExitOK {
+		t.Fatalf("down built-in scenario code = %d; stderr=%s", code, stderr.String())
+	}
+}
+
 func TestVerificationFailureUsesDedicatedExitCode(t *testing.T) {
 	ctx := context.Background()
 	stateDir := t.TempDir()
