@@ -108,3 +108,59 @@ jobs:
         env:
           CAILAB_NATIVE_INTEGRATION: "1"
         run: go test -count=1 -run '^Test(Microsoft|Google|OIDC)NativeIntegration$' -v ./internal/provider
+
+  clean-container-demo:
+    name: Clean container demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      IMAGE: cailab-ci:${{ github.sha }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Build pinned CI image
+        run: >-
+          docker build
+          --file build/ci/Dockerfile
+          --tag "$IMAGE"
+          --build-arg "VERSION=0.0.0-ci.${GITHUB_RUN_NUMBER}"
+          --build-arg "COMMIT=${GITHUB_SHA}"
+          .
+
+      - name: Validate final image contract
+        shell: bash
+        run: |
+          user="$(docker image inspect --format '{{.Config.User}}' "$IMAGE")"
+          ports="$(docker image inspect --format '{{json .Config.ExposedPorts}}' "$IMAGE")"
+          volumes="$(docker image inspect --format '{{json .Config.Volumes}}' "$IMAGE")"
+          entrypoint="$(docker image inspect --format '{{join .Config.Entrypoint " "}}' "$IMAGE")"
+          [[ "$user" == "65532:65532" ]]
+          [[ "$ports" == "null" ]]
+          [[ "$volumes" == "null" ]]
+          [[ "$entrypoint" == "/usr/local/bin/cailab-ci-demo" ]]
+          container="$(docker create "$IMAGE")"
+          trap 'docker rm --force "$container" >/dev/null' EXIT
+          filesystem="$(docker export "$container" | tar -tf -)"
+          if grep -Eq '^(src|go|usr/local/go)(/|$)' <<< "$filesystem"; then
+            echo "final image contains a source or Go toolchain path" >&2
+            exit 1
+          fi
+          docker run --rm --network none --read-only \
+            --entrypoint /usr/local/bin/cailab "$IMAGE" version
+
+      - name: Run network-isolated clean demo
+        run: >-
+          docker run --rm
+          --network none
+          --ipc none
+          --read-only
+          --tmpfs /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777,uid=65532,gid=65532
+          --cap-drop ALL
+          --security-opt no-new-privileges=true
+          --security-opt seccomp=builtin
+          --memory 256m
+          --cpus 1
+          --pids-limit 128
+          --ulimit nofile=1024:1024
+          "$IMAGE"

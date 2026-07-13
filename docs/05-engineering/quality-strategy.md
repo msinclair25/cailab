@@ -111,13 +111,14 @@ The Go project recommends govulncheck, fuzzing, and the race detector as complem
 - Markdown formatting and link checks
 - Secret scanning and dependency review
 - Targeted integration tests when affected paths change
+- Digest-pinned CI image build, final-image contract inspection, and Docker `none` network walking-skeleton demo
 
 ### Default branch and scheduled
 
 - Full provider integration suite
 - Bounded fuzzing
 - Cross-platform compile matrix
-- Container image build without publication
+- CI image build and hardened clean demo without publication
 - CodeQL and dependency/security scans
 - Cleanup leak detection
 
