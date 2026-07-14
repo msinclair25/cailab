@@ -153,16 +153,49 @@ func TestToolUsesOnlyFixedLoopbackProviderTarget(t *testing.T) {
 }
 
 func TestToolFailsClosedForMismatchedTarget(t *testing.T) {
-	request := toolRequest{
-		ProtocolVersion: protocolVersion, CallID: "call:1", Tool: toolName, Action: toolAction,
-		Resource: resourceRef{ID: "google:other", Tenant: "tenant:northstar", Classification: "internal"}, Arguments: json.RawMessage(`{}`),
+	tests := []struct {
+		name     string
+		resource resourceRef
+	}{
+		{name: "resource", resource: resourceRef{ID: "google:other", Tenant: toolTenant, Classification: toolClass}},
+		{name: "tenant", resource: resourceRef{ID: toolResource, Tenant: "tenant:other", Classification: toolClass}},
+		{name: "classification", resource: resourceRef{ID: toolResource, Tenant: toolTenant, Classification: "restricted"}},
 	}
-	var input bytes.Buffer
-	if err := json.NewEncoder(&input).Encode(request); err != nil {
-		t.Fatal(err)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := toolRequest{
+				ProtocolVersion: protocolVersion, CallID: "call:1", Tool: toolName, Action: toolAction,
+				Resource: test.resource, Arguments: json.RawMessage(`{}`),
+			}
+			var input bytes.Buffer
+			if err := json.NewEncoder(&input).Encode(request); err != nil {
+				t.Fatal(err)
+			}
+			if err := serveTool(context.Background(), &input, io.Discard, "http://127.0.0.1:1234", "synthetic-token"); err == nil {
+				t.Fatal("tool accepted a mismatched canonical target")
+			}
+		})
 	}
-	if err := serveTool(context.Background(), &input, io.Discard, "http://127.0.0.1:1234", "synthetic-token"); err == nil {
-		t.Fatal("tool accepted a mismatched canonical target")
+}
+
+func TestDecodeStrictRejectsAmbiguousOrInvalidJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+		want string
+	}{
+		{name: "duplicate key", data: []byte(`{"protocolVersion":"1.1","protocolVersion":"0.1"}`), want: "duplicate"},
+		{name: "nested duplicate key", data: []byte(`{"outer":{"id":"one","id":"two"}}`), want: "duplicate"},
+		{name: "invalid UTF-8", data: []byte{'{', '"', 'x', '"', ':', '"', 0xff, '"', '}'}, want: "UTF-8"},
+		{name: "trailing value", data: []byte(`{} {}`), want: "trailing"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var value map[string]any
+			if err := decodeStrict(test.data, &value); err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("decodeStrict() error = %v, want %q", err, test.want)
+			}
+		})
 	}
 }
 

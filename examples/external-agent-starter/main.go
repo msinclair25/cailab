@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -28,6 +29,8 @@ const (
 	toolAction      = "google.drive.files.get"
 	toolResource    = "google:agent-runbook"
 	toolFileID      = "drive_file_agent_runbook"
+	toolTenant      = "tenant:northstar"
+	toolClass       = "internal"
 )
 
 type message struct {
@@ -158,7 +161,7 @@ func configure(output string, stdout io.Writer) error {
 			"apiVersion": "cloudailab.dev/agent/v1alpha1", "kind": "GovernancePolicy", "version": "0.1.0", "defaultEffect": "deny",
 			"rules": []any{map[string]any{
 				"id": "rule:allow-starter-read", "effect": "allow", "agentId": agentID, "tool": toolName,
-				"action": toolAction, "resource": toolResource, "resourceTenant": "tenant:northstar", "resourceClassification": "internal",
+				"action": toolAction, "resource": toolResource, "resourceTenant": toolTenant, "resourceClassification": toolClass,
 			}},
 		},
 	}
@@ -186,7 +189,7 @@ func toolManifest(executable string) map[string]any {
 		"spec": map[string]any{
 			"transport":   map[string]any{"type": "subprocess", "command": []string{executable, "tool"}},
 			"inputSchema": map[string]any{"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object", "properties": map[string]any{}, "additionalProperties": false},
-			"permissions": []any{map[string]any{"tenant": "tenant:northstar", "actions": []string{toolAction}, "resources": []string{toolResource}}},
+			"permissions": []any{map[string]any{"tenant": toolTenant, "actions": []string{toolAction}, "resources": []string{toolResource}}},
 			"risk":        "medium", "timeoutMillis": 5000,
 			"isolation":       map[string]any{"network": "loopback", "filesystem": "none"},
 			"sensitiveFields": []string{"/content"},
@@ -275,7 +278,8 @@ func serveTool(ctx context.Context, input io.Reader, output io.Writer, endpoint,
 	if err := decodeStrict(requestFrame, &request); err != nil {
 		return fmt.Errorf("decode tool request: %w", err)
 	}
-	if request.ProtocolVersion != protocolVersion || request.Tool != toolName || request.Action != toolAction || request.Resource.ID != toolResource {
+	if request.ProtocolVersion != protocolVersion || request.Tool != toolName || request.Action != toolAction ||
+		request.Resource.ID != toolResource || request.Resource.Tenant != toolTenant || request.Resource.Classification != toolClass {
 		return errors.New("tool request does not match the fixed starter target")
 	}
 	var arguments map[string]json.RawMessage
@@ -363,6 +367,9 @@ func readSingleFrame(input io.Reader) ([]byte, error) {
 }
 
 func decodeStrict(data []byte, target any) error {
+	if err := rejectDuplicateJSONKeys(data); err != nil {
+		return err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
@@ -370,6 +377,76 @@ func decodeStrict(data []byte, target any) error {
 	}
 	if decoder.Decode(&struct{}{}) != io.EOF {
 		return errors.New("JSON contains trailing data")
+	}
+	return nil
+}
+
+func rejectDuplicateJSONKeys(data []byte) error {
+	if len(bytes.TrimSpace(data)) == 0 {
+		return errors.New("JSON value is empty")
+	}
+	if !utf8.Valid(data) {
+		return errors.New("JSON value must be UTF-8")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	var parseValue func() error
+	parseValue = func() error {
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+		delimiter, ok := token.(json.Delim)
+		if !ok {
+			return nil
+		}
+		switch delimiter {
+		case '{':
+			keys := make(map[string]struct{})
+			for decoder.More() {
+				keyToken, err := decoder.Token()
+				if err != nil {
+					return err
+				}
+				key, ok := keyToken.(string)
+				if !ok {
+					return errors.New("JSON object key is not a string")
+				}
+				if _, exists := keys[key]; exists {
+					return fmt.Errorf("duplicate JSON object key %q", key)
+				}
+				keys[key] = struct{}{}
+				if err := parseValue(); err != nil {
+					return err
+				}
+			}
+			closing, err := decoder.Token()
+			if err != nil || closing != json.Delim('}') {
+				return errors.New("JSON object is not closed")
+			}
+		case '[':
+			for decoder.More() {
+				if err := parseValue(); err != nil {
+					return err
+				}
+			}
+			closing, err := decoder.Token()
+			if err != nil || closing != json.Delim(']') {
+				return errors.New("JSON array is not closed")
+			}
+		default:
+			return fmt.Errorf("unexpected JSON delimiter %q", delimiter)
+		}
+		return nil
+	}
+	if err := parseValue(); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("unexpected trailing JSON value")
+		}
+		return err
 	}
 	return nil
 }

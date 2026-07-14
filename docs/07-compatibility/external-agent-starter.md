@@ -13,9 +13,9 @@ The repository and release packager provide `cailab-agent-starter`, a dependency
 | Surface | Supported behavior |
 |---|---|
 | Agent protocol | Protocol `1.1`; one `session.start`, one `agent.ready`, one fixed `tool.call`, one correlated `tool.result`, and one `session.complete` |
-| Tool protocol | One strict JSON request and one correlated JSON response |
+| Tool protocol | One UTF-8, duplicate-key-free, strict JSON request and one correlated JSON response |
 | Provider operation | `GET /drive/v3/files/drive_file_agent_runbook?alt=media` on the exact active IPv4 loopback Google origin |
-| Registration | Generated closed tool schema, fixed scenario tenant/action/resource permission, and default-deny exact-match policy |
+| Registration | Generated closed tool schema, fixed scenario tenant/action/resource/classification permission, and default-deny exact-match policy |
 | Secret handling | Google endpoint and synthetic token selected explicitly through `--tool-env`; values absent from manifest and evidence output |
 | Protected output | `/content` declared sensitive and redacted before agent return and outcome hashing |
 | Evidence | One completion, authorization, execution outcome, and optional restored before/after state pair |
@@ -23,7 +23,7 @@ The repository and release packager provide `cailab-agent-starter`, a dependency
 
 ## Tested boundary
 
-- Unit tests cover configuration refusal on overwrite, fixed registration content, protocol framing, correlation, the exact provider route, loopback-only endpoint validation, and target mismatch refusal.
+- Unit tests cover configuration refusal on overwrite, fixed registration content, UTF-8 and duplicate-key-free protocol framing, correlation, the exact provider route, loopback-only endpoint validation, and exact tenant/action/resource/classification mismatch refusal.
 - The Linux flagship public CLI integration builds and configures the starter, validates registrations, performs the real facade-backed tool read, replays evidence, and checks the expected completion, authorization, execution, and task-result numerators. The packaged workflow is also acceptance-rehearsed on macOS.
 - Release tests and Linux/macOS/Windows smoke jobs require the starter binary and supporting files and exercise help plus configuration generation.
 
