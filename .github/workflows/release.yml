@@ -10,6 +10,12 @@ on:
       - NOTICE
       - THIRD_PARTY_NOTICES.md
       - cmd/cailab/**
+      - examples/external-agent-starter/**
+      - examples/scenario-starter/**
+      - examples/ci/**
+      - docs/08-learning/**
+      - learning/**
+      - schemas/learning/**
       - internal/**
       - go.mod
       - go.sum
@@ -147,12 +153,21 @@ jobs:
           mkdir smoke
           tar -xzf "$archive" -C smoke
           root="smoke/cailab_${VERSION}_${target_os}_${target_arch}"
-          for required in LICENSE NOTICE THIRD_PARTY_NOTICES.md CHANGELOG.md third_party/licenses/go/LICENSE third_party/modules.txt; do
+          for required in LICENSE NOTICE THIRD_PARTY_NOTICES.md CHANGELOG.md examples/ci/README.md examples/ci/github-actions.yml examples/external-agent-starter/README.md examples/external-agent-starter/expected-report.md examples/external-agent-starter/main.go examples/external-agent-starter/policy.json examples/external-agent-starter/prompt.txt examples/scenario-starter/README.md examples/scenario-starter/scenario.yaml docs/08-learning/README.md docs/08-learning/identity-agent-foundations.md docs/08-learning/learning-contract.md docs/08-learning/adaptation-provenance.md learning/catalog.json schemas/learning/v1alpha1/learning-catalog.json third_party/licenses/go/LICENSE third_party/modules.txt; do
             test -f "$root/$required"
           done
           binary="$root/cailab"
+          starter="$root/cailab-agent-starter"
           "$binary" version | grep -F "cailab ${VERSION} (commit "
           "$binary" scenario list
+          "$binary" scenario validate "$root/examples/scenario-starter/scenario.yaml" | grep -F "community-trust-path@0.1.0 is valid"
+          "$binary" up --state-dir "$root/scenario-smoke" "$root/examples/scenario-starter/scenario.yaml"
+          "$binary" verify --state-dir "$root/scenario-smoke" --format junit --output "$root/cailab-verification.xml"
+          grep -F 'tests="2" failures="0"' "$root/cailab-verification.xml"
+          "$binary" down --state-dir "$root/scenario-smoke"
+          "$starter" --help | grep -F "cailab-agent-starter configure"
+          "$starter" configure --output "$root/starter-smoke"
+          test -f "$root/starter-smoke/tool.json"
 
   smoke-windows:
     name: Smoke install (windows-latest)
@@ -181,13 +196,25 @@ jobs:
           $archive = "cailab_${env:VERSION}_windows_amd64.zip"
           Expand-Archive -Path $archive -DestinationPath smoke
           $root = "smoke/cailab_${env:VERSION}_windows_amd64"
-          @("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "third_party/licenses/go/LICENSE", "third_party/modules.txt") | ForEach-Object {
+          @("LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "examples/ci/README.md", "examples/ci/github-actions.yml", "examples/external-agent-starter/README.md", "examples/external-agent-starter/expected-report.md", "examples/external-agent-starter/main.go", "examples/external-agent-starter/policy.json", "examples/external-agent-starter/prompt.txt", "examples/scenario-starter/README.md", "examples/scenario-starter/scenario.yaml", "docs/08-learning/README.md", "docs/08-learning/identity-agent-foundations.md", "docs/08-learning/learning-contract.md", "docs/08-learning/adaptation-provenance.md", "learning/catalog.json", "schemas/learning/v1alpha1/learning-catalog.json", "third_party/licenses/go/LICENSE", "third_party/modules.txt") | ForEach-Object {
             if (-not (Test-Path (Join-Path $root $_) -PathType Leaf)) { throw "missing release document: $_" }
           }
           $binary = "$root/cailab.exe"
+          $starter = "$root/cailab-agent-starter.exe"
           $versionOutput = & $binary version
           if (-not $versionOutput.StartsWith("cailab $env:VERSION (commit ")) { throw "unexpected version output: $versionOutput" }
           & $binary scenario list
+          $scenarioValidation = & $binary scenario validate "$root/examples/scenario-starter/scenario.yaml"
+          if (-not ($scenarioValidation -join "`n").Contains("community-trust-path@0.1.0 is valid")) { throw "unexpected scenario validation: $scenarioValidation" }
+          & $binary up --state-dir "$root/scenario-smoke" "$root/examples/scenario-starter/scenario.yaml"
+          & $binary verify --state-dir "$root/scenario-smoke" --format junit --output "$root/cailab-verification.xml"
+          $junit = Get-Content "$root/cailab-verification.xml" -Raw
+          if (-not $junit.Contains('tests="2" failures="0"')) { throw "unexpected JUnit report: $junit" }
+          & $binary down --state-dir "$root/scenario-smoke"
+          $starterHelp = & $starter --help
+          if (-not ($starterHelp -join "`n").Contains("cailab-agent-starter configure")) { throw "unexpected starter help: $starterHelp" }
+          & $starter configure --output "$root/starter-smoke"
+          if (-not (Test-Path "$root/starter-smoke/tool.json" -PathType Leaf)) { throw "starter configure did not write tool.json" }
 
   attest:
     name: Attest release assets

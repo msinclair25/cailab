@@ -1,6 +1,7 @@
 package verify
 
 import (
+	"encoding/xml"
 	"fmt"
 	"strings"
 
@@ -122,4 +123,72 @@ func Markdown(report Report) string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+type junitTestSuite struct {
+	XMLName    xml.Name        `xml:"testsuite"`
+	Name       string          `xml:"name,attr"`
+	Tests      int             `xml:"tests,attr"`
+	Failures   int             `xml:"failures,attr"`
+	Properties junitProperties `xml:"properties"`
+	Cases      []junitTestCase `xml:"testcase"`
+}
+
+type junitProperties struct {
+	Values []junitProperty `xml:"property"`
+}
+
+type junitProperty struct {
+	Name  string `xml:"name,attr"`
+	Value string `xml:"value,attr"`
+}
+
+type junitTestCase struct {
+	Name      string        `xml:"name,attr"`
+	ClassName string        `xml:"classname,attr"`
+	Failure   *junitFailure `xml:"failure,omitempty"`
+	SystemOut string        `xml:"system-out,omitempty"`
+}
+
+type junitFailure struct {
+	Message string `xml:"message,attr"`
+	Type    string `xml:"type,attr"`
+	Body    string `xml:",chardata"`
+}
+
+// JUnit projects deterministic invariant results into a timestamp-free JUnit
+// testsuite. Each invariant is one testcase; failed invariants are failures.
+func JUnit(report Report) ([]byte, error) {
+	suite := junitTestSuite{
+		Name:  "CloudAILab verification: " + report.Scenario,
+		Tests: len(report.Results),
+		Properties: junitProperties{Values: []junitProperty{
+			{Name: "cloudailab.run_id", Value: report.RunID},
+			{Name: "cloudailab.scenario", Value: report.Scenario},
+			{Name: "cloudailab.scenario_version", Value: report.ScenarioVersion},
+			{Name: "cloudailab.plan_digest", Value: report.Digest},
+		}},
+		Cases: make([]junitTestCase, 0, len(report.Results)),
+	}
+	for _, result := range report.Results {
+		testCase := junitTestCase{
+			Name:      result.InvariantID,
+			ClassName: "cloudailab.verify." + report.Scenario,
+			SystemOut: strings.Join(result.Evidence, "\n"),
+		}
+		if !result.Passed {
+			suite.Failures++
+			testCase.Failure = &junitFailure{
+				Message: result.Message,
+				Type:    "cloudailab.invariant." + result.Severity,
+				Body:    result.Description,
+			}
+		}
+		suite.Cases = append(suite.Cases, testCase)
+	}
+	encoded, err := xml.MarshalIndent(suite, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode JUnit verification report: %w", err)
+	}
+	return append([]byte(xml.Header), append(encoded, '\n')...), nil
 }

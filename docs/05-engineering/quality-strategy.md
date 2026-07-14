@@ -14,7 +14,7 @@ CloudAILab must be trustworthy enough to teach authorization and evaluate agents
 
 | Risk class | Examples | Required evidence |
 |---|---|---|
-| Critical | Authorization, tenant isolation, agent approvals, credential redaction, protected ground truth | Positive, negative, deny-precedence, regression, and end-to-end tests |
+| Critical | Authorization, tenant isolation, agent approvals, credential redaction, protected ground truth, proof-of-work export disclosure | Positive, negative, deny-precedence, regression, and end-to-end tests |
 | High | Scenario compilation, graph paths, state migrations, provider normalization, cleanup | Unit, property/fuzz where applicable, integration, and failure-path tests |
 | Medium | CLI rendering, reports, configuration diagnostics | Unit or golden tests plus smoke tests |
 | Low | Static prose and non-behavioral examples | Formatting and link validation |
@@ -66,6 +66,26 @@ Failure cases include occupied ports, unavailable container runtime, corrupt sta
 
 Use only public CLI commands and documented workflows. The flagship scenario is the primary end-to-end test. It verifies both the vulnerable initial path and at least one valid remediation while preserving required access.
 
+### First-user acceptance
+
+Run the clean archive journeys separately from an observed unfamiliar-participant session. Automated and maintainer rehearsals cover artifact execution, deterministic outcomes, reporting, endpoint/container cleanup, and regressions. Human acceptance additionally records time to first success, hints, errors, comprehension of emulation and isolation boundaries, and public-document navigation. Automated smoke must never be presented as usability observation. Follow the [first-user acceptance protocol](first-user-acceptance.md).
+
+### Learning catalog
+
+The data-only learning catalog is checked against its Draft 2020-12 schema and typed semantic rules. Tests cover duplicate and unknown references, prerequisite cycles and path ordering, guide/scenario binding, progressive hint ordering, cleanup consistency, and current-repository validation. Lesson metadata cannot select executable hooks, provider runtimes, policies, or verification predicates.
+
+### Community scenario authoring
+
+The packaged starter is loaded and compiled through the same strict path as built-in manifests, then exercised through public `validate`, `up`, `verify`, and `down` commands. Regression tests prove that the starter selects no runtime, provider facade, or evaluation fixture and that unknown hook fields and unreviewed runtime engines are rejected. Release smoke tests validate the exact bundled starter on Linux, macOS, and Windows.
+
+### Verification reports
+
+All output formats project one deterministic verification report. JUnit tests cover invariant-to-testcase/failure mapping, exact counts, XML metacharacter escaping, byte-stable repeated rendering, absence of time metadata, CLI file output, exit-code preservation, and source/release lifecycle execution. Agent evidence remains multidimensional and cannot be reduced to a JUnit verdict without a future scenario-declared gate.
+
+### Proof-of-work exports
+
+Before the planned M5 portfolio export is supported, tests must cover versioned schema validation, byte-stable repeated projection, deterministic ordering, complete evidence linkage, contradictory and incomplete evidence, compatibility limitations, credential/classified-payload redaction, protected-ground-truth exclusion, owner-safe atomic output, traversal and symlink refusal, bounded archive size/count, checksum verification, cleanup evidence, and mandatory non-attestation language. An integrity manifest is tested only as change detection and must never be described as proof of identity, authorship, competence, or employment suitability.
+
 ### Agent evaluations
 
 - A deterministic reference agent establishes harness correctness.
@@ -109,6 +129,9 @@ The Go project recommends govulncheck, fuzzing, and the race detector as complem
 - Vulnerability scan
 - Scenario and JSON Schema validation
 - Markdown formatting and link checks
+- Learning catalog schema, reference, prerequisite, guide, scenario, and cleanup validation
+- Data-only scenario-starter validation and public lifecycle regression tests
+- Timestamp-free JUnit invariant projection and least-privilege synthetic CI workflow
 - Secret scanning and dependency review
 - Manual-build CodeQL analysis of the shipped Go command
 - Targeted integration tests when affected paths change

@@ -1,6 +1,7 @@
 package verify
 
 import (
+	"encoding/xml"
 	"strings"
 	"testing"
 
@@ -50,5 +51,46 @@ func TestEvaluateReportsProhibitedPath(t *testing.T) {
 	}
 	if got := report.Results[0].Evidence; len(got) != 1 || !strings.Contains(got[0], "can_access") {
 		t.Fatalf("evidence = %v", got)
+	}
+}
+
+func TestJUnitIsDeterministicAndEscapesEvidence(t *testing.T) {
+	t.Parallel()
+	report := Report{
+		RunID: "run:<one>", Scenario: "test&scenario", ScenarioVersion: "1.0.0", Digest: strings.Repeat("c", 64),
+		Passed: false, PassedCount: 1, FailedCount: 1,
+		Results: []Result{
+			{InvariantID: "approved", Severity: "high", Passed: true, Message: "required path exists", Evidence: []string{"actor --can_access--> resource&one"}},
+			{InvariantID: "blocked", Severity: "critical", Description: "contractor <must> be blocked", Passed: false, Message: "prohibited path exists"},
+		},
+	}
+	first, err := JUnit(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := JUnit(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(first) != string(second) {
+		t.Fatal("JUnit output changed for identical input")
+	}
+	var document struct {
+		XMLName xml.Name
+	}
+	if err := xml.Unmarshal(first, &document); err != nil {
+		t.Fatalf("JUnit output is invalid XML: %v\n%s", err, first)
+	}
+	if document.XMLName.Local != "testsuite" {
+		t.Fatalf("JUnit root = %q, want testsuite", document.XMLName.Local)
+	}
+	output := string(first)
+	for _, want := range []string{`tests="2"`, `failures="1"`, `name="blocked"`, `type="cloudailab.invariant.critical"`, `resource&amp;one`, `contractor &lt;must&gt; be blocked`} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("JUnit output missing %q:\n%s", want, output)
+		}
+	}
+	if strings.Contains(output, "timestamp=") || strings.Contains(output, "time=") {
+		t.Fatalf("JUnit output contains nondeterministic time metadata:\n%s", output)
 	}
 }

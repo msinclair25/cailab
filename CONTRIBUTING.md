@@ -19,7 +19,8 @@ go test ./...
 
 ## Before coding
 
-- Read the [master plan](docs/00-project/master-plan.md), [requirements](docs/01-product/requirements.md), applicable [ADRs](docs/02-architecture/decisions/README.md), and [threat model](docs/03-security/threat-model.md).
+- Start with the [documentation map](docs/README.md), then read the [master plan](docs/00-project/master-plan.md), [requirements](docs/01-product/requirements.md), applicable [ADRs](docs/02-architecture/decisions/README.md), and [threat model](docs/03-security/threat-model.md).
+- Follow the [documentation conventions](docs/05-engineering/documentation-conventions.md) for Markdown, frontmatter, source-of-truth ownership, and Obsidian portability.
 - Open an issue before a broad provider surface, schema change, new trust boundary, new executable dependency, or costly-to-reverse design.
 - Add provider operations only for a documented scenario or compatibility contract.
 - Never place real credentials, tenant data, personal data, or proprietary prompts in fixtures, tests, issues, or pull requests.
@@ -45,6 +46,8 @@ go vet ./...
 go test ./...
 go test -race ./...
 go run ./internal/tools/doccheck .
+go run ./internal/tools/learningcheck .
+go run ./cmd/cailab scenario validate ./examples/scenario-starter/scenario.yaml
 ```
 
 Container and provider changes also require the targeted integration tests documented in [quality strategy](docs/05-engineering/quality-strategy.md).

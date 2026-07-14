@@ -71,6 +71,7 @@ Use golden files only for stable structured output. Normalize timestamps and gen
 
 ## Documentation practice
 
+- Follow the [documentation conventions](documentation-conventions.md) for source-of-truth ownership, frontmatter, portable links, assets, and Obsidian settings.
 - `README.md` explains value, status, quick start, and verified capabilities.
 - Requirements use stable identifiers.
 - Significant structural or security choices use ADRs.

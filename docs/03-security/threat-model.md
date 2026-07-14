@@ -8,7 +8,7 @@ last_reviewed: 2026-07-13
 
 ## Scope
 
-This threat model covers the CloudAILab control plane, local provider services, scenario files, generated credentials, agent gateway, audit records, optional model integrations, and the developer host on which the range runs.
+This threat model covers the CloudAILab control plane, local provider services, scenario files, generated credentials, agent gateway, audit records, planned proof-of-work exports, optional model integrations, and the developer host on which the range runs.
 
 It does not assert containment for arbitrary agent processes unless an isolation mode enforces network and filesystem boundaries.
 
@@ -17,6 +17,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - Host credentials and personal files
 - Integrity of scenario ground truth and verification rules
 - Integrity and confidentiality of audit evidence
+- Confidentiality, integrity, and bounded interpretation of planned proof-of-work exports
 - Isolation between simulated tenants and accounts
 - Authenticity of downloaded runtime dependencies
 - Availability of the local control plane
@@ -31,6 +32,7 @@ It does not assert containment for arbitrary agent processes unless an isolation
 5. Local issuer ↔ token-consuming services
 6. Local range ↔ optional hosted model API
 7. Workspace files ↔ downloaded third-party artifacts
+8. Persisted evidence ↔ user-selected proof-of-work export directory (planned M5)
 
 ## Initial threats and controls
 
@@ -76,6 +78,11 @@ It does not assert containment for arbitrary agent processes unless an isolation
 | TM-038 | A mutable or compromised base image, oversized build context, root default, host mount, network access, writable path, or misleading isolation claim compromises the CI demo or makes it depend on undeclared host state. | Docker Official builder pinned by tag and digest; allowlisted context; multi-stage CGO-free build; final-image contract inspection; numeric non-root user; no ports/volumes/source/toolchain; Docker `none` network; no IPC or mounts; read-only root; bounded tmpfs/resources; dropped capabilities; no-new-privileges; built-in seccomp; CI-only non-publication and explicit non-sandbox claim. |
 | TM-039 | A release omits license/notice material, ships stale dependency attribution, or treats an SBOM/classifier as a legal conclusion. | Apache-2.0 project license; required release documents; copied linked-component licenses/notices including the Go runtime; multi-target linked-module inventory drift gate; archive unit/smoke tests; independent SBOM, vulnerability, and human review; explicit non-legal-advice boundary. |
 | TM-040 | A recording helper executes an unintended binary, replaces an existing run, follows a forged external endpoint, hides an expected failure, consumes an oversized response, or leaves provider listeners active. | Explicit regular non-symlink executable; optional exact version/commit assertion; new or empty owner-only state; direct argv without a shell; exact expected exits; complete ready-runtime set and origin-only IPv4 loopback validation; bounded HTTP responses and redirect refusal; fixed synthetic Graph operation; signal-aware cleanup; inactive-run and endpoint-closure checks. |
+| TM-041 | A planned proof-of-work export leaks credentials, classified payloads, or protected ground truth; follows an unsafe output path; omits contradictory evidence; or is presented as identity proof, a credential, or a hiring recommendation. | Before M5 support: allowlisted evidence projection, export-specific redaction, protected-ground-truth exclusion, owner-safe atomic writes, traversal/symlink and size checks, required incomplete/error evidence, deterministic ordering, integrity manifest, explicit non-attestation language, and negative/regression tests. No export support claim exists until those controls pass. |
+| TM-042 | The external-agent starter follows a caller-controlled provider URL, broadens its canonical target, leaks retrieved content or a token into configuration/evidence, overwrites user files, or is mistaken for isolated/model-general evaluation. | Exact IPv4 loopback origin and fixed provider path; fixed scenario tenant/action/resource; closed empty input; explicit environment selection; `/content` protected-output redaction; new-directory and exclusive-file creation; host/tool non-isolation warnings; deterministic-starter limitation; unit, flagship integration, archive, and cross-platform smoke tests. |
+| TM-043 | Learning metadata becomes an executable hook, points outside the repository, binds to nonexistent scenarios, bypasses prerequisites, changes deterministic results, or is mistaken for grades or credentials. | Closed data-only schema; fixed field vocabulary with no command transport; regular in-repository guide and scenario checks; stable/unique references; cycle and path-order validation; deterministic verification remains external and authoritative; explicit non-LMS/non-attestation language; CI and release-bundle checks. |
+| TM-044 | A community scenario starter gains an executable hook or unreviewed runtime, leaks real data, hides cross-tenant authority, exposes ground truth as learner briefing, or is mistaken for provider parity. | No-runtime starter; strict unknown-field and runtime allowlist validation; synthetic-data and visible-edge guidance; separate briefing/invariants; explicit non-confidential ground-truth boundary; public lifecycle, negative, CI, archive, and compatibility tests. |
+| TM-045 | Scenario-controlled text corrupts JUnit XML, timestamps make results nondeterministic, a report is mistaken for an agent score, or canonical evidence discloses real data. | Standard XML escaping; timestamp-free ordered projection; invariant-only testcases; explicit agent-JUnit deferral; synthetic-data rule; deterministic, metacharacter, CLI, CI, and archive tests. |
 
 ## Security invariants
 
@@ -148,7 +155,16 @@ It does not assert containment for arbitrary agent processes unless an isolation
 - Linux ARM64 is cross-compiled and packaged but is not yet executed on a native hosted release runner.
 - The SBOM reflects Syft's detection over staged binaries and can be incomplete; it complements rather than replaces `govulncheck`, dependency review, and source inspection.
 - The portfolio runner's version/commit check prevents accidental candidate mix-ups but is not cryptographic authenticity. Recording still requires independent checksum and provenance verification of the selected binary.
+- The external-agent starter is intentionally host-executed and deterministic. Its loopback/filesystem declarations are requirements rather than enforced tool isolation, and its successful governed read is not evidence of general model quality or prompt-injection resistance.
+- Learning paths are navigation and instructional metadata. Their durations, outcomes, checklists, and reflection prompts do not prove identity, authorship, competence, employment readiness, or scenario success.
+- The data-only scenario starter proves schema, graph, invariant, lifecycle, and packaging behavior only. It provides no provider facade, executable extension, confidential ground truth, tenant process isolation, or provider-parity claim.
+
+## Planned M5 proof-of-work boundary
+
+- The proof-of-work bundle is planned, not implemented or supported in M4. Existing reports and release attestations do not provide this user-facing portfolio contract.
+- A future integrity manifest can detect changed export files after generation but cannot prove personal identity, independent authorship, general competence, or employment suitability.
+- Public sharing creates a new disclosure boundary even for synthetic environments. Export projection and redaction require dedicated threat review and tests before M5 implementation ships.
 
 ## Review triggers
 
-Review this document when adding a provider, execution mode, downloadable dependency, hosted integration, new credential type, or new agent tool protocol.
+Review this document when adding a provider, execution mode, downloadable dependency, hosted integration, new credential type, agent tool protocol, or evidence-export format.

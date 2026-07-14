@@ -1,6 +1,6 @@
 ---
 title: AWS Cross-Account Acquisition Data Lab
-status: m1-complete
+status: active
 last_reviewed: 2026-07-12
 ---
 
@@ -21,6 +21,7 @@ This M1 scenario is training software, not a complete AWS emulator. Read the [op
 Build and check the host:
 
 ```bash
+mkdir -p ./bin
 go build -o ./bin/cailab ./cmd/cailab
 ./bin/cailab doctor aws-cross-account
 ```

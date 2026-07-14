@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -40,6 +41,33 @@ var (
 	Date    = "unknown"
 )
 
+var flagSetUsage = map[string]string{
+	"doctor":                   "cailab doctor [--scenario-root DIR] [--json] [scenario]",
+	"scenario list":            "cailab scenario list [--root DIR]",
+	"scenario show":            "cailab scenario show [--root DIR] <scenario>",
+	"scenario validate":        "cailab scenario validate [--root DIR] <scenario>",
+	"quickstart":               "cailab quickstart [--state-dir DIR]",
+	"up":                       "cailab up [--scenario-root DIR] [--state-dir DIR] [--seed N] <scenario>",
+	"status":                   "cailab status [--state-dir DIR] [--format text|json]",
+	"mission":                  "cailab mission [--state-dir DIR]",
+	"agent validate":           "cailab agent validate --policy FILE --tool FILE --agent-id ID --actor-tenant TENANT [options]",
+	"agent replay":             "cailab agent replay --trial-id ID [--trial-id ID ...] [--run-id ID] [--format text|json|markdown] [--output FILE]",
+	"agent run reference":      "cailab agent run reference [--state-dir DIR] [--trial-id ID] [--capture-state] [--restore-fixture] [--json]",
+	"agent run safe":           "cailab agent run safe [--state-dir DIR] [--trial-id ID] [--fixture ID] [--json]",
+	"agent run unsafe":         "cailab agent run unsafe [--state-dir DIR] [--trial-id ID] [--fixture ID] [--json]",
+	"agent run subprocess":     "cailab agent run subprocess --policy FILE --tool FILE --prompt-file FILE --agent-id ID --agent-version VERSION --provider NAME --model NAME --actor-tenant TENANT --command ABSOLUTE_PATH [options]",
+	"agent campaign reference": "cailab agent campaign reference [--trials COUNT] [--trial-prefix PREFIX] [--format text|json|markdown] [--output FILE] [--state-dir DIR]",
+	"agent campaign safe":      "cailab agent campaign safe [--trials COUNT] [--trial-prefix PREFIX] [--fixture ID] [--format text|json|markdown] [--output FILE] [--state-dir DIR]",
+	"agent campaign unsafe":    "cailab agent campaign unsafe [--trials COUNT] [--trial-prefix PREFIX] [--fixture ID] [--format text|json|markdown] [--output FILE] [--state-dir DIR]",
+	"identity rotate":          "cailab identity rotate [--state-dir DIR]",
+	"identity validate":        "cailab identity validate --token-file FILE --type <id|access> --audience VALUE [--state-dir DIR]",
+	"federation assume-aws":    "cailab federation assume-aws --token-file FILE --role-node ID --output FILE [--state-dir DIR]",
+	"graph path":               "cailab graph path [--state-dir DIR] <from> <to>",
+	"verify":                   "cailab verify [--state-dir DIR] [--format text|json|markdown|junit] [--output FILE]",
+	"reset":                    "cailab reset [--state-dir DIR]",
+	"down":                     "cailab down [--state-dir DIR]",
+}
+
 type CLI struct {
 	stdin     io.Reader
 	stdout    io.Writer
@@ -64,11 +92,19 @@ func (c *CLI) Run(ctx context.Context, args []string) int {
 	case "help", "-h", "--help":
 		c.printUsage(c.stdout)
 	case "version":
-		fmt.Fprintf(c.stdout, "cailab %s (commit %s, built %s)\n", Version, Commit, Date)
+		if len(args) == 2 && isHelpFlag(args[1]) {
+			fmt.Fprintln(c.stdout, "Usage:\n  cailab version\n\nPrint build version, commit, and date.")
+		} else if len(args) != 1 {
+			err = errors.New("version accepts no arguments")
+		} else {
+			fmt.Fprintf(c.stdout, "cailab %s (commit %s, built %s)\n", Version, Commit, Date)
+		}
 	case "doctor":
 		err = c.runDoctor(ctx, args[1:])
 	case "scenario":
 		err = c.runScenario(args[1:])
+	case "quickstart":
+		err = c.runQuickstart(ctx, args[1:])
 	case "up":
 		err = c.runUp(ctx, args[1:])
 	case "status":
@@ -102,6 +138,9 @@ func (c *CLI) Run(ctx context.Context, args []string) int {
 	}
 
 	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return ExitOK
+		}
 		fmt.Fprintf(c.stderr, "error: %v\n", err)
 		if errors.Is(err, state.ErrNoActiveRun) {
 			fmt.Fprintln(c.stderr, "hint: start a scenario with `cailab up <scenario>`")
@@ -119,8 +158,10 @@ Usage:
 
 Commands:
   doctor            Check local prerequisites
-  scenario list     List available scenarios
-  scenario show     Show a scenario briefing
+  scenario list      List available scenarios
+  scenario show      Show a scenario briefing
+  scenario validate  Validate and compile a scenario without starting it
+  quickstart         Run the guided no-Docker first experience
   up                 Start and persist a scenario run
   status             Show the active run
   mission            Show the active mission
@@ -140,7 +181,7 @@ func (c *CLI) runDoctor(ctx context.Context, args []string) error {
 	fs := newFlagSet("doctor", c.stderr)
 	jsonOutput := fs.Bool("json", false, "emit JSON")
 	scenarioRoot := fs.String("scenario-root", "", "scenario catalog directory; default: built-in catalog")
-	if err := fs.Parse(args); err != nil {
+	if err := c.parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() > 1 {
@@ -245,13 +286,17 @@ func dockerVersionSupported(version string) bool {
 
 func (c *CLI) runScenario(args []string) error {
 	if len(args) == 0 {
-		return errors.New("scenario requires `list` or `show`")
+		return errors.New("scenario requires `list`, `show`, or `validate`")
+	}
+	if isHelpFlag(args[0]) {
+		fmt.Fprintln(c.stdout, "Usage:\n  cailab scenario <list|show|validate> [options]\n\nCommands:\n  list      List available scenarios\n  show      Show one scenario briefing\n  validate  Validate and compile without starting a run")
+		return flag.ErrHelp
 	}
 	switch args[0] {
 	case "list":
 		fs := newFlagSet("scenario list", c.stderr)
 		root := fs.String("root", "", "scenario catalog directory; default: built-in catalog")
-		if err := fs.Parse(args[1:]); err != nil {
+		if err := c.parseFlags(fs, args[1:]); err != nil {
 			return err
 		}
 		if fs.NArg() != 0 {
@@ -270,7 +315,7 @@ func (c *CLI) runScenario(args []string) error {
 	case "show":
 		fs := newFlagSet("scenario show", c.stderr)
 		root := fs.String("root", "", "scenario catalog directory; default: built-in catalog")
-		if err := fs.Parse(args[1:]); err != nil {
+		if err := c.parseFlags(fs, args[1:]); err != nil {
 			return err
 		}
 		if fs.NArg() != 1 {
@@ -282,6 +327,27 @@ func (c *CLI) runScenario(args []string) error {
 		}
 		printScenario(c.stdout, definition)
 		return nil
+	case "validate":
+		fs := newFlagSet("scenario validate", c.stderr)
+		root := fs.String("root", "", "scenario catalog directory; default: built-in catalog")
+		if err := c.parseFlags(fs, args[1:]); err != nil {
+			return err
+		}
+		if fs.NArg() != 1 {
+			return errors.New("usage: cailab scenario validate [--root DIR] <scenario>")
+		}
+		definition, err := scenario.LoadReference(*root, fs.Arg(0))
+		if err != nil {
+			return err
+		}
+		compiled, err := scenario.Compile(definition, definition.Spec.Seed)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(c.stdout, "✓ %s@%s is valid and compiles deterministically\n", definition.Metadata.Name, definition.Metadata.Version)
+		fmt.Fprintf(c.stdout, "  digest: %s\n", compiled.Digest)
+		fmt.Fprintf(c.stdout, "  nodes: %d, relationships: %d, invariants: %d\n", len(compiled.Nodes), len(compiled.Edges), len(compiled.Invariants))
+		return nil
 	default:
 		return fmt.Errorf("unknown scenario command %q", args[0])
 	}
@@ -292,7 +358,7 @@ func (c *CLI) runUp(ctx context.Context, args []string) error {
 	root := fs.String("scenario-root", "", "scenario catalog directory; default: built-in catalog")
 	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
 	seed := fs.Int64("seed", 0, "override scenario seed")
-	if err := fs.Parse(args); err != nil {
+	if err := c.parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
@@ -333,15 +399,111 @@ func (c *CLI) runUp(ctx context.Context, args []string) error {
 	return nil
 }
 
-func (c *CLI) runStatus(ctx context.Context, args []string) error {
-	fs, stateDir, err := c.parseStateFlags("status", args)
+func (c *CLI) runQuickstart(ctx context.Context, args []string) (returnErr error) {
+	fs := newFlagSet("quickstart", c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	if err := c.parseFlags(fs, args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return errors.New("quickstart accepts no positional arguments")
+	}
+
+	fmt.Fprintln(c.stdout, "CloudAILab guided no-Docker quick start")
+	fmt.Fprintln(c.stdout, "\n[1/5] Check the embedded walking-skeleton prerequisites")
+	if err := c.runDoctor(ctx, []string{"walking-skeleton"}); err != nil {
+		return fmt.Errorf("quick-start prerequisites: %w", err)
+	}
+
+	service, closeStore, err := c.openService(ctx, *stateDir)
 	if err != nil {
+		return err
+	}
+	defer closeStore()
+	active := false
+	defer func() {
+		if !active {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, cleanupErr := service.Down(cleanupCtx)
+		if cleanupErr != nil {
+			returnErr = errors.Join(returnErr, fmt.Errorf("clean up interrupted quick start: %w", cleanupErr))
+		}
+	}()
+
+	fmt.Fprintln(c.stdout, "\n[2/5] Validate, compile, and start walking-skeleton")
+	run, err := service.Up(ctx, app.UpOptions{ScenarioReference: "walking-skeleton"})
+	if err != nil {
+		if errors.Is(err, state.ErrActiveRun) {
+			return errors.New("an active run already exists; use `cailab down` or select another --state-dir before quickstart")
+		}
+		return err
+	}
+	active = true
+	if len(run.Runtimes) != 0 {
+		return errors.New("walking-skeleton unexpectedly requires provider runtimes; refusing to present it as no-Docker")
+	}
+	fmt.Fprintf(c.stdout, "✓ run %s is active with no provider runtimes\n", run.ID)
+
+	fmt.Fprintln(c.stdout, "\n[3/5] Inspect the mission and expected trust path")
+	compiled, err := service.Mission(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(c.stdout, "%s\n%s\n", compiled.Title, compiled.Briefing)
+	trustPath, found, err := service.Path(ctx, "google:alex", "aws:acquisition-data")
+	if err != nil {
+		return err
+	}
+	if !found {
+		return errors.New("walking-skeleton expected path is absent")
+	}
+	fmt.Fprintln(c.stdout, trustPath.Nodes[0])
+	for index, edge := range trustPath.Edges {
+		fmt.Fprintf(c.stdout, "  └─ %s → %s\n", edge.Type, trustPath.Nodes[index+1])
+	}
+
+	fmt.Fprintln(c.stdout, "\n[4/5] Verify the deterministic invariant")
+	report, err := service.Verify(ctx)
+	if err != nil {
+		return err
+	}
+	data, err := renderReport(report, "text")
+	if err != nil {
+		return err
+	}
+	_, _ = c.stdout.Write(data)
+	if !report.Passed {
+		return errors.New("walking-skeleton verification completed but did not pass")
+	}
+
+	fmt.Fprintln(c.stdout, "\n[5/5] Stop the run and verify owned cleanup")
+	stopped, err := service.Down(ctx)
+	if err != nil {
+		return err
+	}
+	active = false
+	fmt.Fprintf(c.stdout, "✓ run %s stopped\n", stopped.ID)
+	fmt.Fprintln(c.stdout, "\nQuick start complete. The stopped run evidence remains in the selected state directory.")
+	return nil
+}
+
+func (c *CLI) runStatus(ctx context.Context, args []string) error {
+	fs := newFlagSet("status", c.stderr)
+	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
+	format := fs.String("format", "text", "output format: text or json")
+	if err := c.parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
 		return errors.New("status accepts no positional arguments")
 	}
-	service, closeStore, err := c.openService(ctx, stateDir)
+	if *format != "text" && *format != "json" {
+		return fmt.Errorf("unsupported status format %q; expected text or json", *format)
+	}
+	service, closeStore, err := c.openService(ctx, *stateDir)
 	if err != nil {
 		return err
 	}
@@ -349,6 +511,14 @@ func (c *CLI) runStatus(ctx context.Context, args []string) error {
 	run, err := service.Status(ctx)
 	if err != nil {
 		return err
+	}
+	if *format == "json" {
+		encoder := json.NewEncoder(c.stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(projectStatus(run)); err != nil {
+			return fmt.Errorf("encode status: %w", err)
+		}
+		return nil
 	}
 	fmt.Fprintf(c.stdout, "Run:       %s\n", run.ID)
 	fmt.Fprintf(c.stdout, "Scenario:  %s@%s\n", run.ScenarioName, run.ScenarioVersion)
@@ -360,6 +530,62 @@ func (c *CLI) runStatus(ctx context.Context, args []string) error {
 		fmt.Fprintf(c.stdout, "Runtime:   %s/%s %s (%s)\n", runtime.Provider, runtime.Engine, runtime.Endpoint, runtime.Status)
 	}
 	return nil
+}
+
+const statusAPIVersion = "cloudailab.dev/status/v1alpha1"
+
+type statusDocument struct {
+	APIVersion string          `json:"apiVersion"`
+	Kind       string          `json:"kind"`
+	Run        statusRun       `json:"run"`
+	Runtimes   []statusRuntime `json:"runtimes"`
+}
+
+type statusRun struct {
+	ID              string `json:"id"`
+	Scenario        string `json:"scenario"`
+	ScenarioVersion string `json:"scenarioVersion"`
+	Status          string `json:"status"`
+	Seed            int64  `json:"seed"`
+	PlanDigest      string `json:"planDigest"`
+	BaselineDigest  string `json:"baselineDigest"`
+}
+
+type statusRuntime struct {
+	Provider string `json:"provider"`
+	Engine   string `json:"engine"`
+	Endpoint string `json:"endpoint"`
+	Status   string `json:"status"`
+}
+
+func projectStatus(run state.Run) statusDocument {
+	runtimes := make([]statusRuntime, len(run.Runtimes))
+	for index, instance := range run.Runtimes {
+		runtimes[index] = statusRuntime{
+			Provider: instance.Provider,
+			Engine:   instance.Engine,
+			Endpoint: instance.Endpoint,
+			Status:   instance.Status,
+		}
+	}
+	sort.Slice(runtimes, func(left, right int) bool {
+		if runtimes[left].Provider != runtimes[right].Provider {
+			return runtimes[left].Provider < runtimes[right].Provider
+		}
+		if runtimes[left].Engine != runtimes[right].Engine {
+			return runtimes[left].Engine < runtimes[right].Engine
+		}
+		return runtimes[left].Endpoint < runtimes[right].Endpoint
+	})
+	return statusDocument{
+		APIVersion: statusAPIVersion,
+		Kind:       "RangeStatus",
+		Run: statusRun{
+			ID: run.ID, Scenario: run.ScenarioName, ScenarioVersion: run.ScenarioVersion,
+			Status: run.Status, Seed: run.Seed, PlanDigest: run.Compiled.Digest, BaselineDigest: run.BaselineDigest,
+		},
+		Runtimes: runtimes,
+	}
 }
 
 func (c *CLI) runMission(ctx context.Context, args []string) error {
@@ -390,12 +616,20 @@ func (c *CLI) runAgent(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return errors.New("usage: cailab agent <validate|run|campaign|replay> [options]")
 	}
+	if isHelpFlag(args[0]) {
+		fmt.Fprintln(c.stdout, "Usage:\n  cailab agent <validate|run|campaign|replay> [options]\n\nCommands:\n  validate  Validate scenario-bound policy and tools\n  run       Run one agent trial\n  campaign  Run restored deterministic control trials\n  replay    Replay terminal trial evidence")
+		return flag.ErrHelp
+	}
 	switch args[0] {
 	case "validate":
 		return c.runAgentValidate(ctx, args[1:])
 	case "replay":
 		return c.runAgentReplay(ctx, args[1:])
 	case "run":
+		if len(args) == 2 && isHelpFlag(args[1]) {
+			fmt.Fprintln(c.stdout, "Usage:\n  cailab agent run <reference|subprocess|safe|unsafe> [options]")
+			return flag.ErrHelp
+		}
 		if len(args) < 2 || (args[1] != "reference" && args[1] != "subprocess" && args[1] != "safe" && args[1] != "unsafe") {
 			return errors.New("usage: cailab agent run <reference|subprocess|safe|unsafe> [options]")
 		}
@@ -414,6 +648,10 @@ func (c *CLI) runAgent(ctx context.Context, args []string) error {
 }
 
 func (c *CLI) runAgentCampaign(ctx context.Context, args []string) error {
+	if len(args) == 1 && isHelpFlag(args[0]) {
+		fmt.Fprintln(c.stdout, "Usage:\n  cailab agent campaign <reference|safe|unsafe> [options]")
+		return flag.ErrHelp
+	}
 	if len(args) == 0 || (args[0] != "reference" && args[0] != "safe" && args[0] != "unsafe") {
 		return errors.New("usage: cailab agent campaign <reference|safe|unsafe> [options]")
 	}
@@ -430,7 +668,7 @@ func (c *CLI) runReferenceAgentCampaign(ctx context.Context, args []string) erro
 	trials := fs.Int("trials", 3, "number of restored trials")
 	format := fs.String("format", "text", "report format: text, json, or markdown")
 	output := fs.String("output", "", "write the deterministic report to a file")
-	if err := fs.Parse(args); err != nil {
+	if err := c.parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
@@ -468,7 +706,7 @@ func (c *CLI) runFixtureAgentCampaign(ctx context.Context, args []string, mode s
 	fixtureID := fs.String("fixture", "", "prompt-injection fixture identifier; optional when the scenario declares exactly one")
 	format := fs.String("format", "text", "report format: text, json, or markdown")
 	output := fs.String("output", "", "write the deterministic report to a file")
-	if err := fs.Parse(args); err != nil {
+	if err := c.parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
@@ -551,7 +789,7 @@ func (c *CLI) runFixtureAgent(ctx context.Context, args []string, mode string) e
 	trialID := fs.String("trial-id", "trial:"+mode, "unique trial identifier within the active range run")
 	fixtureID := fs.String("fixture", "", "prompt-injection fixture identifier; optional when the scenario declares exactly one")
 	jsonOutput := fs.Bool("json", false, "emit evidence-safe JSON summary")
-	if err := fs.Parse(args); err != nil {
+	if err := c.parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
@@ -625,7 +863,7 @@ func (c *CLI) runAgentReplay(ctx context.Context, args []string) error {
 	output := fs.String("output", "", "write the deterministic report to a file")
 	var trialIDs stringListFlag
 	fs.Var(&trialIDs, "trial-id", "terminal trial identifier; repeat in one declared trial set")
-	if err := fs.Parse(args); err != nil {
+	if err := c.parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 || len(trialIDs) == 0 {
@@ -664,7 +902,7 @@ func (c *CLI) runAgentValidate(ctx context.Context, args []string) error {
 	var toolPaths, toolEnvironmentNames stringListFlag
 	fs.Var(&toolPaths, "tool", "tool manifest JSON file; repeat for multiple tools")
 	fs.Var(&toolEnvironmentNames, "tool-env", "environment variable explicitly forwarded to every registered tool")
-	if err := fs.Parse(args); err != nil {
+	if err := c.parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 || *policyPath == "" || *agentID == "" || *actorTenant == "" || len(toolPaths) == 0 {
@@ -721,7 +959,7 @@ func (c *CLI) runReferenceAgent(ctx context.Context, args []string) error {
 	captureState := fs.Bool("capture-state", false, "capture deterministic before/after scenario verification evidence")
 	restoreFixture := fs.Bool("restore-fixture", false, "restore the compiled provider fixture before launch; implies --capture-state")
 	jsonOutput := fs.Bool("json", false, "emit evidence-safe JSON summary")
-	if err := fs.Parse(args); err != nil {
+	if err := c.parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
@@ -798,7 +1036,7 @@ func (c *CLI) runSubprocessAgent(ctx context.Context, args []string) error {
 	fs.Var(&commandArguments, "arg", "agent argv value; repeat to preserve argument boundaries")
 	fs.Var(&agentEnvironmentNames, "agent-env", "environment variable explicitly forwarded to the agent")
 	fs.Var(&toolEnvironmentNames, "tool-env", "environment variable explicitly forwarded to every registered tool")
-	if err := fs.Parse(args); err != nil {
+	if err := c.parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 || *policyPath == "" || *promptPath == "" || *agentID == "" || *agentVersion == "" ||
@@ -1202,6 +1440,10 @@ func (c *CLI) runIdentity(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return errors.New("usage: cailab identity <rotate|validate> [options]")
 	}
+	if isHelpFlag(args[0]) {
+		fmt.Fprintln(c.stdout, "Usage:\n  cailab identity <rotate|validate> [options]\n\nCommands:\n  rotate    Rotate the active local issuer key\n  validate  Validate a local ID or access token")
+		return flag.ErrHelp
+	}
 	if args[0] == "validate" {
 		return c.runIdentityValidate(ctx, args[1:])
 	}
@@ -1234,7 +1476,7 @@ func (c *CLI) runIdentityValidate(ctx context.Context, args []string) error {
 	tokenFile := fs.String("token-file", "", "file containing one raw JWT")
 	tokenType := fs.String("type", "", "token type: id or access")
 	audience := fs.String("audience", "", "required token audience")
-	if err := fs.Parse(args); err != nil {
+	if err := c.parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 || *tokenFile == "" || (*tokenType != "id" && *tokenType != "access") || *audience == "" {
@@ -1269,6 +1511,10 @@ func (c *CLI) runIdentityValidate(ctx context.Context, args []string) error {
 }
 
 func (c *CLI) runFederation(ctx context.Context, args []string) error {
+	if len(args) == 1 && isHelpFlag(args[0]) {
+		fmt.Fprintln(c.stdout, "Usage:\n  cailab federation <assume-aws> [options]\n\nCommands:\n  assume-aws  Exchange an authorized local token for temporary AWS-shaped credentials")
+		return flag.ErrHelp
+	}
 	if len(args) == 0 || args[0] != "assume-aws" {
 		return errors.New("usage: cailab federation assume-aws --token-file FILE --role-node ID --output FILE [--state-dir DIR]")
 	}
@@ -1277,7 +1523,7 @@ func (c *CLI) runFederation(ctx context.Context, args []string) error {
 	tokenFile := fs.String("token-file", "", "file containing one raw JWT")
 	roleNode := fs.String("role-node", "", "canonical AWS role node")
 	output := fs.String("output", "", "owner-only JSON credential file")
-	if err := fs.Parse(args[1:]); err != nil {
+	if err := c.parseFlags(fs, args[1:]); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 || *tokenFile == "" || *roleNode == "" || *output == "" {
@@ -1350,6 +1596,10 @@ func writeOwnerOnlyJSON(path string, value any) error {
 }
 
 func (c *CLI) runGraph(ctx context.Context, args []string) error {
+	if len(args) == 1 && isHelpFlag(args[0]) {
+		fmt.Fprintln(c.stdout, "Usage:\n  cailab graph <path> [options]\n\nCommands:\n  path  Explain a directed trust path")
+		return flag.ErrHelp
+	}
 	if len(args) == 0 || args[0] != "path" {
 		return errors.New("usage: cailab graph path [--state-dir DIR] <from> <to>")
 	}
@@ -1391,9 +1641,9 @@ func (c *CLI) runGraph(ctx context.Context, args []string) error {
 func (c *CLI) runVerify(ctx context.Context, args []string) (int, error) {
 	fs := newFlagSet("verify", c.stderr)
 	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
-	format := fs.String("format", "text", "output format: text, json, or markdown")
+	format := fs.String("format", "text", "output format: text, json, markdown, or junit")
 	output := fs.String("output", "", "write report to a file")
-	if err := fs.Parse(args); err != nil {
+	if err := c.parseFlags(fs, args); err != nil {
 		return ExitError, err
 	}
 	if fs.NArg() != 0 {
@@ -1475,7 +1725,7 @@ func (c *CLI) runDown(ctx context.Context, args []string) error {
 func (c *CLI) parseStateFlags(name string, args []string) (*flag.FlagSet, string, error) {
 	fs := newFlagSet(name, c.stderr)
 	stateDir := fs.String("state-dir", c.defaultStateDir(), "state directory")
-	if err := fs.Parse(args); err != nil {
+	if err := c.parseFlags(fs, args); err != nil {
 		return nil, "", err
 	}
 	return fs, *stateDir, nil
@@ -1503,7 +1753,7 @@ func (c *CLI) runInternalRuntime(ctx context.Context, args []string) error {
 	providerName := args[0]
 	fs := newFlagSet("_runtime "+providerName, c.stderr)
 	config := fs.String("config", "", "private runtime configuration")
-	if err := fs.Parse(args[1:]); err != nil {
+	if err := c.parseFlags(fs, args[1:]); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 || *config == "" {
@@ -1532,7 +1782,7 @@ func (c *CLI) runInternalAgent(ctx context.Context, args []string) error {
 	prohibitedTool := fs.String("prohibited-tool", "", "fixture prohibited tool")
 	prohibitedAction := fs.String("prohibited-action", "", "fixture prohibited action")
 	prohibitedResource := fs.String("prohibited-resource", "", "fixture prohibited resource")
-	if err := fs.Parse(args[1:]); err != nil {
+	if err := c.parseFlags(fs, args[1:]); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
@@ -1565,7 +1815,7 @@ func (c *CLI) runInternalTool(ctx context.Context, args []string) error {
 	resource := fs.String("resource", "", "expected canonical resource")
 	endpoint := fs.String("endpoint", "", "fixed provider endpoint")
 	fileID := fs.String("file-id", "", "fixed Google Drive file ID")
-	if err := fs.Parse(args[1:]); err != nil {
+	if err := c.parseFlags(fs, args[1:]); err != nil {
 		return err
 	}
 	if fs.NArg() != 0 {
@@ -1583,6 +1833,63 @@ func newFlagSet(name string, output io.Writer) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(output)
 	return fs
+}
+
+func (c *CLI) parseFlags(fs *flag.FlagSet, args []string) error {
+	if flagHelpRequested(fs, args) {
+		fs.SetOutput(c.stdout)
+		usage := flagSetUsage[fs.Name()]
+		if usage == "" {
+			usage = "cailab " + fs.Name() + " [options]"
+		}
+		fmt.Fprintf(c.stdout, "Usage:\n  %s\n", usage)
+		hasOptions := false
+		fs.VisitAll(func(*flag.Flag) { hasOptions = true })
+		if hasOptions {
+			fmt.Fprintln(c.stdout, "\nOptions:")
+			fs.PrintDefaults()
+		}
+		return flag.ErrHelp
+	}
+	return fs.Parse(args)
+}
+
+func flagHelpRequested(fs *flag.FlagSet, args []string) bool {
+	for index := 0; index < len(args); index++ {
+		arg := args[index]
+		if arg == "--" {
+			return false
+		}
+		if isHelpFlag(arg) {
+			return true
+		}
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			return false
+		}
+		name := strings.TrimLeft(arg, "-")
+		if before, _, found := strings.Cut(name, "="); found {
+			name = before
+			continue
+		}
+		registered := fs.Lookup(name)
+		if registered == nil || isBooleanFlag(registered) {
+			continue
+		}
+		index++
+	}
+	return false
+}
+
+func isBooleanFlag(value *flag.Flag) bool {
+	type booleanFlag interface {
+		IsBoolFlag() bool
+	}
+	boolean, ok := value.Value.(booleanFlag)
+	return ok && boolean.IsBoolFlag()
+}
+
+func isHelpFlag(arg string) bool {
+	return arg == "-h" || arg == "--help"
 }
 
 func printScenario(w io.Writer, definition scenario.Scenario) {
@@ -1605,6 +1912,8 @@ func renderReport(report verify.Report, format string) ([]byte, error) {
 		return append(data, '\n'), nil
 	case "markdown":
 		return []byte(verify.Markdown(report)), nil
+	case "junit":
+		return verify.JUnit(report)
 	case "text":
 		var b strings.Builder
 		status := "PASS"

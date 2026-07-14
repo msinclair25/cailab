@@ -41,6 +41,67 @@ func TestCrossProviderCLIE2E(t *testing.T) {
 			t.Fatalf("up output has no %s endpoint: %s", providerName, output)
 		}
 	}
+	starterBinary := filepath.Join(workspace, "cailab-agent-starter")
+	starterBuild := exec.Command("go", "build", "-o", starterBinary, "./examples/external-agent-starter")
+	starterBuild.Dir = repository
+	if output, err := starterBuild.CombinedOutput(); err != nil {
+		t.Fatalf("build external agent starter: %v: %s", err, output)
+	}
+	starterConfig := filepath.Join(workspace, "starter-config")
+	configure := exec.Command(starterBinary, "configure", "--output", starterConfig)
+	if output, err := configure.CombinedOutput(); err != nil {
+		t.Fatalf("configure external agent starter: %v: %s", err, output)
+	}
+	t.Setenv("CAILAB_GOOGLE_ENDPOINT", endpoints["GOOGLE"])
+	t.Setenv("CAILAB_GOOGLE_TOKEN", "cailab-google-local")
+	starterPolicy := filepath.Join(starterConfig, "policy.json")
+	starterTool := filepath.Join(starterConfig, "tool.json")
+	starterPrompt := filepath.Join(starterConfig, "prompt.txt")
+	output, code = runE2ECLI(t, repository, binary, "agent", "validate", "--state-dir", stateDir,
+		"--policy", starterPolicy, "--tool", starterTool, "--agent-id", "agent:external-starter",
+		"--actor-tenant", "tenant:northstar", "--tool-env", "CAILAB_GOOGLE_ENDPOINT", "--tool-env", "CAILAB_GOOGLE_TOKEN")
+	if code != ExitOK || !strings.Contains(output, "cloudailab.google.drive.read@0.1.0 registered") {
+		t.Fatalf("starter validation exit=%d output=%s", code, output)
+	}
+	output, code = runE2ECLI(t, repository, binary, "agent", "run", "subprocess", "--state-dir", stateDir,
+		"--policy", starterPolicy, "--tool", starterTool, "--prompt-file", starterPrompt,
+		"--agent-id", "agent:external-starter", "--agent-version", "0.1.0", "--provider", "local",
+		"--model", "deterministic-starter", "--actor-tenant", "tenant:northstar", "--command", starterBinary,
+		"--arg", "agent", "--directory", workspace, "--tool-env", "CAILAB_GOOGLE_ENDPOINT", "--tool-env", "CAILAB_GOOGLE_TOKEN",
+		"--restore-fixture", "--trial-id", "trial:external-starter")
+	if code != ExitOK || !strings.Contains(output, "1 decision(s), 0 approval(s), 1 tool outcome(s), 2 state snapshot(s)") {
+		t.Fatalf("starter run exit=%d output=%s", code, output)
+	}
+	output, code = runE2ECLI(t, repository, binary, "agent", "replay", "--state-dir", stateDir,
+		"--trial-id", "trial:external-starter", "--format", "json")
+	if code != ExitOK {
+		t.Fatalf("starter replay exit=%d output=%s", code, output)
+	}
+	var starterReport struct {
+		Profile   string `json:"profile"`
+		Aggregate struct {
+			CompletedTrials struct {
+				Numerator int `json:"numerator"`
+			} `json:"completedTrials"`
+			AuthorizationRate struct {
+				Numerator int `json:"numerator"`
+			} `json:"authorizationRate"`
+			ExecutionSuccessRate struct {
+				Numerator int `json:"numerator"`
+			} `json:"executionSuccessRate"`
+			TaskSuccessRate *struct {
+				Numerator int `json:"numerator"`
+			} `json:"taskSuccessRate"`
+		} `json:"aggregate"`
+	}
+	if err := json.Unmarshal([]byte(output), &starterReport); err != nil {
+		t.Fatal(err)
+	}
+	if starterReport.Profile != "scenario-outcome-v1" || starterReport.Aggregate.CompletedTrials.Numerator != 1 ||
+		starterReport.Aggregate.AuthorizationRate.Numerator != 1 || starterReport.Aggregate.ExecutionSuccessRate.Numerator != 1 ||
+		starterReport.Aggregate.TaskSuccessRate == nil || starterReport.Aggregate.TaskSuccessRate.Numerator != 0 {
+		t.Fatalf("starter report = %+v", starterReport)
+	}
 	output, code = runE2ECLI(t, repository, binary, "graph", "path", "--state-dir", stateDir, "google:contractor", "aws:acquisition-data")
 	if code != ExitOK || !strings.Contains(output, "sts:AssumeRoleWithWebIdentity") {
 		t.Fatalf("initial graph exit=%d output=%s", code, output)

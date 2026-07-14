@@ -1,6 +1,6 @@
 ---
 title: Google Drive Sharing Lab
-status: m2-complete
+status: active
 last_reviewed: 2026-07-12
 ---
 
@@ -19,6 +19,7 @@ The facade implements only the operations in the [Google compatibility matrix](.
 - `curl` or another HTTP client
 
 ```bash
+mkdir -p ./bin
 go build -o ./bin/cailab ./cmd/cailab
 ./bin/cailab doctor google-drive-sharing
 ```

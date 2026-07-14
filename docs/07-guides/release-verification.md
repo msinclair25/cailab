@@ -24,7 +24,7 @@ None of these facts proves the software is vulnerability-free. Review the source
 | macOS Apple silicon | `darwin_arm64.tar.gz` | Yes when the hosted macOS runner is ARM64 |
 | Windows x86-64 | `windows_amd64.zip` | Yes |
 
-The archives contain one versioned directory with the `cailab` executable, README, changelog, project `LICENSE`/`NOTICE`, `THIRD_PARTY_NOTICES.md`, exact `third_party/modules.txt` linked-module inventory, and copied license material under `third_party/licenses/`. Built-in scenario manifests are compiled into the executable, so no checkout or adjacent scenario directory is required. Docker remains required for AWS/Floci scenarios and optional Docker-isolated agent runs; the Microsoft, Google, local OIDC, and walking-skeleton paths do not require it.
+The archives contain one versioned directory with the `cailab` executable, the `cailab-agent-starter` executable and adaptable agent files, the validated data-only scenario starter, least-privilege CI example, validated learning catalog/schema and initial learning-path documents, README, changelog, project `LICENSE`/`NOTICE`, `THIRD_PARTY_NOTICES.md`, exact `third_party/modules.txt` linked-module inventory, and copied license material under `third_party/licenses/`. Built-in scenario manifests are compiled into the executable, so no checkout or adjacent scenario directory is required. Docker remains required for AWS/Floci scenarios and optional Docker-isolated agent runs; the Microsoft, Google, local OIDC, walking-skeleton, and data-only starter paths do not require it.
 
 ## Verify SHA-256
 
@@ -71,8 +71,10 @@ After extraction:
 ```bash
 ./cailab_VERSION_OS_ARCH/cailab version
 ./cailab_VERSION_OS_ARCH/cailab scenario list
+./cailab_VERSION_OS_ARCH/cailab scenario validate ./cailab_VERSION_OS_ARCH/examples/scenario-starter/scenario.yaml
+./cailab_VERSION_OS_ARCH/cailab-agent-starter --help
 ```
 
-On Windows, use `cailab.exe`. The version output should identify the release version, source commit, and source-commit build timestamp recorded by the release workflow.
+On Windows, use `cailab.exe` and `cailab-agent-starter.exe`. The version output should identify the release version, source commit, and source-commit build timestamp recorded by the release workflow.
 
-`scenario list` reads the immutable catalog compiled into that executable, independent of the current working directory. To use custom content, supply an existing scenario file or explicitly select a catalog with `--root` or `--scenario-root`; no ambient `./scenarios` directory overrides the built-ins. Embedded manifests are public data, not a confidentiality boundary.
+`scenario list` reads the immutable catalog compiled into that executable, independent of the current working directory. `scenario validate` checks the bundled data-only starter without starting a run. To use custom content, supply an existing scenario file or explicitly select a catalog with `--root` or `--scenario-root`; no ambient `./scenarios` directory overrides the built-ins. Embedded manifests are public data, not a confidentiality boundary.

@@ -1,6 +1,6 @@
 ---
 title: Agent Protocol v1alpha1
-status: m3-complete
+status: active
 last_reviewed: 2026-07-12
 ---
 

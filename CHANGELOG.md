@@ -20,6 +20,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - CGO-free release archives for the declared Linux, macOS, and Windows target matrix; checksums, SPDX JSON SBOM, native smoke tests, and tag-only build/SBOM attestations.
 - Embedded built-in scenario catalog and digest-pinned CI-only clean-container demo.
 - Full-SHA-pinned CodeQL analysis and pull-request dependency review workflows.
+- A guided no-Docker `quickstart` that deploys, explains, verifies, and cleans up the embedded walking-skeleton scenario.
+- Consistent success-returning help for public CLI commands and a versioned, secret-minimized JSON status contract for automation.
+- Release-package Markdown link validation and exact-source-commit rewriting for documentation that is not bundled in an archive.
+- A release-packaged, dependency-free external-agent starter with a facade-backed governed tool, generated scenario-bound registrations, expected evidence, and flagship end-to-end coverage.
+- A versioned, schema- and semantics-validated data-only learning catalog plus the self-guided Identity and Agent Foundations path and one-time adaptation provenance.
+- A public validate-without-starting command and release-packaged data-only scenario starter with strict capability rejection, lifecycle coverage, authoring guidance, and compatibility evidence.
+- Timestamp-free JUnit output for deterministic scenario invariants and a release-packaged least-privilege GitHub Actions example using only synthetic local state.
+- First-user acceptance protocol plus resolved clean-source and packaged external-agent path friction found during a complete maintainer archive rehearsal.
 
 ### Security
 

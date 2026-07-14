@@ -83,6 +83,46 @@ func TestLoadDistributionFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	for _, name := range []string{"README.md", "expected-report.md", "main.go", "policy.json", "prompt.txt"} {
+		path := filepath.Join(root, "examples", "external-agent-starter", name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(name+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"README.md", "scenario.yaml"} {
+		path := filepath.Join(root, "examples", "scenario-starter", name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(name+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{"README.md", "github-actions.yml"} {
+		path := filepath.Join(root, "examples", "ci", name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(name+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, name := range []string{
+		"docs/08-learning/README.md", "docs/08-learning/adaptation-provenance.md",
+		"docs/08-learning/identity-agent-foundations.md", "docs/08-learning/learning-contract.md",
+		"learning/catalog.json", "schemas/learning/v1alpha1/learning-catalog.json",
+	} {
+		path := filepath.Join(root, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(name+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	licensePath := filepath.Join(root, "third_party", "licenses", "example", "LICENSE")
 	if err := os.MkdirAll(filepath.Dir(licensePath), 0o755); err != nil {
 		t.Fatal(err)
@@ -100,6 +140,21 @@ func TestLoadDistributionFiles(t *testing.T) {
 		"NOTICE",
 		"README.md",
 		"THIRD_PARTY_NOTICES.md",
+		"docs/08-learning/README.md",
+		"docs/08-learning/adaptation-provenance.md",
+		"docs/08-learning/identity-agent-foundations.md",
+		"docs/08-learning/learning-contract.md",
+		"examples/ci/README.md",
+		"examples/ci/github-actions.yml",
+		"examples/external-agent-starter/README.md",
+		"examples/external-agent-starter/expected-report.md",
+		"examples/external-agent-starter/main.go",
+		"examples/external-agent-starter/policy.json",
+		"examples/external-agent-starter/prompt.txt",
+		"examples/scenario-starter/README.md",
+		"examples/scenario-starter/scenario.yaml",
+		"learning/catalog.json",
+		"schemas/learning/v1alpha1/learning-catalog.json",
 		"third_party/licenses/example/LICENSE",
 		"third_party/modules.txt",
 	}
@@ -118,6 +173,69 @@ func TestLoadDistributionFilesRequiresLegalBundle(t *testing.T) {
 	root := t.TempDir()
 	if _, err := loadDistributionFiles(root); err == nil || !strings.Contains(err.Error(), "CHANGELOG.md") {
 		t.Fatalf("loadDistributionFiles() error = %v, want missing release document", err)
+	}
+}
+
+func TestRewriteUnbundledMarkdownLinksUsesExactCommit(t *testing.T) {
+	t.Parallel()
+	commit := strings.Repeat("a", 40)
+	files := []archiveFile{
+		{Name: "LICENSE", Mode: 0o644, Data: []byte("license\n")},
+		{Name: "README.md", Mode: 0o644, Data: []byte("[license](LICENSE) [guide](docs/guide.md#start) [anchor](#local) [web](https://example.com)\n")},
+	}
+
+	rewritten, err := rewriteUnbundledMarkdownLinks(commit, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "[license](LICENSE) [guide](https://github.com/msinclair25/cailab/blob/" + commit + "/docs/guide.md#start) [anchor](#local) [web](https://example.com)\n"
+	if got := string(rewritten[1].Data); got != want {
+		t.Fatalf("README = %q, want %q", got, want)
+	}
+	if got := string(files[1].Data); strings.Contains(got, commit) {
+		t.Fatal("rewrite mutated the input archive file")
+	}
+}
+
+func TestRewriteUnbundledMarkdownLinksRejectsUnsafeTargets(t *testing.T) {
+	t.Parallel()
+	files := []archiveFile{{Name: "README.md", Mode: 0o644, Data: []byte("[outside](../private.md)\n")}}
+	if _, err := rewriteUnbundledMarkdownLinks(strings.Repeat("a", 40), files); err == nil || !strings.Contains(err.Error(), "outside the repository") {
+		t.Fatalf("rewrite error = %v, want outside-repository refusal", err)
+	}
+}
+
+func TestRepositoryDistributionMarkdownLinksResolveOrUseExactCommit(t *testing.T) {
+	t.Parallel()
+	files, err := loadDistributionFiles(filepath.Clean("../../.."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit := strings.Repeat("b", 40)
+	rewritten, err := rewriteUnbundledMarkdownLinks(commit, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	included := make(map[string]struct{}, len(rewritten))
+	for _, file := range rewritten {
+		included[filepath.ToSlash(filepath.Clean(file.Name))] = struct{}{}
+	}
+	for _, file := range rewritten {
+		if !strings.EqualFold(filepath.Ext(file.Name), ".md") {
+			continue
+		}
+		for _, match := range markdownLink.FindAllSubmatch(file.Data, -1) {
+			target := strings.TrimSpace(string(match[1]))
+			if target == "" || strings.HasPrefix(target, "#") || isRemoteMarkdownTarget(target) {
+				continue
+			}
+			pathPart, _, _ := strings.Cut(target, "#")
+			resolved := filepath.ToSlash(filepath.Clean(filepath.Join(filepath.Dir(file.Name), filepath.FromSlash(pathPart))))
+			if _, exists := included[resolved]; !exists {
+				t.Errorf("release document %s retains unresolved local link %q", file.Name, target)
+			}
+		}
 	}
 }
 

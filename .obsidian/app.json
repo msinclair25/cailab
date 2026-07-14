@@ -1,1 +1,8 @@
-{}
+{
+  "alwaysUpdateLinks": true,
+  "attachmentFolderPath": "docs/assets",
+  "newFileFolderPath": "docs",
+  "newFileLocation": "folder",
+  "newLinkFormat": "relative",
+  "useMarkdownLinks": true
+}

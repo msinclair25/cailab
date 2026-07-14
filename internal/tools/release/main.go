@@ -26,6 +26,7 @@ import (
 var (
 	identifierPattern = regexp.MustCompile(`^[0-9A-Za-z-]+$`)
 	commitPattern     = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+	markdownLink      = regexp.MustCompile(`\]\(([^)]+)\)`)
 	releaseTargets    = []target{
 		{GOOS: "linux", GOARCH: "amd64", Format: "tar.gz"},
 		{GOOS: "linux", GOARCH: "arm64", Format: "tar.gz"},
@@ -111,7 +112,7 @@ func run(ctx context.Context, args []string, stdout io.Writer) error {
 	case "modules":
 		fs := flag.NewFlagSet("modules", flag.ContinueOnError)
 		fs.SetOutput(io.Discard)
-		packagePath := fs.String("package", "./cmd/cailab", "release binary package")
+		packagePath := fs.String("package", "./cmd/cailab,./examples/external-agent-starter", "comma-separated release binary packages")
 		if err := fs.Parse(args[1:]); err != nil {
 			return fmt.Errorf("parse modules flags: %w", err)
 		}
@@ -150,12 +151,71 @@ func packageRelease(ctx context.Context, config packageConfig) error {
 	if err != nil {
 		return err
 	}
+	distributionFiles, err = rewriteUnbundledMarkdownLinks(config.Commit, distributionFiles)
+	if err != nil {
+		return err
+	}
 	for _, releaseTarget := range releaseTargets {
 		if err := buildTarget(ctx, config, releaseTarget, binariesDir, packagesDir, distributionFiles); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func rewriteUnbundledMarkdownLinks(commit string, files []archiveFile) ([]archiveFile, error) {
+	included := make(map[string]struct{}, len(files))
+	for _, file := range files {
+		included[filepath.ToSlash(filepath.Clean(file.Name))] = struct{}{}
+	}
+
+	result := make([]archiveFile, len(files))
+	copy(result, files)
+	for index := range result {
+		if !strings.EqualFold(filepath.Ext(result[index].Name), ".md") {
+			continue
+		}
+		var rewriteErr error
+		result[index].Data = markdownLink.ReplaceAllFunc(result[index].Data, func(match []byte) []byte {
+			parts := markdownLink.FindSubmatch(match)
+			if len(parts) != 2 {
+				return match
+			}
+			target := strings.TrimSpace(string(parts[1]))
+			if target == "" || strings.HasPrefix(target, "#") || isRemoteMarkdownTarget(target) {
+				return match
+			}
+			pathPart, fragment, _ := strings.Cut(target, "#")
+			if strings.ContainsAny(pathPart, " \t\r\n") {
+				rewriteErr = fmt.Errorf("release document %s has unsupported Markdown link target %q", result[index].Name, target)
+				return match
+			}
+			resolved := filepath.ToSlash(filepath.Clean(filepath.Join(filepath.Dir(result[index].Name), filepath.FromSlash(pathPart))))
+			if resolved == ".." || strings.HasPrefix(resolved, "../") || filepath.IsAbs(resolved) {
+				rewriteErr = fmt.Errorf("release document %s links outside the repository: %q", result[index].Name, target)
+				return match
+			}
+			if _, exists := included[resolved]; exists {
+				return match
+			}
+			versioned := "https://github.com/msinclair25/cailab/blob/" + commit + "/" + resolved
+			if fragment != "" {
+				versioned += "#" + fragment
+			}
+			return []byte("](" + versioned + ")")
+		})
+		if rewriteErr != nil {
+			return nil, rewriteErr
+		}
+	}
+	return result, nil
+}
+
+func isRemoteMarkdownTarget(target string) bool {
+	lower := strings.ToLower(target)
+	return strings.HasPrefix(lower, "http://") ||
+		strings.HasPrefix(lower, "https://") ||
+		strings.HasPrefix(lower, "mailto:")
 }
 
 func validatePackageConfig(config packageConfig) error {
@@ -224,7 +284,7 @@ func validNumericIdentifier(identifier string) bool {
 
 func loadDistributionFiles(root string) ([]archiveFile, error) {
 	required := []string{"CHANGELOG.md", "LICENSE", "NOTICE", "README.md", "THIRD_PARTY_NOTICES.md", "third_party/modules.txt"}
-	files := make([]archiveFile, 0, len(required)+16)
+	files := make([]archiveFile, 0, len(required)+24)
 	for _, name := range required {
 		path := filepath.Join(root, name)
 		info, err := os.Lstat(path)
@@ -239,6 +299,38 @@ func loadDistributionFiles(root string) ([]archiveFile, error) {
 			return nil, fmt.Errorf("read release document %s: %w", name, err)
 		}
 		files = append(files, archiveFile{Name: name, Mode: 0o644, Data: data})
+	}
+	bundledFiles := map[string]string{
+		"examples/external-agent-starter/README.md":          "examples/external-agent-starter/README.md",
+		"examples/external-agent-starter/expected-report.md": "examples/external-agent-starter/expected-report.md",
+		"examples/external-agent-starter/main.go":            "examples/external-agent-starter/main.go",
+		"examples/external-agent-starter/policy.json":        "examples/external-agent-starter/policy.json",
+		"examples/external-agent-starter/prompt.txt":         "examples/external-agent-starter/prompt.txt",
+		"examples/scenario-starter/README.md":                "examples/scenario-starter/README.md",
+		"examples/scenario-starter/scenario.yaml":            "examples/scenario-starter/scenario.yaml",
+		"examples/ci/README.md":                              "examples/ci/README.md",
+		"examples/ci/github-actions.yml":                     "examples/ci/github-actions.yml",
+		"docs/08-learning/README.md":                         "docs/08-learning/README.md",
+		"docs/08-learning/adaptation-provenance.md":          "docs/08-learning/adaptation-provenance.md",
+		"docs/08-learning/identity-agent-foundations.md":     "docs/08-learning/identity-agent-foundations.md",
+		"docs/08-learning/learning-contract.md":              "docs/08-learning/learning-contract.md",
+		"learning/catalog.json":                              "learning/catalog.json",
+		"schemas/learning/v1alpha1/learning-catalog.json":    "schemas/learning/v1alpha1/learning-catalog.json",
+	}
+	for source, destination := range bundledFiles {
+		path := filepath.Join(root, filepath.FromSlash(source))
+		info, err := os.Lstat(path)
+		if err != nil {
+			return nil, fmt.Errorf("inspect bundled file %s: %w", source, err)
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("bundled file is not a regular file: %s", source)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read bundled file %s: %w", source, err)
+		}
+		files = append(files, archiveFile{Name: destination, Mode: 0o644, Data: data})
 	}
 	licensesRoot := filepath.Join(root, "third_party", "licenses")
 	licensesInfo, err := os.Lstat(licensesRoot)
@@ -279,8 +371,10 @@ func loadDistributionFiles(root string) ([]archiveFile, error) {
 func buildTarget(ctx context.Context, config packageConfig, releaseTarget target, binariesDir, packagesDir string, distributionFiles []archiveFile) error {
 	rootName := fmt.Sprintf("cailab_%s_%s_%s", config.Version, releaseTarget.GOOS, releaseTarget.GOARCH)
 	binaryName := "cailab"
+	starterBinaryName := "cailab-agent-starter"
 	if releaseTarget.GOOS == "windows" {
 		binaryName += ".exe"
+		starterBinaryName += ".exe"
 	}
 	stageDir := filepath.Join(binariesDir, rootName)
 	if err := os.MkdirAll(stageDir, 0o755); err != nil {
@@ -288,17 +382,25 @@ func buildTarget(ctx context.Context, config packageConfig, releaseTarget target
 	}
 	binaryPath := filepath.Join(stageDir, binaryName)
 	ldflags := fmt.Sprintf("-s -w -X=main.version=%s -X=main.commit=%s -X=main.date=%s", config.Version, config.Commit, config.Date.Format(time.RFC3339))
-	command := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-ldflags", ldflags, "-o", binaryPath, "./cmd/cailab")
-	command.Env = releaseEnvironment(os.Environ(), releaseTarget)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("build %s/%s: %w: %s", releaseTarget.GOOS, releaseTarget.GOARCH, err, strings.TrimSpace(string(output)))
+	if err := buildReleaseBinary(ctx, releaseTarget, binaryPath, "./cmd/cailab", ldflags); err != nil {
+		return err
+	}
+	starterBinaryPath := filepath.Join(stageDir, starterBinaryName)
+	if err := buildReleaseBinary(ctx, releaseTarget, starterBinaryPath, "./examples/external-agent-starter", "-s -w"); err != nil {
+		return err
 	}
 	binary, err := os.ReadFile(binaryPath)
 	if err != nil {
 		return fmt.Errorf("read %s/%s binary: %w", releaseTarget.GOOS, releaseTarget.GOARCH, err)
 	}
-	files := []archiveFile{{Name: filepath.ToSlash(filepath.Join(rootName, binaryName)), Mode: 0o755, Data: binary}}
+	starterBinary, err := os.ReadFile(starterBinaryPath)
+	if err != nil {
+		return fmt.Errorf("read %s/%s starter binary: %w", releaseTarget.GOOS, releaseTarget.GOARCH, err)
+	}
+	files := []archiveFile{
+		{Name: filepath.ToSlash(filepath.Join(rootName, binaryName)), Mode: 0o755, Data: binary},
+		{Name: filepath.ToSlash(filepath.Join(rootName, starterBinaryName)), Mode: 0o755, Data: starterBinary},
+	}
 	for _, distributionFile := range distributionFiles {
 		distributionFile.Name = filepath.ToSlash(filepath.Join(rootName, filepath.FromSlash(distributionFile.Name)))
 		files = append(files, distributionFile)
@@ -310,14 +412,33 @@ func buildTarget(ctx context.Context, config packageConfig, releaseTarget target
 	return nil
 }
 
+func buildReleaseBinary(ctx context.Context, releaseTarget target, outputPath, packagePath, ldflags string) error {
+	command := exec.CommandContext(ctx, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-ldflags", ldflags, "-o", outputPath, packagePath)
+	command.Env = releaseEnvironment(os.Environ(), releaseTarget)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("build %s for %s/%s: %w: %s", packagePath, releaseTarget.GOOS, releaseTarget.GOARCH, err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
 func linkedReleaseModules(ctx context.Context, packagePath string) ([]string, error) {
 	if strings.TrimSpace(packagePath) == "" {
 		return nil, errors.New("--package is required")
 	}
+	packagePaths := strings.Split(packagePath, ",")
+	for index := range packagePaths {
+		packagePaths[index] = strings.TrimSpace(packagePaths[index])
+		if packagePaths[index] == "" {
+			return nil, errors.New("--package contains an empty package path")
+		}
+	}
 	const moduleTemplate = `{{with .Module}}{{if not .Main}}{{.Path}}@{{.Version}}{{end}}{{end}}`
 	modules := make(map[string]struct{})
 	for _, releaseTarget := range releaseTargets {
-		command := exec.CommandContext(ctx, "go", "list", "-mod=readonly", "-deps", "-f", moduleTemplate, packagePath)
+		arguments := []string{"list", "-mod=readonly", "-deps", "-f", moduleTemplate}
+		arguments = append(arguments, packagePaths...)
+		command := exec.CommandContext(ctx, "go", arguments...)
 		command.Env = releaseEnvironment(os.Environ(), releaseTarget)
 		var stdout bytes.Buffer
 		var stderr bytes.Buffer
