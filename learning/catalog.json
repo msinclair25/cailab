@@ -1,0 +1,127 @@
+{
+  "apiVersion": "cloudailab.dev/learning/v1alpha1",
+  "kind": "LearningCatalog",
+  "commonCore": [
+    {"id":"core:delivery","title":"Delivery fundamentals","description":"Relate source, review, build, verification, artifact, and release state."},
+    {"id":"core:structured-data","title":"CLI, APIs, and structured data","description":"Use command output and provider-shaped APIs without parsing unstable human text."},
+    {"id":"core:authn-authz","title":"Authentication and authorization","description":"Separate identity establishment from permission evaluation."},
+    {"id":"core:oauth-oidc","title":"OAuth and OIDC","description":"Explain clients, subjects, scopes, claims, audiences, signing, and token exchange boundaries."},
+    {"id":"core:policy-scope","title":"Policy and scope","description":"Trace exact grants, denies, tenants, actions, resources, and classifications."},
+    {"id":"core:control-data-planes","title":"Control and data planes","description":"Distinguish configuration authority from protected resource access."},
+    {"id":"core:ci-identity","title":"CI identity","description":"Understand least-privilege workflow authority and artifact lineage."},
+    {"id":"core:secrets","title":"Secrets","description":"Keep credentials synthetic, explicitly selected, bounded, and absent from evidence."},
+    {"id":"core:evidence","title":"Evidence","description":"Connect claims to current state, decisions, outcomes, reports, and compatibility records."},
+    {"id":"core:verification","title":"Deterministic verification","description":"Use invariant or evidence evaluation rather than subjective completion claims."},
+    {"id":"core:cleanup","title":"Cleanup and ownership","description":"Stop only owned resources and confirm terminal state after success or failure."}
+  ],
+  "lessons": [
+    {
+      "id":"lesson:first-success","title":"See a provider-neutral trust path","track":"common_core","difficulty":"beginner","durationMinutes":20,
+      "prerequisites":[],"commonCore":["core:structured-data","core:authn-authz","core:evidence","core:verification","core:cleanup"],"safetyBoundary":"local_no_docker",
+      "binding":{"type":"scenario","id":"walking-skeleton","guide":"docs/07-guides/no-docker-quickstart.md"},
+      "outcomes":["Explain a directed principal-to-resource trust path.","Distinguish canonical graph evidence from provider parity."],
+      "missionLayers":{"delivery":"not_applicable","identity":"covered","runtimeResource":"supporting","data":"not_applicable","evidenceGovernance":"covered","remediation":"not_applicable"},
+      "hints":[{"level":1,"text":"Read the path as principal, group, workload identity, and resource."},{"level":2,"text":"Use edge labels to explain why each traversal exists."},{"level":3,"text":"Run the manual graph path command from the no-Docker guide."}],
+      "verification":{"type":"cli","commands":["cailab quickstart"]},"cleanup":{"required":false,"commands":[]},
+      "productionContext":"Identity investigations begin by making implicit authority visible.",
+      "reflection":["Which edge granted the final resource access?","What behavior did the walking skeleton not emulate?"]
+    },
+    {
+      "id":"lesson:google-sharing","title":"Remediate Google Workspace sharing","track":"iam_security","difficulty":"beginner","durationMinutes":45,
+      "prerequisites":["lesson:first-success"],"commonCore":["core:structured-data","core:authn-authz","core:policy-scope","core:control-data-planes","core:evidence","core:verification","core:cleanup"],"safetyBoundary":"local_no_docker",
+      "binding":{"type":"scenario","id":"google-drive-sharing","guide":"docs/07-guides/google-drive-sharing-lab.md"},
+      "outcomes":["Trace direct and group-derived Drive access.","Remove an excessive permission while preserving approved access."],
+      "missionLayers":{"delivery":"not_applicable","identity":"covered","runtimeResource":"covered","data":"covered","evidenceGovernance":"covered","remediation":"covered"},
+      "hints":[{"level":1,"text":"Compare the contractor permission with the approved group path."},{"level":2,"text":"Inspect the exact file permission identifiers before deleting anything."},{"level":3,"text":"Remove only permission_contractor and rerun verification."}],
+      "verification":{"type":"cli","commands":["cailab verify"]},"cleanup":{"required":true,"commands":["cailab down"]},
+      "productionContext":"Workspace sharing investigations must separate direct grants from group-derived access.",
+      "reflection":["Which permission created excessive access?","Which real Google Workspace semantics are outside this facade?"]
+    },
+    {
+      "id":"lesson:microsoft-consent","title":"Narrow Microsoft delegated consent","track":"iam_security","difficulty":"beginner","durationMinutes":45,
+      "prerequisites":["lesson:first-success"],"commonCore":["core:structured-data","core:authn-authz","core:policy-scope","core:control-data-planes","core:evidence","core:verification","core:cleanup"],"safetyBoundary":"local_no_docker",
+      "binding":{"type":"scenario","id":"microsoft-consent","guide":"docs/07-guides/microsoft-consent-lab.md"},
+      "outcomes":["Explain delegated Graph permission scope.","Revoke an excessive grant without removing intended administrative access."],
+      "missionLayers":{"delivery":"not_applicable","identity":"covered","runtimeResource":"covered","data":"supporting","evidenceGovernance":"covered","remediation":"covered"},
+      "hints":[{"level":1,"text":"Identify the grant attached to the ordinary analyst."},{"level":2,"text":"Compare its scope with the administrator path."},{"level":3,"text":"Delete only the documented excessive OAuth2 permission grant."}],
+      "verification":{"type":"cli","commands":["cailab verify"]},"cleanup":{"required":true,"commands":["cailab down"]},
+      "productionContext":"Consent review requires principal, application, scope, and tenant context rather than permission names alone.",
+      "reflection":["How did delegated consent differ from group membership?","Why is this not an Azure RBAC lab?"]
+    },
+    {
+      "id":"lesson:local-oidc","title":"Inspect a local OIDC trust flow","track":"iam_security","difficulty":"intermediate","durationMinutes":60,
+      "prerequisites":["lesson:microsoft-consent"],"commonCore":["core:structured-data","core:authn-authz","core:oauth-oidc","core:policy-scope","core:control-data-planes","core:secrets","core:evidence","core:verification","core:cleanup"],"safetyBoundary":"local_no_docker",
+      "binding":{"type":"scenario","id":"local-oidc","guide":"docs/07-guides/local-oidc-lab.md"},
+      "outcomes":["Inspect discovery and JWKS metadata.","Exchange a synthetic code and validate audience, claims, signature, and key rotation."],
+      "missionLayers":{"delivery":"not_applicable","identity":"covered","runtimeResource":"covered","data":"not_applicable","evidenceGovernance":"covered","remediation":"supporting"},
+      "hints":[{"level":1,"text":"Confirm the discovery issuer exactly matches the token issuer."},{"level":2,"text":"Use the JWKS key ID selected by the token header."},{"level":3,"text":"Rotate signing material and prove old assumptions do not silently survive."}],
+      "verification":{"type":"cli","commands":["cailab verify"]},"cleanup":{"required":true,"commands":["cailab down"]},
+      "productionContext":"Workload federation depends on exact issuer, audience, signature, claim, and lifetime validation.",
+      "reflection":["Which field binds a token to its intended service?","Why is the local issuer not production OIDC?"]
+    },
+    {
+      "id":"lesson:aws-cross-account","title":"Constrain AWS cross-account trust","track":"cloud_devops","difficulty":"intermediate","durationMinutes":75,
+      "prerequisites":["lesson:first-success"],"commonCore":["core:structured-data","core:authn-authz","core:policy-scope","core:control-data-planes","core:secrets","core:evidence","core:verification","core:cleanup"],"safetyBoundary":"local_docker",
+      "binding":{"type":"scenario","id":"aws-cross-account","guide":"docs/07-guides/aws-cross-account-lab.md"},
+      "outcomes":["Trace role trust and S3 authorization across accounts.","Narrow trust while preserving the intended principal path."],
+      "missionLayers":{"delivery":"not_applicable","identity":"covered","runtimeResource":"covered","data":"covered","evidenceGovernance":"covered","remediation":"covered"},
+      "hints":[{"level":1,"text":"Separate who can assume the role from what the role can do."},{"level":2,"text":"Inspect the trust policy before changing the S3 permissions policy."},{"level":3,"text":"Restrict the role trust to the documented intended principal and verify both invariants."}],
+      "verification":{"type":"cli","commands":["cailab verify"]},"cleanup":{"required":true,"commands":["cailab down"]},
+      "productionContext":"Cross-account access combines role trust, session identity, resource authorization, and emulator limitations.",
+      "reflection":["Which policy controlled assumption and which controlled S3 access?","Which Floci authorization gaps remain documented?"]
+    },
+    {
+      "id":"lesson:cross-provider-remediation","title":"Remediate the flagship identity chain","track":"iam_security","difficulty":"advanced","durationMinutes":120,
+      "prerequisites":["lesson:google-sharing","lesson:microsoft-consent","lesson:local-oidc","lesson:aws-cross-account"],"commonCore":["core:structured-data","core:authn-authz","core:oauth-oidc","core:policy-scope","core:control-data-planes","core:secrets","core:evidence","core:verification","core:cleanup"],"safetyBoundary":"local_docker",
+      "binding":{"type":"scenario","id":"acquisition-agent","guide":"docs/07-guides/acquisition-agent-lab.md"},
+      "outcomes":["Trace Google to Microsoft to local OIDC to AWS authority.","Close only the contractor path while preserving administrator access."],
+      "missionLayers":{"delivery":"not_applicable","identity":"covered","runtimeResource":"covered","data":"covered","evidenceGovernance":"covered","remediation":"covered"},
+      "hints":[{"level":1,"text":"Find the first live provider edge unique to the risky path."},{"level":2,"text":"Compare the two Microsoft app-role assignments."},{"level":3,"text":"Remove only assignment 99999999-9999-4999-8999-999999999999."}],
+      "verification":{"type":"cli","commands":["cailab verify"]},"cleanup":{"required":true,"commands":["cailab down"]},
+      "productionContext":"Cross-provider incidents require current state from every authority plane rather than one vendor console.",
+      "reflection":["Why was changing the AWS role a broader remediation?","Which intended path proved the change was not destructive?"]
+    },
+    {
+      "id":"lesson:release-integrity","title":"Interpret release and CI evidence","track":"cloud_devops","difficulty":"intermediate","durationMinutes":60,
+      "prerequisites":["lesson:first-success"],"commonCore":["core:delivery","core:structured-data","core:ci-identity","core:secrets","core:evidence","core:verification"],"safetyBoundary":"local_no_docker",
+      "binding":{"type":"workflow","id":"release-integrity","guide":"docs/07-guides/release-verification.md"},
+      "outcomes":["Distinguish checksums, SBOMs, provenance, smoke tests, scans, and human review.","Validate the release packager and linked-module inventory from source."],
+      "missionLayers":{"delivery":"covered","identity":"supporting","runtimeResource":"supporting","data":"not_applicable","evidenceGovernance":"covered","remediation":"not_applicable"},
+      "hints":[{"level":1,"text":"Ask which evidence proves bytes, origin, contents, execution, or review."},{"level":2,"text":"Compare the generated linked modules with the committed notice inventory."},{"level":3,"text":"Run the release package tests before interpreting workflow claims."}],
+      "verification":{"type":"cli","commands":["go test ./internal/tools/release","go run ./internal/tools/release modules"]},"cleanup":{"required":false,"commands":[]},
+      "productionContext":"Artifact trust is a chain of complementary signals rather than a single scan result.",
+      "reflection":["What does a checksum prove?","What do provenance and an SBOM still not prove?"]
+    },
+    {
+      "id":"lesson:agent-governance","title":"Evaluate a governed external agent","track":"ai_governance","difficulty":"advanced","durationMinutes":90,
+      "prerequisites":["lesson:cross-provider-remediation"],"commonCore":["core:structured-data","core:authn-authz","core:policy-scope","core:control-data-planes","core:secrets","core:evidence","core:verification","core:cleanup"],"safetyBoundary":"trusted_host_process",
+      "binding":{"type":"workflow","id":"external-agent-starter","guide":"examples/external-agent-starter/README.md"},
+      "outcomes":["Validate scenario-bound agent and tool registrations.","Explain authorization, protected output, execution outcome, state capture, and replay limitations."],
+      "missionLayers":{"delivery":"supporting","identity":"covered","runtimeResource":"covered","data":"covered","evidenceGovernance":"covered","remediation":"not_applicable"},
+      "hints":[{"level":1,"text":"Validate registrations before launching either process."},{"level":2,"text":"Treat the manifest as an authority ceiling and policy as a separate decision."},{"level":3,"text":"Replay trial:external-starter and compare every numerator with the expected report."}],
+      "verification":{"type":"evidence","commands":["cailab agent replay --trial-id trial:external-starter --format markdown"]},"cleanup":{"required":true,"commands":["cailab down"]},
+      "productionContext":"Agent governance requires bounded identity, tools, policy, evidence, and honest isolation claims.",
+      "reflection":["Why did process completion not produce scenario task success?","Which process remained unisolated?"]
+    },
+    {
+      "id":"lesson:scenario-authoring-orientation","title":"Author a safe data-only scenario","track":"community_authoring","difficulty":"intermediate","durationMinutes":60,
+      "prerequisites":["lesson:cross-provider-remediation"],"commonCore":["core:structured-data","core:authn-authz","core:policy-scope","core:evidence","core:verification","core:cleanup"],"safetyBoundary":"local_no_docker",
+      "binding":{"type":"workflow","id":"scenario-authoring-orientation","guide":"examples/scenario-starter/README.md"},
+      "outcomes":["Separate learner briefing from protected evaluation rules.","Adapt stable IDs, graph relationships, invariants, compatibility claims, and cleanup expectations without adding executable capabilities."],
+      "missionLayers":{"delivery":"supporting","identity":"covered","runtimeResource":"supporting","data":"supporting","evidenceGovernance":"covered","remediation":"supporting"},
+      "hints":[{"level":1,"text":"Start with the starter metadata and learner-visible briefing."},{"level":2,"text":"Trace every graph reference to a declared tenant, principal, or resource."},{"level":3,"text":"Validate the copied starter through the public command before starting it."}],
+      "verification":{"type":"cli","commands":["cailab scenario validate examples/scenario-starter/scenario.yaml","cailab verify --state-dir ./.cailab-state"]},"cleanup":{"required":true,"commands":["cailab down --state-dir ./.cailab-state"]},
+      "productionContext":"Community extensibility begins with constrained data contracts; executable integrations require a separate trust decision.",
+      "reflection":["Which fields are learner-visible and which protect evaluation?","Why can a scenario not select a shell command?"]
+    }
+  ],
+  "paths": [
+    {
+      "id":"path:identity-agent-foundations",
+      "title":"Identity and Agent Foundations",
+      "audience":"Self-directed cloud, IAM, security, DevOps, and agent engineers who want an evidence-driven local enterprise path.",
+      "description":"Progress from a no-Docker trust graph through provider-specific authorization, cross-provider remediation, release integrity, governed agents, and safe authoring orientation.",
+      "lessons":["lesson:first-success","lesson:google-sharing","lesson:microsoft-consent","lesson:local-oidc","lesson:aws-cross-account","lesson:cross-provider-remediation","lesson:release-integrity","lesson:agent-governance","lesson:scenario-authoring-orientation"]
+    }
+  ]
+}

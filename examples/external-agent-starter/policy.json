@@ -1,0 +1,18 @@
+{
+  "apiVersion": "cloudailab.dev/agent/v1alpha1",
+  "kind": "GovernancePolicy",
+  "version": "0.1.0",
+  "defaultEffect": "deny",
+  "rules": [
+    {
+      "id": "rule:allow-starter-read",
+      "effect": "allow",
+      "agentId": "agent:external-starter",
+      "tool": "cloudailab.google.drive.read",
+      "action": "google.drive.files.get",
+      "resource": "google:agent-runbook",
+      "resourceTenant": "tenant:northstar",
+      "resourceClassification": "internal"
+    }
+  ]
+}

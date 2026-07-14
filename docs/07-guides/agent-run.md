@@ -1,6 +1,6 @@
 ---
 title: Agent Run Guide
-status: m3-complete
+status: active
 last_reviewed: 2026-07-12
 ---
 
@@ -17,12 +17,15 @@ The opt-in Docker mode isolates the agent process with no host mounts or forward
 Build CloudAILab, start any scenario, and run the deterministic reference agent:
 
 ```bash
+mkdir -p ./bin
 go build -o ./bin/cailab ./cmd/cailab
 ./bin/cailab up walking-skeleton
 ./bin/cailab agent run reference
 ```
 
 The reference agent completes without tool calls. CloudAILab persists its scenario digest/seed, agent and policy identity, prompt hash, tool digest, lifecycle timestamps, and terminal status. Reusing the default `trial:1` in the same active range is rejected; select a new value with `--trial-id` when intentionally recording another trial.
+
+For an adaptable standalone implementation that performs a governed provider-backed read, start with the tested [external-agent starter](../../examples/external-agent-starter/README.md). It includes configuration generation, an exact-match policy, a closed tool registration, a prompt, expected replay evidence, and release-archive support.
 
 Replay the terminal reference evidence without launching it again:
 

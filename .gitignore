@@ -1,7 +1,15 @@
 .DS_Store
 .trash/
 
-# Obsidian stores per-user UI state here. Vault configuration remains versioned.
+# Obsidian stores per-user UI, Sync, and plugin state here. Only the portable
+# Files and Links defaults and the minimal core-plugin set remain versioned.
+.obsidian/appearance.json
+.obsidian/bookmarks.json
+.obsidian/community-plugins.json
+.obsidian/graph.json
+.obsidian/hotkeys.json
+.obsidian/plugins/
+.obsidian/sync.json
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .obsidian/cache/

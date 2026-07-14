@@ -1,6 +1,6 @@
 ---
 title: Google Workspace Facade Compatibility Matrix
-status: m2-complete
+status: active
 last_reviewed: 2026-07-13
 facade_version: 0.1.0
 ---

@@ -14,6 +14,8 @@ import (
 
 	"github.com/msinclair25/cailab/internal/agent"
 	"github.com/msinclair25/cailab/internal/app"
+	"github.com/msinclair25/cailab/internal/provider"
+	"github.com/msinclair25/cailab/internal/state"
 )
 
 const (
@@ -72,6 +74,14 @@ func TestWalkingSkeletonLifecycle(t *testing.T) {
 	if !strings.Contains(output, "walking-skeleton@0.1.0") {
 		t.Fatalf("status output = %q", output)
 	}
+	output = assertRun(ExitOK, "status", "--state-dir", stateDir, "--format", "json")
+	var status statusDocument
+	if err := json.Unmarshal([]byte(output), &status); err != nil {
+		t.Fatalf("decode status JSON: %v; output=%s", err, output)
+	}
+	if status.APIVersion != statusAPIVersion || status.Kind != "RangeStatus" || status.Run.Scenario != "walking-skeleton" {
+		t.Fatalf("status JSON = %+v", status)
+	}
 	output = assertRun(ExitOK, "mission", "--state-dir", stateDir)
 	if !strings.Contains(output, "Inspect the path") {
 		t.Fatalf("mission output = %q", output)
@@ -92,6 +102,178 @@ func TestWalkingSkeletonLifecycle(t *testing.T) {
 	}
 	if code := c.Run(ctx, []string{"status", "--state-dir", stateDir}); code != ExitError {
 		t.Fatalf("status after down code = %d, want %d", code, ExitError)
+	}
+}
+
+func TestDataOnlyScenarioStarterPublicLifecycle(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	stateDir := t.TempDir()
+	scenarioPath := filepath.Join("..", "..", "examples", "scenario-starter", "scenario.yaml")
+	var stdout, stderr bytes.Buffer
+	c := New(&stdout, &stderr)
+
+	assertRun := func(wantCode int, args ...string) string {
+		t.Helper()
+		stdout.Reset()
+		stderr.Reset()
+		if code := c.Run(ctx, args); code != wantCode {
+			t.Fatalf("Run(%v) code = %d, want %d; stderr=%s", args, code, wantCode, stderr.String())
+		}
+		return stdout.String()
+	}
+
+	validated := assertRun(ExitOK, "scenario", "validate", scenarioPath)
+	if !strings.Contains(validated, "community-trust-path@0.1.0 is valid") || !strings.Contains(validated, "invariants: 2") {
+		t.Fatalf("validate output = %q", validated)
+	}
+	assertRun(ExitOK, "up", "--state-dir", stateDir, scenarioPath)
+	junitPath := filepath.Join(t.TempDir(), "verification.xml")
+	assertRun(ExitOK, "verify", "--state-dir", stateDir, "--format", "junit", "--output", junitPath)
+	junitData, err := os.ReadFile(junitPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(junitData), `<testsuite name="CloudAILab verification: community-trust-path" tests="2" failures="0">`) {
+		t.Fatalf("JUnit report = %s", junitData)
+	}
+	verified := assertRun(ExitOK, "verify", "--state-dir", stateDir)
+	if !strings.Contains(verified, "2 passed, 0 failed") {
+		t.Fatalf("verify output = %q", verified)
+	}
+	assertRun(ExitOK, "down", "--state-dir", stateDir)
+	if code := c.Run(ctx, []string{"status", "--state-dir", stateDir}); code != ExitError {
+		t.Fatalf("status after cleanup code = %d, want %d", code, ExitError)
+	}
+}
+
+func TestPublicHelpIsSuccessfulAndUsesStandardOutput(t *testing.T) {
+	t.Parallel()
+	tests := [][]string{
+		{"--help"},
+		{"version", "--help"},
+		{"doctor", "--help"},
+		{"scenario", "--help"},
+		{"scenario", "list", "--help"},
+		{"scenario", "show", "--help"},
+		{"scenario", "validate", "--help"},
+		{"quickstart", "--help"},
+		{"up", "--help"},
+		{"status", "--help"},
+		{"mission", "--help"},
+		{"agent", "--help"},
+		{"agent", "validate", "--help"},
+		{"agent", "run", "--help"},
+		{"agent", "run", "reference", "--help"},
+		{"agent", "run", "subprocess", "--help"},
+		{"agent", "run", "safe", "--help"},
+		{"agent", "run", "unsafe", "--help"},
+		{"agent", "campaign", "--help"},
+		{"agent", "campaign", "reference", "--help"},
+		{"agent", "campaign", "safe", "--help"},
+		{"agent", "campaign", "unsafe", "--help"},
+		{"agent", "replay", "--help"},
+		{"identity", "--help"},
+		{"identity", "rotate", "--help"},
+		{"identity", "validate", "--help"},
+		{"federation", "--help"},
+		{"federation", "assume-aws", "--help"},
+		{"graph", "--help"},
+		{"graph", "path", "--help"},
+		{"verify", "--help"},
+		{"reset", "--help"},
+		{"down", "--help"},
+	}
+
+	for _, args := range tests {
+		args := args
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			t.Parallel()
+			var stdout, stderr bytes.Buffer
+			code := New(&stdout, &stderr).Run(context.Background(), args)
+			if code != ExitOK {
+				t.Fatalf("Run(%v) code = %d, want %d; stderr=%q", args, code, ExitOK, stderr.String())
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("Run(%v) stderr = %q, want empty", args, stderr.String())
+			}
+			if !strings.Contains(stdout.String(), "Usage:") {
+				t.Fatalf("Run(%v) stdout = %q, want usage", args, stdout.String())
+			}
+		})
+	}
+}
+
+func TestQuickstartCompletesVerificationAndCleanup(t *testing.T) {
+	t.Parallel()
+	stateDir := t.TempDir()
+	var stdout, stderr bytes.Buffer
+	c := New(&stdout, &stderr)
+	if code := c.Run(context.Background(), []string{"quickstart", "--state-dir", stateDir}); code != ExitOK {
+		t.Fatalf("quickstart code = %d; stderr=%s; stdout=%s", code, stderr.String(), stdout.String())
+	}
+	output := stdout.String()
+	for _, want := range []string{"guided no-Docker quick start", "no provider runtimes", "CloudAILab verification: walking-skeleton — PASS", "Quick start complete"} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("quickstart output missing %q: %s", want, output)
+		}
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if code := c.Run(context.Background(), []string{"status", "--state-dir", stateDir}); code != ExitError {
+		t.Fatalf("status after quickstart code = %d, want %d", code, ExitError)
+	}
+	if !strings.Contains(stderr.String(), "no active run") {
+		t.Fatalf("status stderr = %q, want no active run", stderr.String())
+	}
+}
+
+func TestHelpTokenRemainsAFlagValueWhenDeclared(t *testing.T) {
+	t.Parallel()
+	var stdout, stderr bytes.Buffer
+	c := New(&stdout, &stderr)
+	fs := newFlagSet("test", &stderr)
+	var values stringListFlag
+	fs.Var(&values, "arg", "argument")
+	if err := c.parseFlags(fs, []string{"--arg", "--help"}); err != nil {
+		t.Fatalf("parseFlags: %v", err)
+	}
+	if len(values) != 1 || values[0] != "--help" {
+		t.Fatalf("values = %v, want [--help]", values)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("stdout = %q, want no help", stdout.String())
+	}
+}
+
+func TestStatusProjectionIsStableAndEvidenceSafe(t *testing.T) {
+	t.Parallel()
+	run := state.Run{
+		ID: "run:1", ScenarioName: "scenario", ScenarioVersion: "0.1.0", Status: "active", Seed: 42,
+		BaselineDigest: "baseline",
+		Runtimes: []provider.Instance{
+			{Provider: "google", Engine: "native", Endpoint: "http://127.0.0.1:2", Status: "ready", Name: "private-name", ProcessID: 99, ControlPath: "control-secret"},
+			{Provider: "aws", Engine: "floci", Endpoint: "http://127.0.0.1:1", Status: "ready", ContainerID: "container-secret", Image: "image-secret"},
+		},
+	}
+	run.Compiled.Digest = "plan"
+
+	projected := projectStatus(run)
+	if projected.APIVersion != statusAPIVersion || projected.Run.PlanDigest != "plan" || projected.Run.BaselineDigest != "baseline" {
+		t.Fatalf("projection = %+v", projected)
+	}
+	if len(projected.Runtimes) != 2 || projected.Runtimes[0].Provider != "aws" || projected.Runtimes[1].Provider != "google" {
+		t.Fatalf("runtime order = %+v", projected.Runtimes)
+	}
+	data, err := json.Marshal(projected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, prohibited := range []string{"control-secret", "container-secret", "image-secret", "private-name", "processId", "controlPath"} {
+		if bytes.Contains(data, []byte(prohibited)) {
+			t.Fatalf("status JSON exposes %q: %s", prohibited, data)
+		}
 	}
 }
 
@@ -147,11 +329,16 @@ func TestVerificationFailureUsesDedicatedExitCode(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if code := c.Run(ctx, []string{"verify", "--state-dir", stateDir}); code != ExitVerificationFailed {
+	reportPath := filepath.Join(t.TempDir(), "failed-verification.xml")
+	if code := c.Run(ctx, []string{"verify", "--state-dir", stateDir, "--format", "junit", "--output", reportPath}); code != ExitVerificationFailed {
 		t.Fatalf("verify code = %d, want %d; stderr=%s", code, ExitVerificationFailed, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "1 failed") {
-		t.Fatalf("verify output = %q", stdout.String())
+	report, err := os.ReadFile(reportPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(report), `failures="1"`) || !strings.Contains(string(report), `<failure`) {
+		t.Fatalf("failed JUnit report = %s", report)
 	}
 }
 

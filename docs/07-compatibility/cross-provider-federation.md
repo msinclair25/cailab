@@ -1,6 +1,6 @@
 ---
 title: Cross-Provider Federation Compatibility Matrix
-status: m2-complete
+status: active
 last_reviewed: 2026-07-13
 scenario_version: acquisition-agent@0.1.0
 ---
@@ -50,7 +50,7 @@ Any validation or authorization failure occurs before the Floci STS call. Existi
 
 ## External agent boundary
 
-Agents and scripts may call the supported loopback APIs and execute the CLI gateway as ordinary external tools. M2 makes no claim that those processes are sandboxed, governed, approved, traced, or repeatedly scored. The M3 agent protocol and governance gateway remain separate work.
+Independently launched agents and scripts may call the supported loopback APIs and execute the federation command as ordinary external tools; those calls do not become governed merely because they target CloudAILab. The supported agent runner separately validates scenario-bound registrations and mediates declared tools through deterministic policy, approvals, protected output, and linked evidence. Host-mode agents and all registered tool subprocesses remain unisolated. Optional Docker mode applies only to the agent process under the exact [Docker compatibility contract](agent-docker-isolation.md), and automatic repeated campaigns remain limited to the code-owned reference, safe, and unsafe controls documented in the [campaign record](agent-campaign-execution.md).
 
 ## Primary sources
 

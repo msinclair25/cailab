@@ -1,11 +1,28 @@
 ---
 title: Product Requirements
-status: draft
+status: active
+last_reviewed: 2026-07-13
 ---
 
 # Product requirements
 
 Requirement identifiers are stable. Removed requirements are deprecated rather than renumbered.
+
+## Status and evidence
+
+This is the active requirements index. A requirement states the product contract; its presence does not by itself prove implementation. Current capability claims require supporting implementation, tests, schemas, and the applicable [compatibility record](../07-compatibility/README.md).
+
+Known open requirements in the current M4.1 slice are explicit:
+
+| Requirement | Current evidence boundary |
+|---|---|
+| FR-014 | Implemented for deterministic verification as text, Markdown, JSON, and timestamp-free JUnit with one testcase per invariant. Agent evaluation remains text/Markdown/JSON because its evidence rates intentionally do not define one universal pass/fail verdict; an agent JUnit gate is explicitly deferred until a scenario declares such criteria. |
+| FR-018 | Optional evidence-grounded coaching is not implemented and is deferred beyond the first public release. |
+| NFR-USE-008, NFR-USE-009, and NFR-USE-011 | Implemented in M4.1 with the public help matrix, versioned evidence-safe status projection, and exact-commit release-link tests. |
+| NFR-USE-010 | The guided no-Docker lifecycle is implemented and covered by unit and cross-platform CI workflow steps. A clean maintainer archive rehearsal completed in 0.07 seconds without Go or Docker, but the ten-minute unfamiliar-user target remains pending the documented RC2 participant walkthrough. |
+| NFR-USE-012 | Implemented with the dependency-free external-agent starter, fixed facade-backed governed tool, generated scenario-bound registrations, public flagship integration, release packaging/smoke checks, expected evidence, and explicit host/isolation limitations. |
+| NFR-USE-013 | Implemented with the public validate-without-starting command, release-packaged no-runtime starter, strict hook/runtime rejection tests, public lifecycle coverage, authoring/contribution guidance, and an explicit compatibility record. |
+| NFR-USE-014 | Implemented with the versioned data-only learning catalog, semantic validator, common-core and mission-layer metadata, one-time adaptation provenance, initial focused path, CI validation, and release bundling. |
 
 ## Functional requirements
 
@@ -24,7 +41,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | FR-011 | The system shall record actor identity, request, policy decision, side effect, and outcome for supported actions. | Must |
 | FR-012 | The system shall support lifecycle commands for diagnostics, startup, status, reset, verification, and shutdown. | Must |
 | FR-013 | The system shall support seeded data generation and reproducible initial state. | Must |
-| FR-014 | The system shall export human-readable Markdown and machine-readable JSON/JUnit reports. | Should |
+| FR-014 | The system shall export human-readable Markdown and machine-readable JSON for deterministic verification and agent evaluation, plus JUnit testcases for deterministic verification invariants; agent evaluation shall not invent a JUnit verdict without declared pass/fail criteria. | Should |
 | FR-015 | The system shall execute or connect an agent under test through a governed tool boundary. | Must |
 | FR-016 | The agent boundary shall support allow, deny, redact, and require-approval decisions. | Must |
 | FR-017 | The system shall support repeated agent trials and aggregate behavioral results. | Should |
@@ -103,6 +120,13 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 | NFR-USE-005 | The release executable shall list, show, validate, and start its built-in scenarios without a repository checkout or working-directory catalog; custom files and catalogs shall require explicit selection. |
 | NFR-USE-006 | CI shall build and execute the documented walking-skeleton demo in an ephemeral non-root container without cloud accounts, hosted models, host mounts, external networking, or a writable root filesystem. |
 | NFR-USE-007 | The public release documentation shall provide tested installation, architecture, upgrade, troubleshooting, verification, support, and recording-ready demo guidance without claiming an unpublished version. |
+| NFR-USE-008 | `-h` and `--help` shall exit successfully for the root command, every public command, and every public command group; help shall be written to standard output and shall not be rendered as an operational error. |
+| NFR-USE-009 | The CLI shall expose a stable versioned machine-readable status and endpoint representation that does not include provider control tokens, temporary credentials, or other secrets. |
+| NFR-USE-010 | The release shall include a guided no-Docker workflow that uses the normal lifecycle, verification, and cleanup contracts and can produce a meaningful first success in ten minutes or less on a supported clean environment. |
+| NFR-USE-011 | Every Markdown link in a release archive shall either resolve within that unpacked archive or target an intentionally durable versioned source. |
+| NFR-USE-012 | The release shall include a tested protocol-compatible external-agent starter with a governed provider-backed tool, scenario-bound policy and registrations, expected deterministic evidence, and explicit host/isolation limitations. |
+| NFR-USE-013 | The repository shall provide a validated data-only custom-scenario starter and authoring workflow that cannot select executable hooks or unreviewed provider runtimes. |
+| NFR-USE-014 | The release shall include a schema- and semantics-validated data-only learning catalog with stable lesson/path IDs, common-core dependencies, complete mission-layer coverage, safety/verification/cleanup metadata, and an initial self-guided path bound only to implemented scenarios and workflows. |
 
 ### Maintainability and supply chain
 
@@ -119,6 +143,7 @@ Requirement identifiers are stable. Removed requirements are deprecated rather t
 
 ## Deferred requirements
 
+- Versioned, redacted, integrity-manifested proof-of-work bundles generated from evidence-supported scenario state. These are portfolio artifacts, not identity proof, credentials, rankings, hiring recommendations, or employment guarantees.
 - Full graphical administration console.
 - High-fidelity email, collaboration, and endpoint emulation.
 - Transparent interception for applications that cannot override endpoints.

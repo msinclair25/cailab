@@ -214,6 +214,44 @@ func TestRepositorySchemaAndReferenceScenario(t *testing.T) {
 	}
 }
 
+func TestDataOnlyScenarioStarterCompilesWithoutExecutableCapabilities(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join("..", "..", "examples", "scenario-starter", "scenario.yaml")
+	definition, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load() starter error = %v", err)
+	}
+	if definition.Spec.Runtimes != (Runtimes{}) || definition.Spec.Providers != (Providers{}) || len(definition.Spec.Evaluation.PromptInjections) != 0 {
+		t.Fatalf("starter selected an executable/provider/evaluation capability: %+v", definition.Spec)
+	}
+	compiled, err := Compile(definition, definition.Spec.Seed)
+	if err != nil {
+		t.Fatalf("Compile() starter error = %v", err)
+	}
+	if len(compiled.Invariants) != 2 || compiled.Digest == "" {
+		t.Fatalf("compiled starter = %+v", compiled)
+	}
+}
+
+func TestDataOnlyScenarioStarterRejectsHooksAndUnreviewedRuntime(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join("..", "..", "examples", "scenario-starter", "scenario.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	withHook := strings.Replace(string(data), "  seed: 42", "  seed: 42\n  hooks:\n    - command: whoami", 1)
+	if _, err := Decode([]byte(withHook), ".yaml"); err == nil || !strings.Contains(err.Error(), "field hooks not found") {
+		t.Fatalf("Decode() hook error = %v", err)
+	}
+
+	withRuntime := strings.Replace(string(data), "  objectives:", "  runtimes:\n    google:\n      engine: subprocess\n  objectives:", 1)
+	if _, err := Decode([]byte(withRuntime), ".yaml"); err == nil || !strings.Contains(err.Error(), "unsupported value") {
+		t.Fatalf("Decode() runtime error = %v", err)
+	}
+}
+
 func TestBuiltInCatalogLoadsWithoutFilesystemRoot(t *testing.T) {
 	t.Parallel()
 

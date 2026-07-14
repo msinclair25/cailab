@@ -6,18 +6,24 @@ audit_date: 2026-07-13
 baseline_commit: 4fa8bb2b9b6d25a9be7db1ad7b45239e04840638
 candidate_commit: 9190af11a6188fd17a614d2b9d9833d08f164188
 candidate_workflow_run: 29241014494
-decision: candidate-validated-public-tag-pending
+decision: rc1-validated-replacement-required
 ---
 
 # Release-candidate readiness audit
 
 ## Decision
 
-CloudAILab **successfully exercised and validated `0.1.0-rc.1`**, but it is **not approved for a public `v0.1.0` tag**.
+CloudAILab **successfully exercised and validated `0.1.0-rc.1`**, but it is **not approved for a public `v0.1.0` tag and is no longer the proposed final lineage**.
 
 The release-readiness change was merged from the exact reviewed head after all required CI, CodeQL, and dependency-review checks passed. The manual candidate workflow then packaged and smoke-tested the exact merge commit without creating a tag or GitHub release. The candidate exists to test the exact archives and release controls; it is not a stable-version promise.
 
-Public-tag approval remains a separate owner decision after candidate artifact inspection, a published demo recording, changelog promotion, and explicit acceptance of Apache-2.0 plus the residual risks in this record.
+The bounded M4.1 adoption pass intentionally changes CLI behavior, documentation navigation and distribution, examples, and possibly report output. RC1 remains historical evidence for the release foundation, but a fully exercised `0.1.0-rc.2` from the final reviewed lineage is required before public-tag approval. A published demo recording, changelog promotion, and explicit acceptance of Apache-2.0 plus the residual risks in this record remain separate final gates.
+
+## M4.1 disposition
+
+This audit records RC1 facts and must not be rewritten as though those artifacts contained later work. M4.1 reopens the user contract, distribution-link, first-user, external-agent starter, curriculum, community-authoring, and reporting gates. After those changes merge, RC2 must repeat the security, compatibility, packaging, legal, reproducibility, native smoke, and clean-user review against its exact commit.
+
+Local M4.1 pre-candidate evidence and the exact remaining remote/human gates are tracked separately in the [RC2 preparation record](rc2-preparation.md). That record is not an RC2 audit and does not alter the historical RC1 results below.
 
 ## Scope and evidence reviewed
 
@@ -118,7 +124,9 @@ All of the following are required before `v0.1.0`:
 |---|---|
 | Merge the release-readiness implementation with every required check green. | Complete: PR #22 merged the exact reviewed head. |
 | Exercise `0.1.0-rc.1` from the exact merge commit and inspect its archives, checksums, SBOM, legal bundle, reproducibility, and native smoke evidence. | Complete: workflow run 29241014494 and the independent inspection above passed. |
-| Record the portfolio demo from the verified candidate and link the published recording from the repository. | Pending. |
+| Complete the bounded M4.1 adoption-quality requirements and merge them with all required checks green. | Pending. |
+| Exercise and audit `0.1.0-rc.2` from the exact proposed tag lineage, including archive link integrity and clean first-user evidence. | Pending. |
+| Record the portfolio demo from the verified RC2 candidate and link the published recording from the repository. | Pending. |
 | Move the changelog content from `Unreleased` to a dated `0.1.0` entry. | Pending. |
 | Obtain explicit repository-owner approval of Apache-2.0 and the residual-risk acceptances above. | Pending. |
 | Confirm the proposed tag still points to the reviewed commit with no intervening behavior, dependency, workflow, notice, or compatibility change. | Pending until tag time. |

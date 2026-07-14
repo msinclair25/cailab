@@ -2,14 +2,14 @@
 title: CloudAILab
 aliases:
   - CAL
-status: m4-in-development
+status: active
 ---
 
 # CloudAILab
 
 > A local enterprise identity and AI-agent security range.
 
-CloudAILab is a working project name for a reproducible learning and evaluation environment spanning AWS, Microsoft Entra/Microsoft 365, and Google Workspace-compatible ecosystems. It is intended to teach enterprise IAM and cybersecurity, and to evaluate how AI agents behave when they receive identities, credentials, tools, and access to sensitive data.
+CloudAILab is a reproducible learning and evaluation environment spanning AWS, Microsoft Entra/Microsoft 365, and Google Workspace-compatible ecosystems. It is intended to teach enterprise IAM and cybersecurity, and to evaluate how AI agents behave when they receive identities, credentials, tools, and access to sensitive data.
 
 The command-line name is planned as `cailab`; `cal` is intentionally avoided because it conflicts with the traditional Unix calendar utility.
 
@@ -17,11 +17,26 @@ The command-line name is planned as `cailab`; `cal` is intentionally avoided bec
 
 M0 through M3 are complete. Versioned agent and evidence contracts; supported inert reference, fixture-specific safe, deliberately unsafe, and custom subprocess runs; deterministic governance; optional Docker agent isolation; endpoint-preserving restoration; normalized provider baselines; scenario evidence; fixture-labeled indirect prompt-injection scoring; repeated-trial replay metrics; and automatic restored reference/safe/unsafe campaigns are implemented and test-backed. Provider and protocol compatibility is limited to the tested matrices and schemas.
 
-## Build and try the walking skeleton
+## Fastest no-Docker first run
 
-Prerequisites: Go 1.25.12 or newer. Docker is required for AWS/Floci scenarios and the opt-in isolated agent mode.
+Prerequisite: Go 1.25.12 or newer for a source build. Release users will run the same command from the verified archive without Go.
 
 ```bash
+mkdir -p ./bin
+go build -o ./bin/cailab ./cmd/cailab
+./bin/cailab quickstart
+```
+
+The guided command checks the embedded `walking-skeleton`, starts it through the normal lifecycle, explains the trust path, runs deterministic verification, and stops the owned run. It requires no Docker, cloud account, hosted model, proxy, or certificate installation. See the [no-Docker quick-start guide](docs/07-guides/no-docker-quickstart.md).
+
+Continue with the validated [Identity and Agent Foundations path](docs/08-learning/identity-agent-foundations.md). It organizes the implemented provider labs, flagship remediation, release evidence, governed external-agent starter, and safe authoring orientation into a self-guided sequence. CloudAILab remains a sandbox rather than an LMS; deterministic verification and persisted evidence stay authoritative.
+
+## Run the walking skeleton manually
+
+Docker is required for AWS/Floci scenarios and the opt-in isolated agent mode, but not for this walking-skeleton workflow.
+
+```bash
+mkdir -p ./bin
 go build -o ./bin/cailab ./cmd/cailab
 ./bin/cailab doctor
 ./bin/cailab scenario list
@@ -121,6 +136,12 @@ With any active scenario, the reference command launches the deterministic proto
 
 Protocol-compatible user agents can be launched with `cailab agent run subprocess`. Policies and tool manifests are selected explicitly for that trial and validated against the active scenario before a process starts. See the [agent-run guide](docs/07-guides/agent-run.md) for the complete workflow and security limitations.
 
+The tested [external-agent starter](examples/external-agent-starter/README.md) includes a standalone protocol agent, a provider-backed governed tool, generated scenario-bound registrations, a prompt, an expected evidence contract, and release packaging. It is the recommended starting point for connecting a trusted local agent or framework before adding model-specific behavior.
+
+Scenario authors can begin with the release-packaged [data-only scenario starter](examples/scenario-starter/README.md). `cailab scenario validate <file>` strictly decodes and deterministically compiles a custom manifest without starting a run. The starter has no executable hooks or provider runtimes; plugins and dynamic provider loading remain deferred.
+
+CI can export the same deterministic invariant results as timestamp-free JUnit with `cailab verify --format junit --output cailab-verification.xml`. The [least-privilege GitHub Actions example](examples/ci/README.md) uses synthetic local state and no cloud or model credentials. Agent evaluations remain multidimensional JSON/Markdown evidence and do not receive an invented universal JUnit verdict.
+
 Replay one terminal trial—or an explicitly selected complete repeated set—without executing the agent or tools:
 
 ```bash
@@ -164,6 +185,8 @@ go vet ./...
 go test ./...
 go test -race ./...
 go run ./internal/tools/doccheck .
+go run ./internal/tools/learningcheck .
+go run ./cmd/cailab scenario validate ./examples/scenario-starter/scenario.yaml
 ```
 
 ## Release integrity
@@ -185,6 +208,7 @@ For source builds and future archives, start with [installation](docs/07-guides/
 
 ## Documentation
 
+- [Documentation map](docs/README.md)
 - [Project charter](docs/00-project/charter.md)
 - [Master plan](docs/00-project/master-plan.md)
 - [Glossary](docs/00-project/glossary.md)
@@ -194,13 +218,18 @@ For source builds and future archives, start with [installation](docs/07-guides/
 - [Threat model](docs/03-security/threat-model.md)
 - [Scenario specification](docs/04-scenarios/scenario-specification.md)
 - [Engineering standards](docs/05-engineering/engineering-standards.md)
+- [Documentation conventions](docs/05-engineering/documentation-conventions.md)
 - [Quality strategy](docs/05-engineering/quality-strategy.md)
+- [First-user acceptance](docs/05-engineering/first-user-acceptance.md)
+- [RC2 preparation record](docs/05-engineering/rc2-preparation.md)
 - [Delivery roadmap](docs/05-engineering/roadmap.md)
 - [Release-candidate readiness audit](docs/05-engineering/release-readiness-audit.md)
 - [Technical basis and source register](docs/06-research/technical-basis.md)
 - [Installation](docs/07-guides/installation.md)
+- [No-Docker quick start](docs/07-guides/no-docker-quickstart.md)
 - [Architecture walkthrough](docs/07-guides/architecture-walkthrough.md)
 - [Troubleshooting](docs/07-guides/troubleshooting.md)
+- [CLI automation](docs/07-guides/automation.md)
 - [Upgrading](docs/07-guides/upgrading.md)
 - [Portfolio demo runbook](docs/07-guides/portfolio-demo.md)
 - [Portfolio demo transcript and publication copy](docs/07-guides/portfolio-demo-transcript.md)
@@ -216,6 +245,9 @@ For source builds and future archives, start with [installation](docs/07-guides/
 - [Cross-provider federation compatibility matrix](docs/07-compatibility/cross-provider-federation.md)
 - [Agent protocol v1alpha1](docs/04-agents/agent-protocol.md)
 - [Agent-run guide](docs/07-guides/agent-run.md)
+- [External agent starter](examples/external-agent-starter/README.md)
+- [Data-only scenario starter](examples/scenario-starter/README.md)
+- [Least-privilege CI example](examples/ci/README.md)
 - [Docker agent isolation compatibility](docs/07-compatibility/agent-docker-isolation.md)
 - [Agent evidence replay compatibility](docs/07-compatibility/agent-evidence-replay.md)
 - [Agent trial state compatibility](docs/07-compatibility/agent-trial-state.md)
@@ -223,6 +255,7 @@ For source builds and future archives, start with [installation](docs/07-guides/
 - [Agent campaign execution compatibility](docs/07-compatibility/agent-campaign-execution.md)
 - [Release verification](docs/07-guides/release-verification.md)
 - [Clean container demo](docs/07-guides/clean-container-demo.md)
+- [Learning paths and contract](docs/08-learning/README.md)
 - [Changelog](CHANGELOG.md)
 - [Security policy](SECURITY.md)
 - [Support policy](SUPPORT.md)

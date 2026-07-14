@@ -1,6 +1,7 @@
 ---
 title: Scenario Specification
-status: draft
+status: active
+last_reviewed: 2026-07-13
 ---
 
 # Scenario specification
@@ -16,6 +17,8 @@ The normative schema is [schemas/scenario/v1alpha1.json](../../schemas/scenario/
 Repository-owned `*/scenario.yaml` files under `scenarios/` form the built-in catalog and are embedded into the `cailab` executable at build time. Named commands use this immutable catalog by default, so a binary does not depend on a repository checkout, adjacent data directory, or caller working directory.
 
 Custom development remains explicit. `cailab scenario list --root DIR` selects a filesystem catalog; `scenario show`, `doctor`, and `up` accept the corresponding `--root` or `--scenario-root` option, and an existing scenario file can be supplied directly where a scenario reference is accepted. External and built-in manifests use the same strict decoder, validation, compilation, and runtime allowlist. CloudAILab never merges an ambient directory into the built-in catalog.
+
+Run `cailab scenario validate <file>` to strictly decode, validate, and deterministically compile a custom manifest without creating state or starting a runtime. The release-packaged [data-only scenario starter](../../examples/scenario-starter/README.md) is the supported M4.1 authoring entry point. Its [compatibility record](../07-compatibility/data-only-scenario-authoring.md) defines the tested boundary.
 
 Embedding is not secrecy. Built-in manifests and verification rules are public repository content and are recoverable by the local account running the executable. Agent isolation and disclosure controls must not rely on embedded bytes being hidden.
 
@@ -107,9 +110,13 @@ spec:
 - Code and token lifetimes are bounded by the schema. Scenarios cannot select algorithms, keys, listeners, arbitrary claims, or external redirect origins.
 - AWS web-identity trust binds one canonical local client, audience resource, and exact audience value to a declared role. It is an authoritative CloudAILab contract because the pinned emulator does not validate that trust.
 
-## Flagship scenario acceptance criteria
+## Protected ground truth
 
-The initial `acquisition-agent` scenario is complete when it:
+Verification invariants and evaluation fixtures are omitted from normal mission output and agent session-start messages. They are not confidential from a person or unisolated process that can read the local manifest, embedded executable, or repository. A community scenario must therefore keep learner-facing briefing material logically separate from deterministic ground truth and must not describe local packaging as secrecy. Stronger distribution or disclosure controls are outside the M4.1 data-only authoring contract.
+
+## Flagship scenario acceptance evidence
+
+The embedded `acquisition-agent` scenario satisfies the initial topology contract because it:
 
 - Exercises all three provider surfaces.
 - Contains at least two tenant or account boundaries.
@@ -118,4 +125,6 @@ The initial `acquisition-agent` scenario is complete when it:
 - Supports legitimate access that must survive remediation.
 - Can be remediated through supported APIs.
 - Produces deterministic evidence that the attack path is open or closed.
-- Provides the provider and identity ecosystem that the M3 governed agent harness will evaluate across repeated trials.
+- Provides the provider and identity ecosystem used by the governed agent runner, fixture-specific safe and unsafe controls, state capture and restoration, deterministic replay, and repeated campaigns.
+
+Those statements describe the built-in scenario and its test-backed workflows. They do not make every custom manifest compatible with agent state restoration, prompt-injection evaluation, or campaign execution; each such workflow must satisfy its scenario-bound registration and compatibility contract.

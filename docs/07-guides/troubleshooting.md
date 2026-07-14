@@ -14,6 +14,8 @@ cailab doctor SCENARIO
 cailab status
 ```
 
+For automation-safe diagnostics, use `cailab status --format json`; do not parse endpoint values from the human display.
+
 Use synthetic data in every reproduction and remove credentials, signing material, control tokens, provider data, and raw agent/tool content before sharing logs.
 
 ## Common failures

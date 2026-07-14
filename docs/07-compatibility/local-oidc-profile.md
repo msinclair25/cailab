@@ -1,6 +1,6 @@
 ---
 title: Local Development OIDC Profile Compatibility Matrix
-status: m2-complete
+status: active
 last_reviewed: 2026-07-13
 profile_version: 0.1.0
 ---

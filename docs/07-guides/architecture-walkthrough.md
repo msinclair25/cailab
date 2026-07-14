@@ -48,7 +48,7 @@ SQLite stores compiled runs, runtime ownership, baselines, agent configuration, 
 - **Google:** a managed native loopback process exposes selected Directory and Drive-shaped resources and mutations.
 - **OIDC:** a managed development issuer provides signed synthetic tokens and rotation over loopback HTTP; it is intentionally not a production OpenID Provider.
 
-Every compatibility claim is operation-specific and points to contract or integration tests. See the [compatibility records](../07-compatibility).
+Every compatibility claim is operation-specific and points to contract or integration tests. See the [compatibility index](../07-compatibility/README.md).
 
 ## Agent boundary
 

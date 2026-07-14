@@ -1,6 +1,6 @@
 ---
 title: Agent Evidence Replay Compatibility
-status: implemented
+status: active
 profile: governed-evidence-v1
 last_reviewed: 2026-07-13
 ---

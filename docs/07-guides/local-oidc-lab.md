@@ -1,6 +1,6 @@
 ---
 title: Local Development OIDC Lab
-status: m2-complete
+status: active
 last_reviewed: 2026-07-12
 ---
 
@@ -20,6 +20,7 @@ This is a [documented local development profile](../07-compatibility/local-oidc-
 - No Docker, cloud identity provider, proxy, or certificate installation
 
 ```bash
+mkdir -p ./bin
 go build -o ./bin/cailab ./cmd/cailab
 ./bin/cailab doctor local-oidc
 ./bin/cailab up local-oidc

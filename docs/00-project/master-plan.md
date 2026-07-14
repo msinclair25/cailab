@@ -1,9 +1,9 @@
 ---
 title: CloudAILab Master Plan
 status: active
-plan_version: 0.1.0
+plan_version: 0.4.0
 last_reviewed: 2026-07-13
-current_milestone: M4
+current_milestone: M4.1
 ---
 
 # CloudAILab master plan
@@ -12,7 +12,7 @@ current_milestone: M4
 
 This document is the execution plan for CloudAILab. The [project charter](charter.md) defines why the project exists, the [product requirements](../01-product/requirements.md) define required behavior, accepted [architecture decisions](../02-architecture/decisions/README.md) constrain implementation, and this plan defines delivery order and evidence gates.
 
-The plan is intentionally milestone-based rather than date-based. M0 measured the control-plane, SQLite, and packaging baseline; M1 is measuring provider translation, container lifecycle, and compatibility limits before broader estimates are made.
+The plan is intentionally milestone-based rather than date-based. M0 through M3 are complete, and the `0.1.0-rc.1` artifact and release controls have been exercised successfully. M4.1 is a bounded adoption pass that must improve the first-user, external-agent, curriculum, and community-authoring experience before a replacement candidate is recorded and tagged. Post-release work applies a depth-first, breadth-by-scenario learning strategy, beginning with Azure as a distinct resource platform and then connecting delivery, runtime, security-operations, and agent-governance layers. Web-console and optional AI/ML assistance remain post-release so they cannot turn the first public release into an open-ended program.
 
 ## Product outcome
 
@@ -24,16 +24,53 @@ CloudAILab will be a local-first enterprise identity and AI-agent security range
 4. Investigate an attack path and apply a remediation.
 5. Prove deterministically whether the path was closed without breaking intended access.
 6. Evaluate an AI agent's tool use, approvals, data access, and policy compliance across repeated trials.
+7. Follow the same system from source and delivery identity through deployed workload, protected data, telemetry, investigation, and remediation.
+8. Export portable evidence of the environment, investigation, decisions, remediation, preserved access, verification, and limitations for personal review or a technical portfolio.
+
+## Product strategy and priority
+
+CloudAILab uses this product rule:
+
+> **Teach how modern enterprise systems are built, connected, secured, operated, and governed through realistic end-to-end scenarios. Provide depth in identity and authorization, working exposure across the surrounding stack, and claim compatibility only for behavior covered by implementation and tests.**
+
+The shorthand is **depth-first in identity and security; breadth through end-to-end scenarios**. Identity and authorization remain the technical spine and differentiator. Full-stack learning means following responsibility across connected layers; it does not mean cloning every feature of a cloud, platform, or tool. Job readiness comes from practicing that responsibility and producing inspectable evidence of the work, not from CloudAILab claiming that a user is employable.
+
+Product work is prioritized in this order:
+
+| Priority | Focus | Learner or user outcome |
+|---|---|---|
+| 1 | First-user experience | An unfamiliar user reaches a meaningful, safe success quickly and understands the boundary of the simulation. |
+| 2 | End-to-end enterprise missions | A learner can connect source, delivery, identity, workload, resource, data, telemetry, investigation, and remediation. |
+| 3 | Portable proof of work | A user can share a redacted, inspectable record of what they investigated, changed, preserved, verified, and cleaned up. |
+| 4 | Identity and authorization depth | Knowledge transfers across AWS, Microsoft Entra, Azure, Google Workspace, later Google Cloud, Kubernetes, workload identities, and agents without conflating products or implying provider parity. |
+| 5 | DevOps and cloud delivery | The learner practices Git-based change, CI workload identity, infrastructure as code, secrets, artifact provenance, and controlled deployment. |
+| 6 | Runtime and platform engineering | Optional advanced missions cover containers, Kubernetes, workload identity, admission/policy controls, observability, and operational failure. |
+| 7 | AI-agent security and governance | External agents are evaluated for delegated authority, tool use, approvals, data exposure, and blast radius through deterministic evidence. |
+| 8 | Community extensibility | Contributors can add safe data-only scenarios, lessons, policies, and explicit trusted integrations without weakening the core. |
+| 9 | Web and optional AI assistance | Visual investigation and evidence-grounded coaching improve access only after the underlying contracts are stable. |
+
+Post-release flagship missions should normally cross at least four connected layers, such as delivery, identity, runtime/resource, data, and evidence/governance. Narrow foundation labs remain appropriate when they teach a prerequisite or isolate a security semantic that must be understood before the integrated mission.
+
+The common curriculum core is Git and change review; HTTP, APIs, JSON, and YAML; authentication versus authorization; OAuth 2.0 and OIDC; users, groups, roles, policies, and scopes; control plane versus data plane; CI/CD identity; secrets and short-lived credentials; logs, traces, and evidence; deterministic verification; and cleanup. Specialization tracks build on that core for cloud/DevOps, IAM/security, platform engineering, security operations, AI governance, and community scenario authoring.
+
+Portable proof of work is a product output, not a credential. A versioned evidence bundle should contain a human-readable summary and machine-readable manifest covering the CloudAILab/scenario/profile versions, compatibility boundary, initial relevant state digest and attack path, evidence references, user and agent decisions, applied remediation, required access that remained valid, final invariant results, errors or incomplete steps, and cleanup status. Exports must be deterministic from persisted evidence where possible, redact credentials and classified payloads, exclude protected ground truth, and carry an integrity manifest. Integrity detects changes to the exported files after generation; it does not prove the user's identity, independent authorship, competence outside the recorded scenario, or suitability for employment.
+
+CloudAILab owns the sandbox and self-guided mission experience, not an institutional teaching layer. Stable scenario, lesson, evidence, reporting, and extension contracts should make external classroom products possible, but rosters, instructor dashboards, classroom orchestration, learning-management-system integrations, accreditation mapping, academic-integrity administration, and institution-specific grading workflows remain separate products maintained outside this repository.
 
 ## Non-negotiable constraints
 
 - Security decisions, attack-path analysis, evidence, and scoring are deterministic.
 - Hosted AI is optional and cannot be required for CI or core learning workflows.
 - Provider compatibility is operation-specific, test-backed, and never implied globally.
-- The first useful release contains one deep scenario, not a broad collection of shallow mocks.
+- Capability grows through deep, connected scenarios rather than a broad catalog of shallow mocks, disconnected tutorials, or unsupported provider features.
 - Services bind to loopback by default; credentials are synthetic; isolation claims require enforced isolation.
 - The supported default deployment requires only the `cailab` binary; container-backed scenarios additionally require the documented local Docker configuration. Podman remains planned and untested.
 - Documentation and tests change with behavior in the same pull request.
+- A release user must not need the source repository, Go toolchain, or another private/local project to complete the supported first-run experience.
+- Curriculum imported from the separately owned Learning DevOps vault is a one-time, read-only adaptation. CloudAILab has no runtime, link, submodule, or synchronization dependency on that project.
+- Community extensibility begins with declarative, validated content. Executable tools, agents, and provider code remain explicitly trusted and must not be presented as equivalent to data-only scenario packs.
+- Educational adoption must emerge through the sandbox's usability and stable contracts; CloudAILab does not become a classroom, LMS, instructor, or institutional administration product.
+- Job-readiness claims remain evidence-bounded. CloudAILab may help users practice and demonstrate technical work, but it does not issue credentials, rank people, certify competence, guarantee employment, or make hiring recommendations.
 
 ## Evidence behind the plan
 
@@ -44,6 +81,13 @@ The full evidence register is maintained in [Technical Basis and Source Register
 - Google publishes machine-readable Discovery documents for Admin SDK services. Supported routes should be selected from those contracts rather than invented as a generic OpenAPI surface. [Admin SDK Directory API](https://developers.google.com/workspace/admin/directory/reference/rest)
 - NIST recommends documented, objective, repeatable, and deployment-relevant test, evaluation, verification, and validation. Agent results therefore require structured metrics, run metadata, uncertainty, and repeated trials. [NIST AI RMF Core](https://airc.nist.gov/airmf-resources/airmf/5-sec-core/)
 - OWASP's agentic guidance explicitly covers goal hijacking, tool misuse, and identity/privilege abuse. These become required threat classes in the flagship agent scenario. [OWASP Top 10 for Agentic Applications](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/)
+- Model Context Protocol defines standard tool/resource primitives over local standard I/O or streamable HTTP. It is a strong post-release interoperability candidate, but it adds lifecycle, authorization, and trust-boundary questions that require an ADR and threat-model review before implementation. [MCP architecture](https://modelcontextprotocol.io/docs/learn/architecture)
+- NIST's agentic evaluation work emphasizes reproducible evaluation and machine-readable audit trails that connect agent actions and outputs to evidence. Optional AI features should extend that evidence model rather than replace it. [NIST agentic AI evaluation probes](https://www.nist.gov/programs-projects/building-evaluation-probes-agentic-ai)
+- The Linux Foundation's 2026 tech-talent research describes a full-stack readiness problem spanning AI security/risk, operations/monitoring, infrastructure, cloud, platform engineering, and cost optimization, with security and privacy the leading adoption barrier among respondents. CloudAILab should help people practice and demonstrate connected operational work while avoiding credentials or employment promises. [Linux Foundation 2026 State of Tech Talent](https://www.linuxfoundation.org/research/open-source-jobs-report-2026)
+- CNCF's 2025 survey reports that Kubernetes is production infrastructure for most surveyed container users and is increasingly used for hosted generative-AI inference. Kubernetes and platform-engineering topics therefore belong in optional advanced end-to-end missions, not in the no-Docker first-run dependency set. [CNCF Annual Cloud Native Survey](https://www.cncf.io/reports/the-cncf-annual-cloud-native-survey/)
+- GitHub's 2025 Octoverse reports rapid growth in AI projects and typed development, while GitHub's OIDC and artifact-attestation contracts make delivery identity and provenance directly teachable. CloudAILab should connect agent-assisted development to verification, CI least privilege, and build evidence rather than teach a language popularity contest. [GitHub Octoverse 2025](https://github.blog/news-insights/octoverse/octoverse-a-new-developer-joins-github-every-second-as-ai-leads-typescript-to-1/), [GitHub OIDC](https://docs.github.com/en/actions/reference/security/oidc), [artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations)
+- Azure RBAC links principals, role definitions, and hierarchical resource scopes, while Microsoft Foundry separates ARM control-plane permissions from agent and project data-plane permissions. Azure is therefore the first post-release provider expansion, modeled as distinct from Microsoft 365/Entra directory behavior and limited to scenario-required contracts. [Azure RBAC overview](https://learn.microsoft.com/en-us/azure/role-based-access-control/overview), [Microsoft Foundry hosted-agent permissions](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/hosted-agent-permissions)
+- Current AWS and Google platforms also expose explicit agent-identity and tool-governance constructs. These are later cross-vendor comparison candidates after the provider-neutral agent and evidence contracts remain stable; they are not grounds for early full-service emulation. [Amazon Bedrock AgentCore Identity](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/identity.html), [Google Cloud Agent Identity](https://docs.cloud.google.com/iam/docs/agent-identity-overview)
 
 ## MVP scope
 
@@ -80,6 +124,7 @@ Only operations required by the flagship scenario enter the MVP. Exact request a
 - Compliance certification.
 - Real-cloud offensive testing.
 - Automatic execution of arbitrary scenario code.
+- Classroom administration, instructor portals, student rosters, LMS integration, accreditation, or institution-specific course delivery.
 
 ## Target architecture
 
@@ -108,6 +153,7 @@ flowchart TD
     Graph --> Verify["Path and invariant evaluator"]
     Audit --> Verify
     Verify --> Report["Markdown, JSON and JUnit"]
+    Report --> Portfolio["Planned redacted proof-of-work bundle"]
     Report -. evidence only .-> Coach["Planned optional AI coach"]
 ```
 
@@ -135,6 +181,7 @@ Stable IDs are opaque and provider-neutral. Provider IDs and raw payloads are pr
 | Authorization decision | Canonical policy evaluator for claimed CloudAILab semantics |
 | Pass/fail and score | Deterministic invariants and evidence queries |
 | Agent behavior | Immutable run metadata and action-level event trace |
+| Proof-of-work export | Versioned, redacted projection from persisted evidence plus an integrity manifest; never user ranking or credentialing |
 | Narrative coaching | Optional, non-authoritative model output grounded in evidence |
 
 ## Engineering workstreams
@@ -209,6 +256,8 @@ Required initial metrics:
 - Redact credentials and classified payloads before persistence.
 - Produce Markdown for learners, JSON for automation, and JUnit for CI.
 - Every finding includes severity, invariant ID, evidence references, affected path, and remediation status.
+- Add a post-v0.1 proof-of-work exporter that projects only persisted, evidence-supported facts into a versioned Markdown/JSON bundle with checksums, redaction metadata, compatibility limitations, incomplete-state handling, and cleanup evidence.
+- Test byte-stable repeated export, deterministic ordering, missing/corrupt evidence, protected-ground-truth exclusion, credential and classified-payload redaction, archive traversal, size bounds, and explicit non-attestation language.
 
 ### WS8 — Security and supply chain
 
@@ -217,6 +266,29 @@ Required initial metrics:
 - Pin external images and binaries by version and digest where possible.
 - Generate checksums, an SBOM, and build provenance for releases. GitHub artifact attestations can cover binaries, images, and SBOMs. [Artifact attestations](https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations/use-artifact-attestations)
 - Maintain third-party notices and review redistribution terms before bundling any runtime.
+
+### WS9 — First-user experience and self-guided mission design
+
+- Make the supported no-Docker first run understandable and successful in ten minutes or less for an unfamiliar user on a clean supported host.
+- Provide successful help behavior for every command and command group, machine-readable runtime/endpoint discovery, actionable prerequisite diagnostics, and a guided quick-start path.
+- Keep release archives self-contained for the supported first-run documentation; relative links in an archive must resolve inside the archive or use an intentionally durable versioned web target.
+- Adapt only the relevant instructional patterns from the separately owned DevOps course: explicit outcomes, mental models, safety labels, progressive hints, verification, cleanup, production context, failure drills, and portfolio reflection.
+- Define stable lesson identifiers and machine-readable metadata before a CLI or web console depends on curriculum content.
+- Define one common core covering delivery fundamentals, APIs and structured data, authentication and authorization, OAuth/OIDC, policy and scope, control/data planes, CI identity, secrets, evidence, verification, and cleanup.
+- Build specialization tracks for cloud/DevOps, IAM/security, platform engineering, security operations, AI governance, and community scenario authoring; each specialization declares which common-core outcomes it assumes.
+- Design post-release flagship missions as vertical slices across multiple layers rather than tool-by-tool tours. A mission declares its delivery, identity, runtime/resource, data, evidence/governance, and remediation coverage, with explicit `not_applicable` values where a layer is intentionally absent.
+- Keep the supported no-Docker path as the beginner/default profile. Container, Kubernetes, hosted-service, or live-cloud prerequisites belong only to clearly labeled optional advanced profiles with their own diagnostics, security boundaries, cost expectations, and cleanup.
+- Treat lesson success as deterministic scenario or workflow evidence where possible; checklists and optional coaching cannot override `verify` or agent-evaluation results.
+- Keep educational administration outside the core. Exports and versioned content contracts may support independent classroom layers, but CloudAILab does not implement rosters, instructor views, LMS protocols, accreditation workflows, or centralized student analytics.
+
+### WS10 — Community extensibility and optional product surfaces
+
+- Start community authoring with versioned data-only scenario templates, explicit validation, compatibility documentation, and no executable scenario hooks.
+- Publish a complete protocol-compatible agent starter containing an agent, governed tool, policy, prompt, launch command, expected report, security boundary, and cleanup behavior.
+- Add executable integrations only through explicit trust tiers: data-only scenarios, trusted agent/tool adapters, and reviewed provider code.
+- Evaluate an MCP bridge after the subprocess and evidence contracts are stable; preserve CloudAILab authorization, approvals, evidence, and scoring rather than delegating them to an MCP client or model.
+- Build a local web console only after the application/CLI contracts and curriculum metadata are stable. The console must reuse the deterministic application layer and cannot own separate authorization or grading logic.
+- Keep optional AI/ML disabled by default and supplemental: evidence-grounded tutoring, draft remediation, draft scenario authoring, model/framework comparison, and synthetic-trace analysis may assist users but cannot authorize, mutate, verify, or score without deterministic controls.
 
 ## Milestone plan
 
@@ -306,7 +378,7 @@ Deliverables:
 - Indirect prompt-injection fixture in Google-shaped content (implemented with paired deterministic safe/unsafe controls and fixture-labeled scoring)
 - Repeated-trial aggregate action/task/remediation metrics, endpoint-preserving fixture restoration, and automatic reference/safe/unsafe campaign execution (implemented)
 - Evidence-safe trace replay and evidence-linked report (implemented)
-- User-configured local-model subprocess path; a packaged framework-specific example is deferred to M4 documentation
+- User-configured local-model subprocess path and the complete packaged external-agent starter implemented in M4.1
 
 Exit gate:
 
@@ -317,36 +389,179 @@ Exit gate:
 
 ### M4 — Portfolio-quality public release
 
-**Status:** in development.
+**Status:** release infrastructure and `0.1.0-rc.1` validation complete; the adoption-quality M4.1 pass is now in progress and supersedes the original recording-first sequence.
 
-**Goal:** deliver a secure, reproducible, and understandable public artifact.
+**Goal:** deliver a secure, reproducible, understandable, and genuinely usable first public artifact.
 
-Deliverables:
+Implemented foundation:
 
-- Linux, macOS, and Windows release artifacts with a working-directory-independent built-in scenario catalog for supported architectures (release pipeline implemented; first tag pending)
-- Digest-pinned CI-only clean-demo image with non-root, Docker `none` network, read-only execution (implemented; publication intentionally excluded)
-- Checksums, SBOM, and provenance/SBOM attestations, changelog, upgrade notes, and archive legal bundle (implemented)
-- Installation, quick start, architecture walkthrough, troubleshooting, and a recording-ready demo runbook (implemented); published demo recording pending
-- SECURITY, SUPPORT, CONTRIBUTING, CODE_OF_CONDUCT, Apache-2.0 license, project notice, and linked-component notices (implemented)
-- Threat-model review and [release-candidate security and compatibility audit](../05-engineering/release-readiness-audit.md) (implemented for a conditional candidate decision; final tag confirmation pending)
-- Optional evidence-grounded AI coaching behind an explicit feature flag (not implemented and excluded from the initial candidate gate)
+- Linux, macOS, and Windows release packaging with a working-directory-independent built-in scenario catalog for supported architectures
+- Digest-pinned CI-only clean-demo image with non-root, Docker `none` network, and read-only execution; publication intentionally excluded
+- Checksums, SPDX SBOM, tag-gated provenance/SBOM attestations, changelog, upgrade notes, and archive legal bundle
+- Installation, architecture, troubleshooting, release-verification, and recording-ready demo guidance
+- SECURITY, SUPPORT, CONTRIBUTING, CODE_OF_CONDUCT, Apache-2.0 license, project notice, and linked-component notices
+- Conditional [release-candidate security and compatibility audit](../05-engineering/release-readiness-audit.md) plus a successful manual `0.1.0-rc.1` artifact exercise
+
+#### M4.1 — Adoption-quality release candidate
+
+**Status:** in progress. Truth/navigation reconciliation, CLI onboarding, the packaged external-agent starter, initial validated learning contract/path, minimum data-only community authoring, and CI/reporting closure are implemented. The clean maintainer acceptance rehearsal is complete with identified friction resolved; an unfamiliar-participant walkthrough against RC2 remains pending.
+
+**Goal:** close the gap between a technically complete range and a product that an unfamiliar learner, engineer, or agent developer can adopt without repository-specific knowledge.
+
+Delivery slices, in order:
+
+1. **Truth and navigation reconciliation**
+   - Update `AGENTS.md`, README status/name wording, milestone metadata, requirements status/evidence, scenario specification, architecture, threat model, compatibility records, and the flagship guide to match implemented M0-M3 behavior.
+   - Keep the README outcome-led and route detailed learning content into focused guides.
+   - Confirm every release-archive documentation link resolves from the unpacked archive or intentionally targets durable versioned documentation.
+2. **CLI onboarding and automation contract**
+   - Make `-h`/`--help` successful for the root, every command, and every command group; help goes to standard output and does not render as an error.
+   - Add a stable machine-readable status/endpoint representation; evaluate safe Bash and PowerShell environment rendering without emitting control tokens or credentials.
+   - Add a guided no-Docker quick start that preserves the normal lifecycle and does not hide verification or cleanup.
+   - Keep diagnostics actionable and machine-testable across Linux, macOS, and Windows.
+3. **External-agent starter**
+   - Ship a small protocol-compatible agent, one governed provider-backed tool, policy, prompt, manifests, launch command, expected deterministic report, and cleanup instructions.
+   - Test the starter through the public CLI in CI; distinguish trusted host execution from the opt-in Docker agent boundary and keep tools explicitly unisolated.
+   - Prove that a new user can adapt the starter without reading internal Go tests or constructing schemas from scratch.
+4. **Focused curriculum and learning contract**
+   - Perform a one-time, read-only adaptation of selected material from the separately owned Learning DevOps vault; do not modify, link to, synchronize with, or require that project.
+   - Record source/provenance and license disposition for adapted text, then maintain the adapted copy only in CloudAILab.
+   - Define stable lesson IDs, track, difficulty, duration, prerequisites, safety boundary, scenario/workflow binding, learning outcomes, common-core dependencies, covered mission layers, hints, verification, cleanup, production context, and reflection metadata before embedding or console consumption.
+   - Publish an initial focused path covering the no-Docker first run, the implemented provider labs, the flagship remediation, secure release/CI evidence, agent governance, and community authoring. Do not import the general Kubernetes, Helm, Ansible, GitOps, certification, industrial-domain, or live-cloud course.
+   - Keep Google Workspace distinct from Google Cloud and Microsoft 365/Entra identity distinct from Azure subscription/resource management.
+5. **Minimum community authoring path**
+   - Add explicit custom-scenario validation and a safe starter template with no executable hooks.
+   - Document stable IDs, protected ground truth, invariants, compatibility claims, testing, cleanup, and contribution expectations.
+   - Defer registries, arbitrary plugins, and dynamic provider loading to M5.
+6. **CI/reporting closure**
+   - Implement JUnit output for the documented verification/evaluation use cases or revise FR-014 through an explicit reviewed deferral; do not leave the contract ambiguous.
+   - Publish one least-privilege CI example that uses synthetic local state and no cloud/model credentials.
+7. **First-user acceptance**
+   - Run the archive, guided first lab, flagship lab, external-agent starter, verification/reporting, and cleanup from a clean supported environment.
+   - Include at least one unfamiliar-user walkthrough or equivalent observed usability exercise; record friction and resolve release-blocking confusion rather than treating CI smoke tests as learning validation.
+   - Verify a ten-minute-or-less no-Docker first success, no manual parsing of human status output for automation, no leaked runtime resources, and accurate limitation comprehension.
+8. **Replacement candidate and release closure**
+   - Cut and fully exercise `0.1.0-rc.2` because CLI, documentation bundle, examples, and possibly report behavior will differ from RC1.
+   - Re-run security, compatibility, package, legal, reproducibility, native smoke, and clean-user evidence gates against the exact proposed tag lineage.
+   - Record and publish the portfolio demo from RC2, link it durably, promote the changelog, obtain explicit owner approval of Apache-2.0 and residual risks, and create the verified `v0.1.0` tag only after every prior gate passes.
+
+M4.1 exit gate:
+
+- An unfamiliar user can install the archive and complete a no-Docker first lab in ten minutes or less without the Go toolchain or repository checkout.
+- A learner can complete the flagship remediation and understand what is emulated, deterministic, unisolated, and unsupported.
+- An agent developer can run and adapt the packaged starter through the governed boundary without reverse-engineering the protocol.
+- A scenario author can validate a safe data-only starter and identify the tests and compatibility evidence required for contribution.
+- Automation consumes stable machine-readable status and report output rather than parsing human text.
+- Release artifacts, included documentation, links, checksums, provenance, legal material, native smoke, and cleanup all pass against the exact RC2 lineage.
+- The published recording and README describe only verified RC2 behavior.
+- Critical and high security findings are resolved or documented with an explicit release decision, and the owner has explicitly accepted the license and residual risks.
+
+### M5 — Community extensibility and enterprise full-stack learning
+
+**Status:** planned after `v0.1.0`.
+
+**Goal:** prove the depth-first, breadth-by-scenario strategy with one community-extensible Azure enterprise vertical slice and its connected delivery, runtime, data, evidence, and remediation workflow, without weakening deterministic authorization, compatibility honesty, or local safety.
+
+Delivery order inside M5:
+
+1. **Stable learning and extension contracts**
+   - Version data-only scenario-package and lesson metadata, common-core dependencies, mission-layer coverage, compatibility requirements, digest/integrity handling, and migration behavior.
+   - Publish authoring/validation commands, safe templates, example contract tests, contribution guidance, and explicit trust tiers before adding broad content.
+2. **Azure enterprise identity and governance slice**
+   - Treat Azure subscription/resource management as a distinct provider surface that consumes Entra principals; do not rename the existing Microsoft 365/Entra facade or imply Azure support through it.
+   - Model only scenario-required management groups, subscriptions, resource groups, resources, users/groups, service principals, managed identities, role definitions, role assignments, inherited scopes, and selected deny behavior.
+   - Add selected Storage, Key Vault, Azure Policy, activity/audit evidence, and agent-identity concepts only when a documented mission and contract tests require them.
+   - Spike a native facade plus optional Azurite-backed Storage profile before choosing an implementation. CloudAILab remains authoritative for claimed authorization because Azurite's basic OAuth mode does not validate signatures or permissions. [Azurite installation and OAuth limitations](https://learn.microsoft.com/en-us/azure/storage/common/storage-install-azurite)
+   - Publish an Azure compatibility matrix that separates Entra directory, ARM control plane, service data planes, local emulation, and synthetic evidence; do not claim general Azure CLI, SDK, ARM, Policy, Sentinel, Purview, or Foundry parity.
+3. **First end-to-end enterprise delivery mission**
+   - Connect a GitHub Actions-shaped OIDC delivery identity to an Entra workload identity, an Azure RBAC scope, a deployed workload or resource, protected secret/data access, an agent tool, evidence collection, investigation, and least-privilege remediation.
+   - Provide a deterministic local path using synthetic tokens and state. Any real GitHub, Azure, hosted model, or cloud credential integration remains a separate opt-in advanced profile with explicit cost, data, isolation, and cleanup boundaries.
+   - Exercise infrastructure-as-code plan or policy evidence only for a documented scenario and contract. Terraform/OpenTofu compatibility remains operation-specific; OPA/Rego may be taught as an integration but cannot replace CloudAILab's authoritative evaluator without a superseding ADR.
+4. **Portable proof-of-work bundle**
+   - Define and implement a versioned, portable Markdown/JSON evidence bundle generated from persisted scenario, graph, provider, verifier, agent, and cleanup records rather than user-authored claims.
+   - Include the exact CloudAILab/scenario/profile identity, compatibility boundary, initial relevant state digest and path, evidence-linked actions/decisions, remediation, preserved legitimate invariants, final results, incomplete/error state, and cleanup result.
+   - Apply export-specific redaction and protected-ground-truth exclusion before files are written; fail closed when required evidence cannot be safely projected.
+   - Generate an integrity manifest and document that it detects post-export changes but does not prove personal identity, independent authorship, general competence, or employment suitability.
+   - Keep the bundle portable for local review, source repositories, and external portfolio tooling without requiring a CloudAILab-hosted account, public profile, scoring service, or classroom system.
+5. **Admission rules for later specialization missions (not required for M5 exit)**
+   - Add container/Kubernetes service-account, RBAC, projected-token, workload-identity, admission-policy, secrets, and observability missions only after the no-Docker default remains intact and the optional runtime has lifecycle, isolation, diagnostics, and cleanup tests.
+   - Add Sentinel-style detection, Purview-style data-governance, OpenTelemetry, software-supply-chain, platform-engineering, SPIFFE/SPIRE, AWS AgentCore, Google Cloud Agent Identity, or Microsoft Foundry comparisons one scenario at a time; label synthetic semantics and unsupported product behavior.
+   - Select Backstage, Crossplane, GitOps, or other platform-engineering integrations only when they materially complete an attack/remediation path rather than because the tool is popular.
+
+Planned deliverables:
+
+- Additional agent examples or thin SDK helpers chosen from observed community demand rather than framework breadth for its own sake
+- An MCP bridge only after an accepted ADR covers identity, session lifecycle, tool discovery, approvals, evidence, transport, and untrusted-server/client behavior
+- Automatic restored campaigns for custom agents only after trial identity, recovery, and configuration contracts remain deterministic
+- Reusable CI examples, JUnit consumption, and selected package-manager distribution where maintenance and provenance remain sustainable
+- A role-oriented curriculum map for the common core and cloud/DevOps, IAM/security, platform-engineering, security-operations, AI-governance, and community-author tracks
+- One complete Azure-centered mission crossing at least delivery, identity, resource/runtime, data, and evidence/governance layers
+- One versioned, redacted, integrity-manifested proof-of-work bundle covering the Azure mission and generated entirely from evidence-supported state
+- Operation-specific compatibility records and negative tests for every Azure-, CI-, IaC-, Kubernetes-, agent-platform-, or security-tool-shaped contract that ships
 
 Exit gate:
 
-- A new user can reproduce the published demo from a clean supported environment.
-- Release artifacts verify against published checksums and provenance.
-- The README contains only verified capabilities.
-- Critical and high security findings are resolved or documented with an explicit release decision.
+- A contributor can create, validate, test, document, and package a data-only scenario without changing the core binary or executing manifest-provided code.
+- A learner can complete the common prerequisites and one Azure-centered enterprise mission from delivery identity through protected data and evidence, remediate the vulnerable path, preserve intended access, and clean up.
+- The Azure mission crosses at least four declared layers, uses deterministic local verification, and clearly distinguishes Entra, Azure control plane, Azure data plane, local emulation, and synthetic evidence.
+- The user can export and independently inspect the Azure mission's proof-of-work bundle, verify its file integrity, understand what it proves and does not prove, and publish it without credentials, classified payloads, or protected ground truth.
+- At least one external-agent integration uses a documented standard or helper while preserving CloudAILab governance and evidence.
+- Community artifacts have explicit trust, compatibility, version, integrity, and support boundaries.
+- Added integrations do not broaden provider-parity or isolation claims beyond tests.
+
+### M6 — Local web learning console
+
+**Status:** planned after the M5 contracts it consumes are stable.
+
+**Goal:** provide an accessible visual learning and investigation surface without creating a second authorization or grading implementation.
+
+Planned deliverables:
+
+- Loopback-only local console backed by the same application services, canonical graph, deterministic verifier, evidence store, and cleanup ownership as the CLI
+- Mission and curriculum navigation, progressive hints, path visualization, supported provider state, invariant evidence, agent decisions/approvals/outcomes, campaign comparison, reports, and explicit cleanup status
+- Accessible keyboard navigation, readable contrast, captions/transcripts for embedded media, responsive layouts, and no required external assets or telemetry
+- Authenticated run-scoped control, CSRF protection, restrictive content security policy, bounded requests, origin checks, safe file handling, and explicit separation between read-only inspection and mutation
+- Browser end-to-end tests plus regression tests proving console and CLI results are equivalent for the same state
+
+Exit gate:
+
+- The console adds no independent security decision or score.
+- It binds only to the documented loopback boundary, rejects cross-origin control, and exposes no secrets, private keys, control tokens, or protected ground truth.
+- A user can complete the supported first-run and flagship learning journeys through the console while CLI workflows remain fully supported.
+- Shutdown verifies that the console and every owned provider runtime are gone.
+
+### M7 — Optional evidence-grounded AI/ML layer
+
+**Status:** planned after the deterministic product and console contracts are stable.
+
+**Goal:** add useful intelligence without making a model part of authorization, verification, installation, or core learning.
+
+Candidate capabilities, admitted one at a time through requirements and threat review:
+
+- Evidence-grounded tutor that cites invariant, path, compatibility, and trace records
+- Draft remediation explanations or plans that are applied only through normal governed tools and independently verified
+- Draft scenario/lesson authoring whose output remains inert until deterministic schema validation and human review succeed
+- Repeated model/framework comparisons using the existing restored trial and evidence contracts
+- Synthetic-trace sequence analysis or anomaly experiments reported as supplemental findings with explicit uncertainty
+- Local-model-first examples; hosted providers require separate explicit configuration, data minimization, cost disclosure, and opt-in transmission
+
+Exit gate for any AI/ML capability:
+
+- The feature is disabled by default and core workflows pass with no model, account, network access, or API key.
+- Model output cannot authorize, mutate, verify, score, approve, or suppress a deterministic finding by itself.
+- Inputs are explicitly selected, redacted, bounded, and recorded by digest/provenance without silently transmitting credentials, provider data, protected ground truth, or raw evidence.
+- Reports separate deterministic facts from probabilistic or narrative output and identify model/provider/configuration and limitations.
 
 ### V1 — Stable learning contract
 
-Version 1.0 is not tied to API breadth. It requires:
+Version 1.0 is a stability gate, not a promise that M5-M7 or broad API coverage are complete. It requires:
 
-- A stable scenario schema or a documented compatibility/migration policy.
+- A stable scenario and lesson schema or a documented compatibility/migration policy.
 - One complete cross-provider scenario with supported remediation paths.
-- A stable agent-run trace format.
+- A stable agent-run trace format and documented external-agent integration path.
+- A stable proof-of-work bundle schema or a documented compatibility/migration policy, including redaction and integrity semantics.
 - Operation-level compatibility documentation.
-- Reproducible releases and a maintained security policy.
+- Reproducible releases, a maintained security policy, and a proven clean first-user journey.
 
 ## Repository shape
 
@@ -394,6 +609,8 @@ Coverage remains diagnostic rather than a release target. Critical policy, graph
 
 ## Documentation system
 
+The [documentation map](../README.md) is the vault entry point, and the [documentation conventions](../05-engineering/documentation-conventions.md) define portable Markdown, frontmatter, asset, and Obsidian rules.
+
 | Artifact | Owner and update trigger |
 |---|---|
 | README | Verified user-facing capability or installation change |
@@ -423,6 +640,16 @@ Document statuses are `draft`, `proposed`, `accepted`, `active`, `deprecated`, o
 | Dependency or container compromise | Medium | Critical | Pinning, digests, vulnerability scans, SBOM, provenance, minimal workflow permissions. |
 | Documentation drifts from implementation | Medium | High | Same-change updates, compatibility tests, docs checks, README verified-capability rule. |
 | Protected ground truth leaks to the agent | Medium | High | Separate packages/mounts, integrity checks, and trace which inputs were disclosed. |
+| Adoption work turns the first release into an endless rewrite | High | High | Bound M4.1 to the listed first-run, starter, curriculum, authoring, reporting, UAT, and RC2 gates; defer console, MCP, registries, package breadth, and AI to later milestones. |
+| Curriculum becomes a second stale product or depends on a private path | Medium | High | One-time read-only adaptation, no links/runtime dependency, stable lesson IDs, scenario/workflow evidence, same-change reviews, and no certification/live-cloud content in the initial import. |
+| Full-stack demand turns CloudAILab into a shallow tool catalog | High | High | Keep identity/security as the spine; require scenario, learner outcome, connected-layer declaration, operation budget, compatibility contract, and displaced-work decision for every platform addition. |
+| Azure expansion is mistaken for Microsoft parity or grows into an ARM clone | High | Critical | Keep Entra and Azure surfaces distinct; begin with one vertical mission; publish plane-specific compatibility; require contract and negative tests; defer unsupported services and general CLI/SDK claims. |
+| Educational interest turns the sandbox into an LMS or classroom platform | Medium | High | Keep only self-guided missions and portable contracts in core; reject rosters, instructor dashboards, accreditation, classroom orchestration, and institution-specific grading; allow independent products to consume stable exports. |
+| Proof-of-work exports leak secrets, classified payloads, or protected ground truth | Medium | Critical | Project from allowlisted evidence fields; apply export-specific redaction and size/path bounds; fail closed; add negative and regression tests before M5 exit. |
+| Evidence bundles are mistaken for credentials, identity proof, or hiring recommendations | High | High | Use factual non-attestation language in schema and rendered output; report scenario/compatibility limits; do not rank users, issue certificates, host public profiles, or make employment claims. |
+| Community extensions execute untrusted code implicitly | Medium | Critical | Data-only scenario tier first; no scenario shell hooks; explicit trust labels for tools/agents; provider code remains reviewed and compiled. |
+| Web console creates a control-plane or browser attack surface | Medium | Critical | Do not start M6 before stable application contracts and an ADR/threat review; loopback-only binding, run-scoped authentication, CSRF/origin/CSP controls, bounded input, and equivalence tests. |
+| Optional AI leaks data or is mistaken for authority | Medium | Critical | Disabled by default, explicit selected/redacted inputs, no silent hosted calls, deterministic authority retained, provenance and limitations in every report. |
 | Solo-maintainer scope or burnout | High | High | Milestone gates, one flagship scenario, explicit deferrals, small reviewable increments. |
 
 ## Decision gates
@@ -438,6 +665,15 @@ The following questions must be resolved through spikes and ADRs before dependen
 7. Isolation implementation and supported host platforms — resolved for the opt-in Linux CI-tested Docker agent boundary by ADR-0017; host mode and tool subprocesses remain unisolated.
 8. Initial evidence-replay constructs and unavailable-metric handling — resolved by ADR-0018; scenario-outcome scoring is extended by ADR-0019.
 9. Endpoint-preserving provider restoration and scenario-outcome scoring — resolved for supported provider surfaces by ADR-0019.
+10. Curriculum metadata, distribution, versioning, and protected-ground-truth boundary — before a CLI or web console depends on lesson packages.
+11. Community extension trust tiers and package integrity — before distributing third-party scenario packs or executable integrations.
+12. MCP identity, lifecycle, approval, evidence, and transport contract — before implementing an MCP bridge.
+13. Web-console control API, loopback authentication, browser security, and CLI equivalence — before adding the console listener.
+14. Optional model-provider, data-selection, redaction, provenance, and cost contract — before any hosted or local model integration ships.
+15. Azure provider boundary, Entra linkage, ARM/resource hierarchy, RBAC/deny semantics, Storage/Key Vault strategy, synthetic evidence, and Azurite/native-facade split — before M5 Azure implementation or compatibility claims.
+16. Optional Kubernetes/runtime lifecycle, workload-identity semantics, isolation, resource cost, host prerequisites, and cleanup — before an advanced Kubernetes mission becomes supported.
+17. Cross-vendor agent-platform comparison schema — before claiming comparable Microsoft Foundry, AWS AgentCore, or Google Cloud Agent Identity behavior.
+18. Proof-of-work bundle schema, evidence projection, redaction, integrity semantics, portability, non-attestation language, and compatibility/migration policy — before implementing or publishing portfolio exports.
 
 ## Change control
 
@@ -446,10 +682,20 @@ The following questions must be resolved through spikes and ADRs before dependen
 - A milestone exit requires evidence in CI, documentation, and a recorded release decision.
 - Scope added to a milestone must identify displaced work or explicitly expand the milestone.
 - Research sources are reviewed before relying on version-sensitive provider or governance behavior.
+- At least annually and at every major milestone boundary, review workforce, cloud-native, agent-identity, security, and community-usage evidence. Retain, revise, defer, or retire planned integrations according to transferable learning value, observed demand, maintenance cost, and compatibility evidence rather than popularity alone.
 
 ## Immediate next actions
 
-The release-readiness change and manual `0.1.0-rc.1` exercise are complete. The exact candidate archives, SBOM, checksums, legal bundle, reproducibility, and native smoke evidence are recorded in the [release-candidate readiness audit](../05-engineering/release-readiness-audit.md).
+The release-readiness change and manual `0.1.0-rc.1` exercise are complete. The exact candidate archives, SBOM, checksums, legal bundle, reproducibility, and native smoke evidence are recorded in the [release-candidate readiness audit](../05-engineering/release-readiness-audit.md). RC1 remains evidence for the release foundation, but it is no longer the proposed final lineage because M4.1 intentionally changes user-facing behavior and distribution content.
 
-1. Run the repository-owned portfolio workflow against the verified candidate, record it with the reviewed transcript, publish it, and add the durable recording link to the README and release audit.
-2. Move the changelog entry to `0.1.0`, record the final tag decision, and create the first version tag only after the repository owner explicitly approves the Apache-2.0 license and residual-risk acceptances.
+Execute M4.1 as small reviewable slices:
+
+1. **Planning and truth sync — complete:** requirements/evidence status, stale M3 documentation, contributor guidance, README wording, compatibility boundaries, threat model, release audit, and release-archive link handling now establish the RC2 scope.
+2. **CLI onboarding — implemented, acceptance pending:** public help, stable machine-readable status/endpoints, exact-commit release links, and the guided no-Docker quick start are implemented with unit and cross-platform CI coverage. Confirm the ten-minute target during observed first-user acceptance.
+3. **Agent and curriculum starter — implemented:** the complete external-agent example, provider-backed governed tool, generated registrations, expected evidence, flagship integration test, and release distribution are implemented. The one-time read-only instructional adaptation, provenance/license disposition, versioned data-only learning catalog, common-core dependencies, complete mission-layer metadata, initial focused learning path, validation tool, CI gate, and self-contained release files are also implemented. The existing report/export path is documented; the new proof-of-work bundle schema and implementation remain deferred with Azure, Kubernetes, and other post-release platform scope to M5.
+4. **Community authoring — implemented:** the public validate-without-starting command, release-packaged no-runtime starter, protected-ground-truth and contribution guidance, compatibility boundary, negative capability tests, lifecycle test, CI validation, and cross-platform archive smoke checks are implemented.
+5. **CI/reporting closure — implemented:** deterministic invariant verification now emits timestamp-free JUnit; agent JUnit is explicitly deferred because current evidence does not define one universal verdict. The release includes a least-privilege synthetic GitHub Actions example, and source/archive lifecycle smoke checks exercise report generation and cleanup.
+6. **First-user acceptance — maintainer rehearsal complete, human gate pending:** the development archive passed empty-environment first success, data-only authoring/JUnit, flagship remediation, safe/unsafe controls, packaged external-agent execution/replay, and leak-free cleanup. Source `bin` creation and archive/source starter-path confusion were fixed and regression-protected. Complete the documented unfamiliar-participant walkthrough against exact RC2 before closing this gate.
+7. **RC2 and release — local preparation complete:** all locally available security, integration, reproducibility, clean-container, package, and cleanup gates pass and are recorded in the RC2 preparation record. Review/merge the branch, run exact-commit remote candidate gates and unfamiliar-user acceptance, then record/publish the demo, update the final audit/changelog, obtain explicit Apache-2.0 and residual-risk approval, confirm tag lineage, and create verified `v0.1.0` only after those gates pass.
+
+Do not begin M5, M6, or M7 implementation until `v0.1.0` is published unless an M4.1 blocker requires a narrowly scoped design decision from those milestones.

@@ -1,6 +1,6 @@
 ---
 title: Agent Trial State Compatibility
-status: implemented
+status: active
 profile: scenario-state-v1
 last_reviewed: 2026-07-13
 ---

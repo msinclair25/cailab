@@ -1,7 +1,7 @@
 ---
 title: Cross-Provider Acquisition Agent Lab
-status: m2-complete
-last_reviewed: 2026-07-12
+status: active
+last_reviewed: 2026-07-13
 ---
 
 # Cross-provider acquisition agent lab
@@ -18,7 +18,7 @@ Google user → Google group → synchronized Microsoft group
 
 You will prove the initial contractor access, remove only the risky Microsoft app-role assignment, then prove both that the contractor is denied and the approved security administrator still has a path. The exact compatibility boundary is in the [cross-provider matrix](../07-compatibility/cross-provider-federation.md).
 
-The Drive runbook contains an illustrative indirect prompt-injection string. It is inert data in M2; CloudAILab does not execute it or launch an agent.
+The Drive runbook contains an illustrative indirect prompt-injection string. The identity-remediation workflow in this guide treats it as inert data and never executes document text. Separate supported agent workflows can deliberately expose code-owned safe or unsafe controls to that fixture and evaluate their governed actions after the run.
 
 ## Prerequisites
 
@@ -28,6 +28,7 @@ The Drive runbook contains an illustrative indirect prompt-injection string. It 
 - No cloud account, hosted model, global proxy, or certificate installation
 
 ```bash
+mkdir -p ./bin
 go build -o ./bin/cailab ./cmd/cailab
 ./bin/cailab doctor acquisition-agent
 ./bin/cailab up acquisition-agent
@@ -156,16 +157,23 @@ The supported Microsoft-shaped operation returns `204 No Content` and persists i
 
 Repeating `federation assume-aws` with the still-unexpired contractor token now fails before Floci is called. To exercise the preserved path, repeat the code and token steps with `cailab_subject=northstar-security-admin`; the administrator token remains authorized.
 
-## External AI agents and tools
+## Governed agents and tools
 
-An external agent can use the documented native loopback endpoints and CLI commands. A practical M2 experiment is to give the agent:
+With the scenario active, CloudAILab can launch its deterministic reference, fixture-specific safe, deliberately unsafe, or protocol-compatible custom subprocess workflows through the governed tool boundary. The runner validates scenario-bound policy and tool registration, resolves canonical targets, records immutable linked decision/approval/outcome evidence, and can capture and restore supported provider state for deterministic replay.
 
-- the scenario briefing;
-- only the Google, Microsoft, and OIDC endpoints and synthetic API bearers;
-- a trusted wrapper that retains the AWS endpoint and invokes `cailab federation assume-aws` without exposing the state database;
-- a restricted working directory containing only synthetic lab files.
+The code-owned fixture controls provide a quick harness check:
 
-Then inspect its mutations with `graph path` and `verify`. This is connectivity, not containment or governance. The pinned Floci endpoint is permissive enough to bypass the CLI gateway if called directly, and M2 does not prevent a same-host process from discovering loopback listeners. CloudAILab M2 does not isolate the process, restrict its network access, require approvals, record a complete action trace, or score repeated trials. Do not give an untrusted agent the AWS endpoint, host cloud credentials, broad filesystem access, or the Docker socket.
+```bash
+./bin/cailab reset
+./bin/cailab agent run unsafe
+./bin/cailab agent replay --trial-id trial:unsafe --format markdown
+./bin/cailab agent run safe --fixture drive-runbook-export
+./bin/cailab agent replay --trial-id trial:safe --format markdown
+```
+
+These are deterministic controls, not model evaluations. The unsafe control proves that the fixture findings can trigger; the safe control proves a positive result only for its exact code-owned behavior.
+
+Custom subprocess agents use explicit manifests, policy, argv, working directory, and environment selection. Host mode owns and bounds the direct child but does **not** isolate it from the launching user's filesystem, network, syscalls, or detached descendants. The optional Linux CI-tested Docker mode isolates only the agent under its documented contract; registered tool subprocesses remain trusted and unisolated on the host. Follow the [agent-run guide](agent-run.md), use the tested [external-agent starter](../../examples/external-agent-starter/README.md) as the minimal adaptable implementation, and review the linked compatibility records before launching custom code.
 
 ## Reset and cleanup
 

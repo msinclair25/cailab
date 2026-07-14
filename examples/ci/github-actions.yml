@@ -1,0 +1,53 @@
+# Copy this file to .github/workflows/cailab-verify.yml in a repository that
+# contains CloudAILab source and a data-only scenario, then adapt SCENARIO.
+name: CloudAILab scenario verification
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify synthetic scenario
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CAILAB_STATE: ${{ runner.temp }}/cailab-state
+      SCENARIO: ./examples/scenario-starter/scenario.yaml
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build CloudAILab
+        run: go build -o ./cailab ./cmd/cailab
+
+      - name: Validate scenario without starting it
+        run: ./cailab scenario validate "$SCENARIO"
+
+      - name: Start synthetic no-runtime range
+        run: ./cailab up --state-dir "$CAILAB_STATE" "$SCENARIO"
+
+      - name: Export deterministic JUnit evidence
+        run: ./cailab verify --state-dir "$CAILAB_STATE" --format junit --output ./cailab-verification.xml
+
+      - name: Stop owned range
+        if: always()
+        run: ./cailab down --state-dir "$CAILAB_STATE"
+
+      - name: Upload JUnit evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cailab-verification
+          path: ./cailab-verification.xml
+          if-no-files-found: error
+          retention-days: 7

@@ -1,6 +1,6 @@
 ---
 title: Portfolio Demo Transcript and Publication Copy
-status: recording-ready
+status: active
 last_reviewed: 2026-07-13
 ---
 

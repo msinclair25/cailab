@@ -1,0 +1,81 @@
+apiVersion: cloudailab.dev/v1alpha1
+kind: Scenario
+metadata:
+  name: community-trust-path
+  version: 0.1.0
+  title: Community Trust Path Starter
+spec:
+  seed: 42
+  briefing: >-
+    Trace the approved cross-tenant path from an operations analyst through
+    the incident-response group and evidence collector to the case file.
+    Explain why an unassigned contractor cannot reach the same resource.
+  objectives:
+    - id: trace-approved-path
+      description: Explain every identity and authorization edge in the approved path.
+    - id: confirm-denied-path
+      description: Confirm that the contractor has no path to the restricted case file.
+  tenants:
+    - id: tenant:operations
+      name: Northstar Operations
+      providers:
+        - local
+    - id: tenant:security
+      name: Northstar Security
+      providers:
+        - local
+  principals:
+    - id: principal:analyst
+      tenant: tenant:operations
+      type: human
+      displayName: Operations Analyst
+    - id: principal:contractor
+      tenant: tenant:operations
+      type: human
+      displayName: Operations Contractor
+    - id: group:incident-response
+      tenant: tenant:security
+      type: group
+      displayName: Incident Response
+    - id: workload:evidence-collector
+      tenant: tenant:security
+      type: workload
+      displayName: Evidence Collector
+  resources:
+    - id: resource:case-file
+      tenant: tenant:security
+      type: case_file
+      displayName: Restricted Case File
+      classification: restricted
+  relationships:
+    - id: membership:analyst-response
+      from: principal:analyst
+      to: group:incident-response
+      type: member_of
+    - id: assignment:response-collector
+      from: group:incident-response
+      to: workload:evidence-collector
+      type: assigned_to
+    - id: access:collector-case-file
+      from: workload:evidence-collector
+      to: resource:case-file
+      type: can_access
+      actions:
+        - evidence:Read
+  # Ground truth is intentionally separate from the learner briefing. It is
+  # protected from normal mission output, but it is not secret from a person
+  # who can read this local authoring file.
+  verification:
+    invariants:
+      - id: approved-path-present
+        type: path_exists
+        from: principal:analyst
+        to: resource:case-file
+        severity: high
+        description: The approved analyst path to the case file must remain available.
+      - id: contractor-path-absent
+        type: path_absent
+        from: principal:contractor
+        to: resource:case-file
+        severity: critical
+        description: The unassigned contractor must not reach the restricted case file.

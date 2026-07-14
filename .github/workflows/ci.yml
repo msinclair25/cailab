@@ -77,6 +77,9 @@ jobs:
       - name: Check documentation
         run: go run ./internal/tools/doccheck .
 
+      - name: Validate learning catalog
+        run: go run ./internal/tools/learningcheck .
+
       - name: Validate scenario catalog
         run: go run ./cmd/cailab scenario list
 
@@ -109,6 +112,25 @@ jobs:
 
       - name: Build CLI
         run: go build ./cmd/cailab
+
+      - name: Build external agent starter
+        run: go build ./examples/external-agent-starter
+
+      - name: Validate data-only scenario starter
+        run: go run ./cmd/cailab scenario validate ./examples/scenario-starter/scenario.yaml
+
+      - name: Start data-only scenario starter
+        run: go run ./cmd/cailab up --state-dir "${{ runner.temp }}/cailab-scenario-ci" ./examples/scenario-starter/scenario.yaml
+
+      - name: Export deterministic JUnit verification
+        run: go run ./cmd/cailab verify --state-dir "${{ runner.temp }}/cailab-scenario-ci" --format junit --output "${{ runner.temp }}/cailab-verification.xml"
+
+      - name: Stop data-only scenario starter
+        if: always()
+        run: go run ./cmd/cailab down --state-dir "${{ runner.temp }}/cailab-scenario-ci"
+
+      - name: Run guided no-Docker quick start
+        run: go run ./cmd/cailab quickstart --state-dir "${{ runner.temp }}/cailab-quickstart"
 
       - name: Test native facade lifecycles
         env:
